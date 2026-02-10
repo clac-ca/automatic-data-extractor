@@ -1,324 +1,360 @@
 # ADE Azure Infra (Bicep)
 
-This repo deploys Azure infrastructure from a single template: `infra/azure/main.bicep`.
+This folder contains the Azure infrastructure-as-code for ADE.
+
+- Template entrypoint: `infra/azure/main.bicep`
+- Domain modules: `infra/azure/modules/*.bicep`
+- PostgreSQL Entra bootstrap script: `infra/azure/scripts/postgresql-entra-bootstrap.sh`
 
 ## What Is Azure Bicep?
 
-Azure Bicep is Microsoft's infrastructure-as-code language for Azure.  
-You declare cloud resources in a `.bicep` file, and Azure Resource Manager (ARM) creates or updates them.
+Azure Bicep is Microsoft's infrastructure-as-code language for Azure Resource Manager (ARM). You declare resources in code, and Azure creates or updates them to match the template.
 
-See [Bicep overview][bicep-overview].
+- Bicep overview: [learn.microsoft.com/azure/azure-resource-manager/bicep/overview][bicep-overview]
 
 ## Is It Safe To Re-Run?
 
 Yes.
 
-- `az deployment group create` is designed to be re-run.
-- ARM incremental deployment updates existing resources to match your template/parameters instead of duplicating resources.
-- Use `az deployment group what-if` before `create` to preview changes.
+- ARM deployments use incremental mode by default.
+- Role assignments use deterministic names (`guid(...)`) to avoid duplicates.
+- PostgreSQL Entra bootstrap SQL is idempotent and safe to run again.
+- Entra groups created through the Graph Bicep extension are reconciled by `uniqueName`.
 
-See [deployment modes][arm-deployment-modes] and [what-if][arm-what-if].
+Reference: [ARM deployment modes][arm-deployment-modes]
 
-## Option A: Deploy in Azure (single production-ready container app)
+## What This Deploys
 
-Use this when you only need production.
+Shared platform:
+- Virtual Network + delegated Container Apps subnet
+- Log Analytics workspace
+- Container Apps managed environment
+- PostgreSQL Flexible Server + production database (+ optional development database)
+- Storage account + production blob container/file share (+ optional development blob container/file share)
 
-This deploys:
+Application:
+- Production Container App
+- Optional development Container App
 
-- Shared network and logging resources
-- 1 Azure Container Apps environment
-- 1 production container app (`api,worker,web`)
-- 1 PostgreSQL Flexible Server with production database
-- 1 Storage account with production blob container and file share
+Access automation:
+- Optional Entra group creation from prefix (`createAccessControlEntraGroups=true`)
+- Azure RBAC assignments for the access-control groups
+- PostgreSQL Entra bootstrap for app managed identities + DB group grants (when PostgreSQL auth mode includes Entra)
 
-Full runnable command (all parameters, secure defaults = `microsoft_entra_only` for PostgreSQL and `microsoft_entra` for Blob):
+## Access-Control Model
+
+Group naming contract (derived from `accessControlGroupNamePrefix`):
+- `<prefix>-rg-owners`
+- `<prefix>-rg-contributors`
+- `<prefix>-rg-readers`
+- `<prefix>-ca-admins`
+- `<prefix>-ca-operators`
+- `<prefix>-ca-readers`
+- `<prefix>-db-admins`
+- `<prefix>-db-readwrite`
+- `<prefix>-db-readonly`
+- `<prefix>-st-admins`
+- `<prefix>-st-readwrite`
+- `<prefix>-st-readonly`
+
+### Recommended (simple) mode
+
+Set `createAccessControlEntraGroups=true`.
+
+- The template creates/updates all groups from the prefix.
+- The template uses those group object IDs for RBAC and DB grants automatically.
+- You do not pass any `*EntraGroupObjectId` parameters.
+
+### Manual mode
+
+Set `createAccessControlEntraGroups=false`.
+
+- You must pass all `*EntraGroupObjectId` parameters explicitly.
+- Use this if groups are managed centrally by your identity team.
+
+### Disabled mode (no groups)
+
+Set `createAccessControlEntraGroups=false` and leave all `*EntraGroupObjectId` parameters empty.
+
+- The app and infrastructure still deploy and run.
+- Group-based RBAC assignments are skipped.
+- Database group grants for `<prefix>-db-readwrite` and `<prefix>-db-readonly` are skipped.
+
+## Prerequisites
+
+- Azure CLI installed (`az`) and signed in.
+- Bicep installed via Azure CLI (`az bicep upgrade`).
+- Permission to deploy into the target resource group.
+- Permission to create role assignments at resource group and resource scopes when access-control groups are enabled.
+- If `createAccessControlEntraGroups=true`, identity permissions to create/update Entra groups (for example Graph permissions such as `Group.ReadWrite.All`).
+
+## Option A: Deploy In Azure (Production Only)
+
+This creates one production ADE Container App on shared Azure resources.
+
+If you set `postgresqlAuthenticationMode` to `postgresql_only` or `postgresql_and_microsoft_entra`, also pass:
+- `postgresqlAdministratorLogin="<POSTGRESQL_ADMIN_LOGIN>"`
+- `postgresqlAdministratorPassword="<POSTGRESQL_ADMIN_PASSWORD>"`
 
 ```bash
 az login
-az account set --subscription "REPLACE_WITH_SUBSCRIPTION_ID"
-
-# Optional pre-step: ensure target resource group exists (safe to re-run)
+az account set --subscription "<SUBSCRIPTION_ID>"
 az group create --name "rg-ade-shared-canadacentral-001" --location "canadacentral"
 
 az deployment group create \
   --resource-group "rg-ade-shared-canadacentral-001" \
-  --name "ade-production-single-app" \
+  --name "ade-azure-production-only" \
   --template-file infra/azure/main.bicep \
   --parameters \
     location="canadacentral" \
     workload="ade" \
     instance="001" \
-    vnetCidr="10.80.0.0/16" \
-    acaSubnetCidr="10.80.0.0/23" \
-    postgresAdminUser="adeadmin" \
-    postgresAdminPassword="REPLACE_WITH_STRONG_POSTGRES_PASSWORD" \
-    postgresVersion="16" \
-    postgresTier="Burstable" \
-    postgresSkuName="Standard_B1ms" \
-    postgresStorageSizeGb=32 \
-    postgresProdDatabaseName="ade" \
-    postgresDevDatabaseName="ade_dev" \
-    postgresEntraAdminObjectId="REPLACE_WITH_ENTRA_OBJECT_ID_GUID" \
-    postgresEntraAdminPrincipalName="REPLACE_WITH_ENTRA_UPN_OR_SERVICE_PRINCIPAL_NAME" \
-    postgresEntraAdminPrincipalType="User" \
-    postgresAllowPublicAccessFromAzureServices=true \
-    postgresAuthenticationMode="microsoft_entra_only" \
-    storageSku="Standard_LRS" \
+    deployDevelopmentEnvironment=false \
+    virtualNetworkAddressPrefix="10.80.0.0/16" \
+    containerAppsSubnetAddressPrefix="10.80.0.0/23" \
+    postgresqlVersion="16" \
+    postgresqlSkuTier="Burstable" \
+    postgresqlSkuName="Standard_B1ms" \
+    postgresqlStorageSizeGb=32 \
+    postgresqlProductionDatabaseName="ade" \
+    postgresqlDevelopmentDatabaseName="ade_dev" \
+    postgresqlAuthenticationMode="microsoft_entra_only" \
+    postgresqlAllowPublicAccessFromAzureServices=true \
+    publicIpv4Allowlist='["<ADMIN_PUBLIC_IPV4>"]' \
+    storageAccountSkuName="Standard_LRS" \
     storageBlobAuthenticationMethod="microsoft_entra" \
-    allowedPublicIpAddresses='["REPLACE_WITH_PUBLIC_IPV4"]' \
-    prodContainerAppImage="ghcr.io/clac-ca/automatic-data-extractor:REPLACE_WITH_PROD_TAG" \
-    prodContainerAppPublicWebUrl="" \
-    prodContainerAppEnvAdeSecretKey="REPLACE_WITH_ADE_SECRET_KEY_32_PLUS_BYTES" \
-    prodContainerAppEnvOverrides='{"ADE_LOG_LEVEL":"INFO","ADE_LOG_FORMAT":"json"}' \
-    prodContainerAppMinReplicas=1 \
-    prodContainerAppMaxReplicas=2 \
-    devContainerAppImage="" \
-    devContainerAppPublicWebUrl="" \
-    devContainerAppEnvAdeSecretKey="" \
-    devContainerAppEnvOverrides='{}' \
-    devContainerAppMinReplicas=0 \
-    devContainerAppMaxReplicas=1
+    accessControlGroupNamePrefix="ade" \
+    createAccessControlEntraGroups=true \
+    productionContainerAppImage="ghcr.io/clac-ca/automatic-data-extractor:<PRODUCTION_TAG>" \
+    productionContainerAppPublicWebUrl="" \
+    productionContainerAppSecretKey="<ADE_SECRET_KEY>" \
+    productionContainerAppEnvironmentOverrides='{"ADE_LOG_LEVEL":"INFO","ADE_LOG_FORMAT":"json"}' \
+    productionContainerAppMinimumReplicas=1 \
+    productionContainerAppMaximumReplicas=2 \
+    developmentContainerAppImage="" \
+    developmentContainerAppPublicWebUrl="" \
+    developmentContainerAppSecretKey="" \
+    developmentContainerAppEnvironmentOverrides='{}' \
+    developmentContainerAppMinimumReplicas=0 \
+    developmentContainerAppMaximumReplicas=1
 ```
 
-## Option B: Deploy in Azure (production + dev container apps using shared resources)
+## Option B: Deploy In Azure (Production + Development)
 
-Use this when you want separate prod and dev apps (for example, dev runs a different image/tag).
-
-This deploys:
-
-- Shared network and logging resources
-- 1 shared Azure Container Apps environment
-- 2 container apps (1 x prod + 1 x dev)
-- 1 PostgreSQL server with prod and dev databases
-- 1 Storage account with prod and dev blob containers/file shares
-
-Full runnable command (all parameters, secure defaults = `microsoft_entra_only` for PostgreSQL and `microsoft_entra` for Blob):
+This creates a production app and a separate development app that share the same platform resources.
 
 ```bash
 az login
-az account set --subscription "REPLACE_WITH_SUBSCRIPTION_ID"
-
-# Optional pre-step: ensure target resource group exists (safe to re-run)
+az account set --subscription "<SUBSCRIPTION_ID>"
 az group create --name "rg-ade-shared-canadacentral-001" --location "canadacentral"
 
 az deployment group create \
   --resource-group "rg-ade-shared-canadacentral-001" \
-  --name "ade-production-and-dev-apps" \
+  --name "ade-azure-production-and-development" \
   --template-file infra/azure/main.bicep \
   --parameters \
     location="canadacentral" \
     workload="ade" \
     instance="001" \
-    vnetCidr="10.80.0.0/16" \
-    acaSubnetCidr="10.80.0.0/23" \
-    postgresAdminUser="adeadmin" \
-    postgresAdminPassword="REPLACE_WITH_STRONG_POSTGRES_PASSWORD" \
-    postgresVersion="16" \
-    postgresTier="Burstable" \
-    postgresSkuName="Standard_B1ms" \
-    postgresStorageSizeGb=32 \
-    postgresProdDatabaseName="ade" \
-    postgresDevDatabaseName="ade_dev" \
-    postgresEntraAdminObjectId="REPLACE_WITH_ENTRA_OBJECT_ID_GUID" \
-    postgresEntraAdminPrincipalName="REPLACE_WITH_ENTRA_UPN_OR_SERVICE_PRINCIPAL_NAME" \
-    postgresEntraAdminPrincipalType="User" \
-    postgresAllowPublicAccessFromAzureServices=true \
-    postgresAuthenticationMode="microsoft_entra_only" \
-    storageSku="Standard_LRS" \
+    deployDevelopmentEnvironment=true \
+    virtualNetworkAddressPrefix="10.80.0.0/16" \
+    containerAppsSubnetAddressPrefix="10.80.0.0/23" \
+    postgresqlVersion="16" \
+    postgresqlSkuTier="Burstable" \
+    postgresqlSkuName="Standard_B1ms" \
+    postgresqlStorageSizeGb=32 \
+    postgresqlProductionDatabaseName="ade" \
+    postgresqlDevelopmentDatabaseName="ade_dev" \
+    postgresqlAuthenticationMode="microsoft_entra_only" \
+    postgresqlAllowPublicAccessFromAzureServices=true \
+    publicIpv4Allowlist='["<ADMIN_PUBLIC_IPV4>"]' \
+    storageAccountSkuName="Standard_LRS" \
     storageBlobAuthenticationMethod="microsoft_entra" \
-    allowedPublicIpAddresses='["REPLACE_WITH_PUBLIC_IPV4"]' \
-    prodContainerAppImage="ghcr.io/clac-ca/automatic-data-extractor:REPLACE_WITH_PROD_TAG" \
-    prodContainerAppPublicWebUrl="" \
-    prodContainerAppEnvAdeSecretKey="REPLACE_WITH_ADE_SECRET_KEY_32_PLUS_BYTES" \
-    prodContainerAppEnvOverrides='{"ADE_LOG_LEVEL":"INFO","ADE_LOG_FORMAT":"json"}' \
-    prodContainerAppMinReplicas=1 \
-    prodContainerAppMaxReplicas=2 \
-    devContainerAppImage="ghcr.io/clac-ca/automatic-data-extractor:REPLACE_WITH_DEV_TAG_OR_USE_PROD_IMAGE" \
-    devContainerAppPublicWebUrl="" \
-    devContainerAppEnvAdeSecretKey="REPLACE_WITH_DEV_ADE_SECRET_KEY_32_PLUS_BYTES_OR_EMPTY_TO_REUSE_PROD" \
-    devContainerAppEnvOverrides='{"ADE_LOG_LEVEL":"DEBUG","ADE_LOG_FORMAT":"json"}' \
-    devContainerAppMinReplicas=0 \
-    devContainerAppMaxReplicas=1
+    accessControlGroupNamePrefix="ade" \
+    createAccessControlEntraGroups=true \
+    productionContainerAppImage="ghcr.io/clac-ca/automatic-data-extractor:<PRODUCTION_TAG>" \
+    productionContainerAppPublicWebUrl="" \
+    productionContainerAppSecretKey="<ADE_SECRET_KEY>" \
+    productionContainerAppEnvironmentOverrides='{"ADE_LOG_LEVEL":"INFO","ADE_LOG_FORMAT":"json"}' \
+    productionContainerAppMinimumReplicas=1 \
+    productionContainerAppMaximumReplicas=2 \
+    developmentContainerAppImage="ghcr.io/clac-ca/automatic-data-extractor:<DEVELOPMENT_TAG>" \
+    developmentContainerAppPublicWebUrl="" \
+    developmentContainerAppSecretKey="<ADE_SECRET_KEY_FOR_DEV_OR_EMPTY_TO_REUSE_PRODUCTION>" \
+    developmentContainerAppEnvironmentOverrides='{"ADE_LOG_LEVEL":"DEBUG","ADE_LOG_FORMAT":"json"}' \
+    developmentContainerAppMinimumReplicas=0 \
+    developmentContainerAppMaximumReplicas=1
 ```
-
-URL defaults:
-
-- `prodContainerAppPublicWebUrl=""` uses the generated production Container Apps URL.
-- `devContainerAppPublicWebUrl=""` uses the generated dev Container Apps URL.
-- Set either value to a custom HTTPS origin when you bind a custom domain.
-- `deployDev` is optional. Dev resources auto-deploy when any dev parameter differs from defaults.
-- Set `deployDev=true` only if you want dev deployed while keeping all dev parameters at default values.
-
-Tip:
-
-- Swap `create` with `what-if` to preview changes:
-  - `az deployment group what-if ...`
-
-Operational notes:
-
-- PostgreSQL access: if `postgresAllowPublicAccessFromAzureServices=false` and `allowedPublicIpAddresses=[]`, no public client IPs are allowed and the app cannot connect to PostgreSQL over the public endpoint.
-- PostgreSQL Microsoft Entra bootstrap: when `postgresAuthenticationMode` includes Microsoft Entra auth (`microsoft_entra_only` or `postgresql_and_microsoft_entra`), this template creates DB roles/grants automatically via an idempotent deployment script.
-- PostgreSQL bootstrap connectivity: the bootstrap script needs network access to PostgreSQL. If you disable `postgresAllowPublicAccessFromAzureServices`, ensure connectivity is still possible or use the manual fallback in the FAQ.
-- Storage RBAC propagation: when `storageBlobAuthenticationMethod="microsoft_entra"`, blob role assignments can take up to 10 minutes to apply. Right after deployment, the app may restart until access is active. See [RBAC propagation][rbac-propagation].
-
-Custom env vars:
-
-- Add extra app env vars with `prodContainerAppEnvOverrides` and `devContainerAppEnvOverrides`.
-- Example:
-  - `prodContainerAppEnvOverrides='{"ADE_LOG_LEVEL":"INFO","ADE_LOG_FORMAT":"json"}'`
-  - `devContainerAppEnvOverrides='{"ADE_LOG_LEVEL":"DEBUG"}'`
-- Runtime throughput vars `ADE_API_PROCESSES` and `ADE_WORKER_RUN_CONCURRENCY` are intentionally left to application defaults in this template.
-- Keys managed by this template/application defaults (for example `ADE_PUBLIC_WEB_URL`, `ADE_API_PROCESSES`, `ADE_WORKER_RUN_CONCURRENCY`, `ADE_DATABASE_URL`, `ADE_SECRET_KEY`, `ADE_DATABASE_AUTH_MODE`, `ADE_BLOB_ACCOUNT_URL`, `ADE_BLOB_CONNECTION_STRING`) are not overridden through these maps.
-- Blob auth method is controlled by `storageBlobAuthenticationMethod`:
-  - `microsoft_entra`: template sets `ADE_BLOB_ACCOUNT_URL` and creates RBAC role assignments.
-  - `shared_key`: template sets `ADE_BLOB_CONNECTION_STRING` from the storage account key.
 
 ## Parameter Reference
 
+### General + Networking
+
 | Parameter | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `location` | `string` | No | Resource group location | Azure region where resources are deployed. |
-| `deployDev` | `bool` | No | `false` | Optional force switch for dev deployment. Normally omit it: dev resources are auto-deployed when any dev-specific parameter differs from default values. Set `true` to deploy dev with all-default dev parameters. |
-| `workload` | `string` | No | `ade` | Naming token used in resource names. |
-| `instance` | `string` | No | `001` | Naming token for instance/environment numbering. |
-| `vnetCidr` | `string` | No | `10.80.0.0/16` | Shared VNet address space in [CIDR notation][cidr]. |
-| `acaSubnetCidr` | `string` | No | `10.80.0.0/23` | Container Apps subnet address space in [CIDR notation][cidr]. |
-| `postgresAdminUser` | `string` | No | `adeadmin` | PostgreSQL local admin username. Required by PostgreSQL Flexible Server and used when `postgresAuthenticationMode` includes password auth (`postgresql_only` or `postgresql_and_microsoft_entra`). |
-| `postgresAdminPassword` | `secure string` | Yes | None | PostgreSQL local admin password. Required by PostgreSQL Flexible Server and used when `postgresAuthenticationMode` includes password auth (`postgresql_only` or `postgresql_and_microsoft_entra`). |
-| `postgresVersion` | `string` | No | `16` | PostgreSQL major version. |
-| `postgresTier` | `string` | No | `Burstable` | PostgreSQL compute tier. |
-| `postgresSkuName` | `string` | No | `Standard_B1ms` | PostgreSQL SKU size (compute/memory class). |
-| `postgresStorageSizeGb` | `int` | No | `32` | PostgreSQL storage size in GiB (minimum 32). |
-| `postgresEntraAdminObjectId` | `string` | Yes | None | Entra object ID configured as PostgreSQL Entra admin. |
-| `postgresEntraAdminPrincipalName` | `string` | Yes | None | Entra principal name configured as PostgreSQL Entra admin. |
-| `postgresEntraAdminPrincipalType` | `string` | No | `User` | Entra principal type: `User`, `Group`, `ServicePrincipal`. |
-| `postgresAllowPublicAccessFromAzureServices` | `bool` | No | `true` | Adds PostgreSQL `0.0.0.0` firewall rule ("Allow public access from any Azure service within Azure to this server"). Set `false` to tighten access, then explicitly allow required IPs or use private networking. See [PostgreSQL firewall rules][pg-firewall]. |
-| `allowedPublicIpAddresses` | `array` | No | `[]` | Public IPv4 allowlist for PostgreSQL and Storage firewall/network rules. Empty means no explicit public IP allow rules. See [PostgreSQL firewall rules][pg-firewall] and [Storage IP rules][storage-ip-rules]. |
-| `storageSku` | `string` | No | `Standard_LRS` | Storage redundancy/SKU. |
-| `postgresAuthenticationMode` | `string` | No | `microsoft_entra_only` | PostgreSQL Flexible Server authentication mode. Allowed values: `postgresql_only`, `microsoft_entra_only`, `postgresql_and_microsoft_entra`. The template sets `ADE_DATABASE_AUTH_MODE` to `managed_identity` for Entra-capable modes and `password` for `postgresql_only`. See [PostgreSQL auth modes][pg-auth]. |
-| `storageBlobAuthenticationMethod` | `string` | No | `microsoft_entra` | Blob authentication method used by the app. `microsoft_entra` sets `ADE_BLOB_ACCOUNT_URL` + RBAC; `shared_key` sets `ADE_BLOB_CONNECTION_STRING` from storage account keys. See [Blob auth options][storage-auth]. |
-| `postgresEntraBootstrapForceUpdateTag` | `string` | No | auto-generated GUID | Internal force-update token for the PostgreSQL Microsoft Entra bootstrap script. Leave as default in normal usage. |
-| `postgresProdDatabaseName` | `string` | No | `ade` | PostgreSQL production database name. |
-| `prodContainerAppImage` | `string` | Yes | None | Production Container App image. |
-| `prodContainerAppPublicWebUrl` | `string` | No | `''` | Production Container App public HTTPS URL. Empty means use the generated default Container Apps URL. The template maps this to `ADE_PUBLIC_WEB_URL`. |
-| `prodContainerAppEnvAdeSecretKey` | `secure string` | Yes | None | Container App env var `ADE_SECRET_KEY` for production (32+ bytes). |
-| `prodContainerAppEnvOverrides` | `object` | No | `{}` | Additional production Container App env vars for production-specific behavior (for example `ADE_LOG_LEVEL`, `ADE_LOG_FORMAT`, `ADE_API_LOG_LEVEL`, `ADE_DATABASE_LOG_LEVEL`). |
-| `prodContainerAppMinReplicas` | `int` | No | `1` | Minimum number of production [replicas][aca-replicas]. A replica is one running app instance. |
-| `prodContainerAppMaxReplicas` | `int` | No | `2` | Maximum number of production [replicas][aca-replicas]. |
-| `postgresDevDatabaseName` | `string` | No | `ade_dev` | PostgreSQL development database name (used when dev resources are deployed, either automatically from dev parameter usage or by `deployDev=true`). |
-| `devContainerAppImage` | `string` | No | `''` | Development Container App image. Empty means use `prodContainerAppImage`. |
-| `devContainerAppPublicWebUrl` | `string` | No | `''` | Development Container App public HTTPS URL. Empty means use the generated default Container Apps URL. The template maps this to `ADE_PUBLIC_WEB_URL`. |
-| `devContainerAppEnvAdeSecretKey` | `secure string` | No | `''` | Container App env var `ADE_SECRET_KEY` for development. Empty means use production value. |
-| `devContainerAppEnvOverrides` | `object` | No | `{}` | Additional development Container App env vars for dev-specific behavior (for example `ADE_LOG_LEVEL`, `ADE_LOG_FORMAT`, `ADE_API_LOG_LEVEL`, `ADE_DATABASE_LOG_LEVEL`). |
-| `devContainerAppMinReplicas` | `int` | No | `0` | Minimum number of dev [replicas][aca-replicas]. |
-| `devContainerAppMaxReplicas` | `int` | No | `1` | Maximum number of dev [replicas][aca-replicas]. |
+| `location` | `string` | No | resource group location | Azure region for resources. |
+| `workload` | `string` | No | `ade` | Naming token for this workload. |
+| `instance` | `string` | No | `001` | Naming token for environment instance. |
+| `deployDevelopmentEnvironment` | `bool` | No | `false` | Deploy the optional development app/database/storage resources. |
+| `virtualNetworkAddressPrefix` | `string` | No | `10.80.0.0/16` | VNet CIDR range. |
+| `containerAppsSubnetAddressPrefix` | `string` | No | `10.80.0.0/23` | Delegated Container Apps subnet CIDR range. |
 
-## PostgreSQL Microsoft Entra Authentication (Recommended)
+### PostgreSQL
 
-### Overview
+| Parameter | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `postgresqlAdministratorLogin` | `string` | No | `''` | PostgreSQL password-auth admin login. Only used when auth mode includes password auth. |
+| `postgresqlAdministratorPassword` | `secure string` | No | `''` | PostgreSQL password-auth admin password. Required only when auth mode includes password auth. |
+| `postgresqlVersion` | `string` | No | `16` | PostgreSQL major version. |
+| `postgresqlSkuTier` | `string` | No | `Burstable` | PostgreSQL compute tier. |
+| `postgresqlSkuName` | `string` | No | `Standard_B1ms` | PostgreSQL compute SKU. |
+| `postgresqlStorageSizeGb` | `int` | No | `32` | PostgreSQL storage size in GiB. |
+| `postgresqlProductionDatabaseName` | `string` | No | `ade` | Production database name. |
+| `postgresqlDevelopmentDatabaseName` | `string` | No | `ade_dev` | Development database name. |
+| `postgresqlAuthenticationMode` | `string` | No | `microsoft_entra_only` | DB auth mode: local password, Entra, or both. |
+| `postgresqlAllowPublicAccessFromAzureServices` | `bool` | No | `true` | Adds `0.0.0.0` firewall rule for Azure services access. |
+| `publicIpv4Allowlist` | `array` | No | `[]` | Public IPv4 addresses allowed through PostgreSQL and storage firewalls. |
 
-Managed Identity allows the app to authenticate to Azure PostgreSQL **without storing database passwords**.
-Azure issues short-lived access tokens to the app’s identity at runtime.
-Blob authentication is configured independently via `storageBlobAuthenticationMethod`.
+### Storage
 
-### Why Use It
+| Parameter | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `storageAccountSkuName` | `string` | No | `Standard_LRS` | Storage redundancy/performance SKU. |
+| `storageBlobAuthenticationMethod` | `string` | No | `microsoft_entra` | Blob auth method: managed identity (`microsoft_entra`) or shared key (`shared_key`). |
 
-* No database passwords in configuration or secrets
-* Short-lived, token-based authentication
-* Stronger security posture for production workloads
+### Access Control
 
-See: [Managed identities in Azure Container Apps][aca-mi]
+| Parameter | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `accessControlGroupNamePrefix` | `string` | No | `ade` | Prefix used to derive group names and DB principal names. |
+| `createAccessControlEntraGroups` | `bool` | No | `true` | When true, creates all access-control groups and auto-wires their object IDs. |
+| `resourceGroupOwnersEntraGroupObjectId` | `string` | No | `''` | Optional object ID for `<prefix>-rg-owners` when reusing existing groups. |
+| `resourceGroupContributorsEntraGroupObjectId` | `string` | No | `''` | Optional object ID for `<prefix>-rg-contributors` when reusing existing groups. |
+| `resourceGroupReadersEntraGroupObjectId` | `string` | No | `''` | Optional object ID for `<prefix>-rg-readers` when reusing existing groups. |
+| `containerAppsAdminsEntraGroupObjectId` | `string` | No | `''` | Optional object ID for `<prefix>-ca-admins` when reusing existing groups. |
+| `containerAppsOperatorsEntraGroupObjectId` | `string` | No | `''` | Optional object ID for `<prefix>-ca-operators` when reusing existing groups. |
+| `containerAppsReadersEntraGroupObjectId` | `string` | No | `''` | Optional object ID for `<prefix>-ca-readers` when reusing existing groups. |
+| `databaseAdminsEntraGroupObjectId` | `string` | No | `''` | Optional object ID for `<prefix>-db-admins` Entra admin group. |
+| `databaseReadWriteEntraGroupObjectId` | `string` | No | `''` | Optional object ID for `<prefix>-db-readwrite` DB grants group. |
+| `databaseReadOnlyEntraGroupObjectId` | `string` | No | `''` | Optional object ID for `<prefix>-db-readonly` DB grants group. |
+| `storageAdminsEntraGroupObjectId` | `string` | No | `''` | Optional object ID for `<prefix>-st-admins` when reusing existing groups. |
+| `storageReadWriteEntraGroupObjectId` | `string` | No | `''` | Optional object ID for `<prefix>-st-readwrite` when reusing existing groups. |
+| `storageReadOnlyEntraGroupObjectId` | `string` | No | `''` | Optional object ID for `<prefix>-st-readonly` when reusing existing groups. |
 
----
+### Production Container App
 
-### Enable Microsoft Entra Authentication
+| Parameter | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `productionContainerAppImage` | `string` | Yes | none | Production container image URL/tag. |
+| `productionContainerAppPublicWebUrl` | `string` | No | `''` | Sets `ADE_PUBLIC_WEB_URL`. Empty uses Container App default HTTPS URL. |
+| `productionContainerAppSecretKey` | `secure string` | Yes | none | Sets `ADE_SECRET_KEY` for production app. |
+| `productionContainerAppEnvironmentOverrides` | `object` | No | `{}` | Additional production app environment variables. |
+| `productionContainerAppMinimumReplicas` | `int` | No | `1` | Minimum running replicas. |
+| `productionContainerAppMaximumReplicas` | `int` | No | `2` | Maximum running replicas. |
 
-Start from **Option A** or **Option B** and set:
+### Development Container App
 
-```bash
-postgresAuthenticationMode="microsoft_entra_only"
-```
+| Parameter | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `developmentContainerAppImage` | `string` | No | `''` | Development image. Empty reuses production image. |
+| `developmentContainerAppPublicWebUrl` | `string` | No | `''` | Sets `ADE_PUBLIC_WEB_URL`. Empty uses Container App default HTTPS URL. |
+| `developmentContainerAppSecretKey` | `secure string` | No | `''` | Development `ADE_SECRET_KEY`. Empty reuses production key. |
+| `developmentContainerAppEnvironmentOverrides` | `object` | No | `{}` | Additional development app environment variables. |
+| `developmentContainerAppMinimumReplicas` | `int` | No | `0` | Minimum dev replicas. |
+| `developmentContainerAppMaximumReplicas` | `int` | No | `1` | Maximum dev replicas. |
 
-No extra SQL command is required.  
-When `postgresAuthenticationMode` includes Microsoft Entra auth (`microsoft_entra_only` or `postgresql_and_microsoft_entra`), the template runs an idempotent Azure deployment script that:
+## RBAC Mapping
 
-- Creates PostgreSQL roles for the Container App managed identities (prod and optional dev)
-- Grants `CONNECT`, `CREATE`, and `TEMP` on each app database
-- Safely re-runs on redeployments without duplicating principals
+| Group | Scope | Role(s) |
+| --- | --- | --- |
+| `<prefix>-rg-owners` | Resource group | `Owner` |
+| `<prefix>-rg-contributors` | Resource group | `Contributor` |
+| `<prefix>-rg-readers` | Resource group | `Reader` |
+| `<prefix>-ca-admins` | Prod/dev apps, ACA environment, Log Analytics | `Container Apps Contributor`, `Container Apps ManagedEnvironments Contributor`, `Log Analytics Data Reader` |
+| `<prefix>-ca-operators` | Prod/dev apps, ACA environment, Log Analytics | `Container Apps Operator`, `Reader`, `Log Analytics Data Reader` |
+| `<prefix>-ca-readers` | Prod/dev apps, ACA environment, Log Analytics | `Reader`, `Log Analytics Data Reader` |
+| `<prefix>-db-admins` | PostgreSQL server | `Contributor` |
+| `<prefix>-db-readwrite` | PostgreSQL server | `Reader` (control plane visibility) |
+| `<prefix>-db-readonly` | PostgreSQL server | `Reader` (control plane visibility) |
+| `<prefix>-st-admins` | Storage account | `Storage Account Contributor` |
+| `<prefix>-st-readwrite` | Storage account | `Storage Blob Data Contributor` |
+| `<prefix>-st-readonly` | Storage account | `Storage Blob Data Reader` |
 
-> **TIP — Switching an Existing Deployment**
-> Bicep deployments are **safe and idempotent** to re-run.
-> To switch an existing environment to Microsoft Entra auth, re-run the same deployment command with
-> `postgresAuthenticationMode="microsoft_entra_only"`.
+These role assignments are applied only when all required group object IDs are available (auto-created or provided).
 
-## Teardown
+Reference: [Azure built-in roles][azure-built-in-roles]
 
-```bash
-az group delete --name "<RESOURCE_GROUP>" --yes --no-wait
-```
+## PostgreSQL DB Group Grants (Entra)
+
+When `postgresqlAuthenticationMode` includes Entra, the bootstrap module always creates the app managed identity principals and grants app DB access.  
+When DB group IDs are available (auto-created or provided), it also creates Entra group principals and applies idempotent grants:
+
+- `<prefix>-db-readwrite`
+  - DB: `CONNECT`, `TEMP`
+  - Schema `public`: `USAGE`, `CREATE`
+  - Tables in `public`: `SELECT, INSERT, UPDATE, DELETE`
+  - Sequences in `public`: `USAGE, SELECT, UPDATE`
+- `<prefix>-db-readonly`
+  - DB: `CONNECT`
+  - Schema `public`: `USAGE`
+  - Tables in `public`: `SELECT`
+  - Sequences in `public`: `SELECT`
 
 ## FAQ
 
-**What does this Bicep template configure for authentication?**
+**Do I need `postgresqlAdministratorLogin` and `postgresqlAdministratorPassword` with Entra-only auth?**
 
-- PostgreSQL:
-  - Server auth mode is set by `postgresAuthenticationMode` (`postgresql_only`, `microsoft_entra_only`, `postgresql_and_microsoft_entra`).
-  - App env var `ADE_DATABASE_AUTH_MODE` is derived from that mode (`managed_identity` for Entra-capable modes, `password` for `postgresql_only`).
-- Blob: sets either `ADE_BLOB_ACCOUNT_URL` (`microsoft_entra`) or `ADE_BLOB_CONNECTION_STRING` (`shared_key`).
-- `ADE_SECRET_KEY` is set from `prodContainerAppEnvAdeSecretKey` / `devContainerAppEnvAdeSecretKey`.
+No. In `postgresqlAuthenticationMode="microsoft_entra_only"`, the template omits password-auth admin properties entirely.  
+You only need those parameters when auth mode includes password auth (`postgresql_only` or `postgresql_and_microsoft_entra`).
 
-**What does the PostgreSQL Microsoft Entra bootstrap script do?**
+Reference: [PostgreSQL Flexible Server ARM template reference][postgresql-flexible-servers-template-reference]
 
-- Creates a dedicated user-assigned managed identity for bootstrap.
-- Adds that identity as PostgreSQL Microsoft Entra admin.
-- Runs idempotent SQL to create app principals and grant DB access.
+**How does the Container App public URL work?**
 
-**How do `prodContainerAppPublicWebUrl` and `devContainerAppPublicWebUrl` work with default and custom domains?**
+- If `productionContainerAppPublicWebUrl` / `developmentContainerAppPublicWebUrl` are empty, ADE uses each app's default Container Apps HTTPS URL.
+- For a custom domain, add/bind the domain in Azure Container Apps, set the corresponding `*PublicWebUrl` parameter to that HTTPS origin, and redeploy.
 
-- With ingress enabled, Azure Container Apps provides each app a default FQDN. This template uses that generated URL when `prodContainerAppPublicWebUrl` or `devContainerAppPublicWebUrl` are empty.
-- You can also see those generated hostnames in deployment outputs: `prodAppFqdn` and `devAppFqdn`.
-- See [Container Apps ingress][aca-ingress] and [built-in environment variables][aca-env-vars] (`CONTAINER_APP_NAME` + `CONTAINER_APP_ENV_DNS_SUFFIX`) for how the default URL is formed.
-- If you configure a [custom domain][aca-custom-domains] in the Container App (Portal: Ingress > Custom domains), set the matching `prodContainerAppPublicWebUrl` / `devContainerAppPublicWebUrl` to that custom HTTPS origin and redeploy.
-- If you change `ADE_PUBLIC_WEB_URL` directly in the portal, Azure creates a new revision for the app config change. See [environment variables][aca-env-vars].
+References: [Container Apps ingress][container-apps-ingress], [custom domains][container-apps-custom-domains], [environment variables][container-apps-environment-variables]
 
-**Can I disable shared key authorization on the storage account?**
+**What happens with `storageBlobAuthenticationMethod="shared_key"`?**
 
-- Not with this template as-is. The Container Apps Azure Files volume mount uses the storage account key for `managedEnvironments/storages`.
-- Blob data auth for ADE still uses your selected `storageBlobAuthenticationMethod` (`microsoft_entra` recommended).
-- If you enforce "Prevent Shared Key authorization" at the storage account level, Azure Files mounts in this template will fail until you move off key-based file share mounts.
-- See [Storage shared key hardening][storage-shared-key-hardening] and [Container Apps storage mounts][aca-storage-mounts].
+The template creates a Container Apps secret and sets `ADE_BLOB_CONNECTION_STRING` from the storage account key.
 
-**Is it safe to re-run deployments?**
+**What happens with `storageBlobAuthenticationMethod="microsoft_entra"`?**
 
-- Yes. ARM incremental mode and idempotent SQL make repeated runs safe.
-- Use `az deployment group what-if` to preview changes first.
+The template sets `ADE_BLOB_ACCOUNT_URL` and assigns blob data contributor role to each deployed app identity for its blob container.
 
-**How do I do PostgreSQL Microsoft Entra role mapping manually?**
+Reference: [Blob authorization with Microsoft Entra ID][blob-entra-authorization]
 
-If the bootstrap script cannot reach PostgreSQL due to your networking policy, run manual SQL:
+**What if `createAccessControlEntraGroups=true` but my identity cannot create groups?**
+
+The deployment fails during Graph resource creation. Use `createAccessControlEntraGroups=false` and pass all `*EntraGroupObjectId` parameters.
+
+**Can I run without groups at all?**
+
+Yes. Set `createAccessControlEntraGroups=false` and do not provide any group object IDs. The app still works; only group-based RBAC and DB group grants are skipped.
+
+**Can I use `what-if` for everything?**
+
+- Use `what-if` for ARM resource preview.
+- Graph extension resources have limitations and are not fully represented in ARM what-if output.
+
+Reference: [Bicep Graph extension limitations][graph-bicep-limitations]
+
+**How do I validate locally before deploying?**
+
+Run:
 
 ```bash
-az postgres flexible-server execute \
-  --name "<POSTGRES_SERVER_NAME>" \
-  --admin-user "<POSTGRES_ENTRA_ADMIN_PRINCIPAL_NAME>" \
-  --admin-password "$(az account get-access-token --resource-type oss-rdbms --query accessToken -o tsv)" \
-  --database-name postgres \
-  --querytext "DO \$\$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = '<PROD_APP_NAME>') THEN PERFORM pg_catalog.pgaadauth_create_principal_with_oid('<PROD_APP_NAME>', '<PROD_APP_OBJECT_ID>', 'service', false, false); END IF; END \$\$; GRANT CONNECT, CREATE, TEMP ON DATABASE \"<PROD_DB_NAME>\" TO \"<PROD_APP_NAME>\";"
+bash infra/azure/validate.sh
 ```
 
-[bicep-overview]: https://learn.microsoft.com/en-us/azure/azure-resource-manager/bicep/overview
-[arm-deployment-modes]: https://learn.microsoft.com/en-us/azure/azure-resource-manager/templates/deployment-modes
-[arm-what-if]: https://learn.microsoft.com/en-us/azure/azure-resource-manager/templates/deploy-what-if
-[cidr]: https://learn.microsoft.com/en-us/azure/virtual-network/manage-virtual-network
-[pg-firewall]: https://learn.microsoft.com/en-us/azure/postgresql/flexible-server/concepts-firewall-rules
-[pg-auth]: https://learn.microsoft.com/en-us/azure/postgresql/security/security-entra-concepts
-[storage-ip-rules]: https://learn.microsoft.com/en-us/azure/storage/common/storage-network-security-ip-address-range
-[storage-auth]: https://learn.microsoft.com/en-us/azure/storage/common/authorize-data-access
-[storage-shared-key-hardening]: https://learn.microsoft.com/en-us/azure/storage/common/shared-key-authorization-prevent
-[aca-replicas]: https://learn.microsoft.com/en-us/azure/container-apps/scale-app
-[aca-mi]: https://learn.microsoft.com/en-us/azure/container-apps/managed-identity
-[aca-ingress]: https://learn.microsoft.com/en-us/azure/container-apps/ingress-overview
-[aca-custom-domains]: https://learn.microsoft.com/en-us/azure/container-apps/custom-domains-managed-certificates
-[aca-env-vars]: https://learn.microsoft.com/en-us/azure/container-apps/environment-variables
-[aca-storage-mounts]: https://learn.microsoft.com/en-us/azure/container-apps/storage-mounts
-[rbac-propagation]: https://learn.microsoft.com/en-us/azure/role-based-access-control/troubleshooting#symptom---role-assignment-changes-are-not-being-detected
+[bicep-overview]: https://learn.microsoft.com/azure/azure-resource-manager/bicep/overview
+[arm-deployment-modes]: https://learn.microsoft.com/azure/azure-resource-manager/templates/deployment-modes
+[azure-built-in-roles]: https://learn.microsoft.com/azure/role-based-access-control/built-in-roles
+[container-apps-ingress]: https://learn.microsoft.com/azure/container-apps/ingress-overview
+[container-apps-custom-domains]: https://learn.microsoft.com/azure/container-apps/custom-domains-certificates
+[container-apps-environment-variables]: https://learn.microsoft.com/azure/container-apps/environment-variables
+[blob-entra-authorization]: https://learn.microsoft.com/azure/storage/blobs/authorize-access-azure-active-directory
+[graph-bicep-limitations]: https://learn.microsoft.com/graph/templates/bicep/overview#known-limitations
+[postgresql-flexible-servers-template-reference]: https://learn.microsoft.com/azure/templates/microsoft.dbforpostgresql/flexibleservers

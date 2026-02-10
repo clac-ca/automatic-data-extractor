@@ -1,60 +1,63 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Dependency: Azure CLI ("az")
-# Install on macOS: brew update && brew install azure-cli
-# Install on Ubuntu/Debian: curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+# Dependency: Azure CLI (az)
+# Install (macOS): brew update && brew install azure-cli
+# Install (Ubuntu/Debian): curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
 
 if ! command -v az >/dev/null 2>&1; then
-  echo "Azure CLI ('az') is required. Install with one of:" >&2
+  echo "Azure CLI ('az') is required." >&2
+  echo "Install with one of:" >&2
   echo "  brew update && brew install azure-cli" >&2
   echo "  curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash" >&2
   exit 1
 fi
 
-# Copy this file to deploy.sh and replace all REPLACE_* values.
+# Copy this file to deploy.sh and replace all <...> placeholders.
+# Safe to re-run: ARM/Bicep deployment is incremental and idempotent.
+# Set deployDevelopmentEnvironment=false for production-only deployments.
+# With createAccessControlEntraGroups=true, deployment identity needs Microsoft Graph group create/update permissions.
+# For postgresqlAuthenticationMode=postgresql_only or postgresql_and_microsoft_entra, also pass:
+#   postgresqlAdministratorLogin="<POSTGRESQL_ADMIN_LOGIN>" \
+#   postgresqlAdministratorPassword="<POSTGRESQL_ADMIN_PASSWORD>" \
 
 az login
-az account set --subscription "REPLACE_WITH_SUBSCRIPTION_ID"
-
-# Optional pre-step: ensure target resource group exists (safe to re-run)
+az account set --subscription "<SUBSCRIPTION_ID>"
 az group create --name "rg-ade-shared-canadacentral-001" --location "canadacentral"
 
 az deployment group create \
   --resource-group "rg-ade-shared-canadacentral-001" \
-  --name "ade-production-and-dev-apps" \
+  --name "ade-azure-production-and-development" \
   --template-file infra/azure/main.bicep \
   --parameters \
     location="canadacentral" \
     workload="ade" \
     instance="001" \
-    vnetCidr="10.80.0.0/16" \
-    acaSubnetCidr="10.80.0.0/23" \
-    postgresAdminUser="adeadmin" \
-    postgresAdminPassword="REPLACE_WITH_STRONG_POSTGRES_PASSWORD" \
-    postgresVersion="16" \
-    postgresTier="Burstable" \
-    postgresSkuName="Standard_B1ms" \
-    postgresStorageSizeGb=32 \
-    postgresProdDatabaseName="ade" \
-    postgresDevDatabaseName="ade_dev" \
-    postgresEntraAdminObjectId="REPLACE_WITH_ENTRA_OBJECT_ID_GUID" \
-    postgresEntraAdminPrincipalName="REPLACE_WITH_ENTRA_UPN_OR_SERVICE_PRINCIPAL_NAME" \
-    postgresEntraAdminPrincipalType="User" \
-    postgresAllowPublicAccessFromAzureServices=true \
-    postgresAuthenticationMode="microsoft_entra_only" \
-    storageSku="Standard_LRS" \
+    deployDevelopmentEnvironment=true \
+    virtualNetworkAddressPrefix="10.80.0.0/16" \
+    containerAppsSubnetAddressPrefix="10.80.0.0/23" \
+    postgresqlVersion="16" \
+    postgresqlSkuTier="Burstable" \
+    postgresqlSkuName="Standard_B1ms" \
+    postgresqlStorageSizeGb=32 \
+    postgresqlProductionDatabaseName="ade" \
+    postgresqlDevelopmentDatabaseName="ade_dev" \
+    postgresqlAuthenticationMode="microsoft_entra_only" \
+    postgresqlAllowPublicAccessFromAzureServices=true \
+    publicIpv4Allowlist='["<ADMIN_PUBLIC_IPV4>"]' \
+    storageAccountSkuName="Standard_LRS" \
     storageBlobAuthenticationMethod="microsoft_entra" \
-    allowedPublicIpAddresses='["REPLACE_WITH_PUBLIC_IPV4"]' \
-    prodContainerAppImage="ghcr.io/clac-ca/automatic-data-extractor:REPLACE_WITH_PROD_TAG" \
-    prodContainerAppPublicWebUrl="" \
-    prodContainerAppEnvAdeSecretKey="REPLACE_WITH_ADE_SECRET_KEY_32_PLUS_BYTES" \
-    prodContainerAppEnvOverrides='{"ADE_LOG_LEVEL":"INFO","ADE_LOG_FORMAT":"json"}' \
-    prodContainerAppMinReplicas=1 \
-    prodContainerAppMaxReplicas=2 \
-    devContainerAppImage="ghcr.io/clac-ca/automatic-data-extractor:REPLACE_WITH_DEV_TAG_OR_USE_PROD_IMAGE" \
-    devContainerAppPublicWebUrl="" \
-    devContainerAppEnvAdeSecretKey="REPLACE_WITH_DEV_ADE_SECRET_KEY_32_PLUS_BYTES_OR_EMPTY_TO_REUSE_PROD" \
-    devContainerAppEnvOverrides='{"ADE_LOG_LEVEL":"DEBUG","ADE_LOG_FORMAT":"json"}' \
-    devContainerAppMinReplicas=0 \
-    devContainerAppMaxReplicas=1
+    accessControlGroupNamePrefix="ade" \
+    createAccessControlEntraGroups=true \
+    productionContainerAppImage="ghcr.io/clac-ca/automatic-data-extractor:<PRODUCTION_TAG>" \
+    productionContainerAppPublicWebUrl="" \
+    productionContainerAppSecretKey="<ADE_SECRET_KEY>" \
+    productionContainerAppEnvironmentOverrides='{"ADE_LOG_LEVEL":"INFO","ADE_LOG_FORMAT":"json"}' \
+    productionContainerAppMinimumReplicas=1 \
+    productionContainerAppMaximumReplicas=2 \
+    developmentContainerAppImage="ghcr.io/clac-ca/automatic-data-extractor:<DEVELOPMENT_TAG>" \
+    developmentContainerAppPublicWebUrl="" \
+    developmentContainerAppSecretKey="<ADE_SECRET_KEY_FOR_DEV_OR_EMPTY_TO_REUSE_PRODUCTION>" \
+    developmentContainerAppEnvironmentOverrides='{"ADE_LOG_LEVEL":"DEBUG","ADE_LOG_FORMAT":"json"}' \
+    developmentContainerAppMinimumReplicas=0 \
+    developmentContainerAppMaximumReplicas=1
