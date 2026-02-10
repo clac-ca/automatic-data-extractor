@@ -923,11 +923,7 @@ if ! printf '%s\n' "$SUBNET_ENDPOINTS" | grep -qx "Microsoft.Storage"; then
     --service-endpoints Microsoft.Storage >/dev/null
 fi
 
-ACA_SUBNET_ID="$(az network vnet subnet show \
-  --resource-group "$RESOURCE_GROUP" \
-  --vnet-name "$VNET_NAME" \
-  --name "$ACA_SUBNET_NAME" \
-  --query id -o tsv)"
+ACA_SUBNET_ID="$(az network vnet subnet show --resource-group "$RESOURCE_GROUP" --vnet-name "$VNET_NAME" --name "$ACA_SUBNET_NAME" --query id -o tsv)"
 
 if az containerapp env show --resource-group "$RESOURCE_GROUP" --name "$ACA_ENV_NAME" >/dev/null 2>&1; then
   log "container apps environment already exists: $ACA_ENV_NAME"
@@ -974,10 +970,7 @@ else
     --infrastructure-subnet-resource-id "$ACA_SUBNET_ID" >/dev/null
 fi
 
-ACA_ENV_ID="$(az containerapp env show \
-  --resource-group "$RESOURCE_GROUP" \
-  --name "$ACA_ENV_NAME" \
-  --query id -o tsv)"
+ACA_ENV_ID="$(az containerapp env show --resource-group "$RESOURCE_GROUP" --name "$ACA_ENV_NAME" --query id -o tsv)"
 
 if az postgres flexible-server show --resource-group "$RESOURCE_GROUP" --name "$POSTGRES_SERVER_NAME" >/dev/null 2>&1; then
   log "postgres server already exists: $POSTGRES_SERVER_NAME"
