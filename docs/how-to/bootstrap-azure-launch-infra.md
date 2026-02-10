@@ -13,11 +13,17 @@ Create launch-ready Azure infrastructure for ADE with:
 
 This workflow intentionally uses **public PostgreSQL** with an Azure-services firewall rule for Fabric no-gateway mirroring compatibility. It does **not** create private endpoints.
 
+Provisioning is Bicep-first for speed and idempotency:
+
+- control-plane resources are deployed in one ARM/Bicep deployment (`scripts/azure/bicep/main.bicep`)
+- post-deploy data-plane SQL grants and runtime verifications are handled by the shell script
+
 ## Script and Config Template
 
 ```bash
 scripts/azure/bootstrap_launch_infra.sh
 scripts/azure/bootstrap_launch_infra.env.example
+scripts/azure/bicep/main.bicep
 ```
 
 ## Prerequisites
@@ -27,12 +33,13 @@ scripts/azure/bootstrap_launch_infra.env.example
 - `curl`
 - Azure login with rights on the target subscription
 
-The script auto-installs or updates the Azure CLI `containerapp` extension.
+The script auto-installs the Azure CLI `containerapp` extension if it is missing.
 
 ## Preflight Commands
 
 ```bash
 command -v az curl psql
+az bicep version
 az --version
 psql --version
 az login
@@ -73,7 +80,7 @@ Notes:
 
 - Default `POSTGRES_VERSION` is `18.1`.
 - Script accepts `major` (`18`) or `major.minor` (`18.1`).
-- Create call uses major only (`az postgres flexible-server create --version 18`) because Azure CLI create accepts major.
+- Bicep deployment uses major only for server provisioning (`18` when `POSTGRES_VERSION=18.1`).
 - After server creation/update, script runs `SHOW server_version;` via SQL.
 - If you requested a minor (`18.1`), script enforces strict prefix match (for example `18.1.x` is accepted, `18.0` or `17.x` fails).
 - If you requested major only (`18`), script enforces major match only.
@@ -130,6 +137,12 @@ Built-in checks (`VERIFY_DEPLOYMENT=true` by default):
 - PostgreSQL Azure-services rule check (when enabled)
 - managed identity DB auth env checks
 - PostgreSQL runtime version check against `POSTGRES_VERSION`
+
+Not handled by ARM/Bicep (still imperative in script):
+
+- PostgreSQL principal mapping via `pgaadauth_*` functions
+- SQL grants/revokes for prod/dev DB role isolation
+- HTTP readiness checks for deployed app endpoints
 
 Manual checks:
 

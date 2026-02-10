@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Quick start (prod + dev):
 #   Uses ./bootstrap_launch_infra.env and deploys full infrastructure + both apps.
+#   Control-plane resources are provisioned via scripts/azure/bicep/main.bicep.
 #   bash scripts/azure/bootstrap_launch_infra.sh --env-file ./bootstrap_launch_infra.env
 #
 # Quick start (prod-only):
@@ -132,12 +134,6 @@ is_ipv4() {
   return 0
 }
 
-yaml_quote() {
-  local value="$1"
-  value=${value//\'/\'\'}
-  printf "'%s'" "$value"
-}
-
 sql_escape_literal() {
   printf "%s" "$1" | sed "s/'/''/g"
 }
@@ -212,6 +208,7 @@ Optional:
   --dev-min-replicas <int>                   (default: 0)
   --dev-max-replicas <int>                   (default: 1)
   --verify-deployment <bool>                 (default: true)
+  --bicep-template-file <path>               (default: scripts/azure/bicep/main.bicep)
   --help
 
 Notes:
@@ -256,80 +253,107 @@ ensure_provider_registered() {
   az provider register --namespace "$namespace" --wait >/dev/null
 }
 
-ensure_postgres_db() {
-  local db_name="$1"
-  if az postgres flexible-server db show \
-    --resource-group "$RESOURCE_GROUP" \
-    --server-name "$POSTGRES_SERVER_NAME" \
-    --database-name "$db_name" >/dev/null 2>&1; then
-    log "postgres database already exists: $db_name"
-    return 0
-  fi
-
-  log "creating postgres database: $db_name"
-  az postgres flexible-server db create \
-    --resource-group "$RESOURCE_GROUP" \
-    --server-name "$POSTGRES_SERVER_NAME" \
-    --database-name "$db_name" >/dev/null
+json_array_from_values() {
+  local out="["
+  local first="true"
+  local value
+  for value in "$@"; do
+    if [[ "$first" == "true" ]]; then
+      first="false"
+    else
+      out+=","
+    fi
+    out+="\"${value//\"/\\\"}\""
+  done
+  out+="]"
+  printf '%s' "$out"
 }
 
-ensure_postgres_firewall_rule() {
-  local rule_name="$1"
-  local start_ip="$2"
-  local end_ip="$3"
-  if az postgres flexible-server firewall-rule show \
+deployment_output_value() {
+  local deployment_name="$1"
+  local output_name="$2"
+  az deployment group show \
     --resource-group "$RESOURCE_GROUP" \
-    --name "$POSTGRES_SERVER_NAME" \
-    --rule-name "$rule_name" >/dev/null 2>&1; then
-    az postgres flexible-server firewall-rule update \
-      --resource-group "$RESOURCE_GROUP" \
-      --name "$POSTGRES_SERVER_NAME" \
-      --rule-name "$rule_name" \
-      --start-ip-address "$start_ip" \
-      --end-ip-address "$end_ip" >/dev/null
-    return 0
-  fi
+    --name "$deployment_name" \
+    --query "properties.outputs.${output_name}.value" \
+    -o tsv 2>/dev/null || true
+}
 
-  az postgres flexible-server firewall-rule create \
+deploy_control_plane_bicep() {
+  local deployment_name="$1"
+  local operator_ips_json
+  operator_ips_json="$(json_array_from_values "${OPERATOR_IPS[@]}")"
+
+  [[ -f "$BICEP_TEMPLATE_FILE" ]] || die "bicep template file not found: $BICEP_TEMPLATE_FILE"
+
+  log "deploying infrastructure with bicep template: ${BICEP_TEMPLATE_FILE}"
+  az deployment group create \
+    --resource-group "$RESOURCE_GROUP" \
+    --name "$deployment_name" \
+    --mode Incremental \
+    --template-file "$BICEP_TEMPLATE_FILE" \
+    --parameters \
+      location="$LOCATION" \
+      deployDev="$DEPLOY_DEV" \
+      vnetName="$VNET_NAME" \
+      acaSubnetName="$ACA_SUBNET_NAME" \
+      acaEnvName="$ACA_ENV_NAME" \
+      logAnalyticsWorkspaceName="$LOG_ANALYTICS_WORKSPACE_NAME" \
+      postgresServerName="$POSTGRES_SERVER_NAME" \
+      storageAccountName="$STORAGE_ACCOUNT_NAME" \
+      prodAppName="$PROD_APP_NAME" \
+      devAppName="$DEV_APP_NAME" \
+      prodStorageMountName="$PROD_STORAGE_MOUNT_NAME" \
+      devStorageMountName="$DEV_STORAGE_MOUNT_NAME" \
+      vnetCidr="$VNET_CIDR" \
+      acaSubnetCidr="$ACA_SUBNET_CIDR" \
+      postgresAdminUser="$POSTGRES_ADMIN_USER" \
+      postgresAdminPassword="$POSTGRES_ADMIN_PASSWORD" \
+      postgresVersionMajor="$POSTGRES_VERSION_MAJOR" \
+      postgresTier="$POSTGRES_TIER" \
+      postgresSkuName="$POSTGRES_SKU_NAME" \
+      postgresStorageSizeGb="$POSTGRES_STORAGE_SIZE_GB" \
+      postgresProdDb="$POSTGRES_PROD_DB" \
+      postgresDevDb="$POSTGRES_DEV_DB" \
+      postgresEntraAdminObjectId="$ENTRA_ADMIN_OBJECT_ID" \
+      postgresEntraAdminPrincipalName="$ENTRA_ADMIN_DISPLAY_NAME" \
+      postgresEntraAdminPrincipalType="User" \
+      enableFabricAzureServicesRule="$ENABLE_FABRIC_AZURE_SERVICES_RULE" \
+      operatorIps="$operator_ips_json" \
+      storageSku="$STORAGE_SKU" \
+      blobProdContainer="$BLOB_PROD_CONTAINER" \
+      blobDevContainer="$BLOB_DEV_CONTAINER" \
+      fileProdShare="$FILE_PROD_SHARE" \
+      fileDevShare="$FILE_DEV_SHARE" \
+      prodImage="$PROD_IMAGE" \
+      devImage="$DEV_IMAGE" \
+      prodWebUrl="$PROD_WEB_URL" \
+      devWebUrl="$DEV_WEB_URL" \
+      prodSecretKey="$PROD_SECRET_KEY" \
+      devSecretKey="$DEV_SECRET_KEY" \
+      databaseAuthMode="$DATABASE_AUTH_MODE" \
+      prodMinReplicas="$PROD_MIN_REPLICAS" \
+      prodMaxReplicas="$PROD_MAX_REPLICAS" \
+      devMinReplicas="$DEV_MIN_REPLICAS" \
+      devMaxReplicas="$DEV_MAX_REPLICAS" \
+      prodDbRoleName="$PROD_DB_ROLE_NAME" \
+      devDbRoleName="$DEV_DB_ROLE_NAME" \
+    --only-show-errors >/dev/null
+}
+
+postgres_firewall_rule_show() {
+  local rule_name="$1"
+  az postgres flexible-server firewall-rule show \
     --resource-group "$RESOURCE_GROUP" \
     --name "$POSTGRES_SERVER_NAME" \
     --rule-name "$rule_name" \
-    --start-ip-address "$start_ip" \
-    --end-ip-address "$end_ip" >/dev/null
-}
+    --only-show-errors >/dev/null 2>&1 && return 0
 
-ensure_storage_subnet_rule() {
-  local subnet_id="$1"
-  local exists
-  exists="$(az storage account network-rule list \
+  az postgres flexible-server firewall-rule show \
     --resource-group "$RESOURCE_GROUP" \
-    --account-name "$STORAGE_ACCOUNT_NAME" \
-    --query "virtualNetworkRules[?id=='${subnet_id}'] | length(@)" \
-    -o tsv)"
-  if [[ "$exists" != "0" ]]; then
-    return 0
-  fi
-  az storage account network-rule add \
-    --resource-group "$RESOURCE_GROUP" \
-    --account-name "$STORAGE_ACCOUNT_NAME" \
-    --subnet "$subnet_id" >/dev/null
-}
-
-ensure_storage_ip_rule() {
-  local ip="$1"
-  local exists
-  exists="$(az storage account network-rule list \
-    --resource-group "$RESOURCE_GROUP" \
-    --account-name "$STORAGE_ACCOUNT_NAME" \
-    --query "ipRules[?ipAddressOrRange=='${ip}'] | length(@)" \
-    -o tsv)"
-  if [[ "$exists" != "0" ]]; then
-    return 0
-  fi
-  az storage account network-rule add \
-    --resource-group "$RESOURCE_GROUP" \
-    --account-name "$STORAGE_ACCOUNT_NAME" \
-    --ip-address "$ip" >/dev/null
+    --server-name "$POSTGRES_SERVER_NAME" \
+    --name "$rule_name" \
+    --only-show-errors >/dev/null 2>&1
 }
 
 ensure_blob_role_assignment() {
@@ -385,20 +409,55 @@ postgres_access_token() {
 }
 
 fetch_postgres_server_version() {
-  local attempts=18
+  local attempts=60
   local i
   local raw_version
   local version_token
+  local last_error=""
+  local err_file
+  err_file="$(mktemp)"
   for ((i=1; i<=attempts; i++)); do
-    PG_ACCESS_TOKEN="$(postgres_access_token)"
+    PG_ACCESS_TOKEN="$(postgres_access_token 2>/dev/null || true)"
+    if [[ -z "$PG_ACCESS_TOKEN" ]]; then
+      last_error="unable to obtain Entra access token"
+      sleep 10
+      continue
+    fi
     raw_version="$(PGPASSWORD="$PG_ACCESS_TOKEN" psql \
       "host=${POSTGRES_FQDN} port=5432 dbname=postgres user=${ENTRA_ADMIN_UPN} sslmode=require" \
       -v ON_ERROR_STOP=1 \
       -Atq \
-      -c "SHOW server_version;" 2>/dev/null || true)"
+      -c "SHOW server_version;" 2>"$err_file" || true)"
     version_token="$(printf '%s' "$raw_version" | awk '{print $1}')"
     if [[ -n "$version_token" ]]; then
+      rm -f "$err_file"
       printf '%s' "$version_token"
+      return 0
+    fi
+    if [[ -s "$err_file" ]]; then
+      last_error="$(tr '\n' ' ' <"$err_file" | sed -E 's/[[:space:]]+/ /g; s/^ //; s/ $//')"
+    fi
+    if (( i % 6 == 0 )); then
+      log "waiting for PostgreSQL Entra auth readiness (attempt ${i}/${attempts})"
+    fi
+    sleep 10
+  done
+  rm -f "$err_file"
+  if [[ -n "$last_error" ]]; then
+    log "postgres version probe last error: $last_error"
+  fi
+  return 1
+}
+
+wait_for_postgres_entra_admin() {
+  local attempts=30
+  local i
+  for ((i=1; i<=attempts; i++)); do
+    if az postgres flexible-server microsoft-entra-admin show \
+      --resource-group "$RESOURCE_GROUP" \
+      --server-name "$POSTGRES_SERVER_NAME" \
+      --object-id "$ENTRA_ADMIN_OBJECT_ID" \
+      --only-show-errors >/dev/null 2>&1; then
       return 0
     fi
     sleep 10
@@ -503,98 +562,6 @@ SQL
   psql_exec "$db_name" "$schema_sql"
 }
 
-write_containerapp_yaml() {
-  local file_path="$1"
-  local app_name="$2"
-  local image="$3"
-  local web_url="$4"
-  local database_url="$5"
-  local secret_key="$6"
-  local blob_container="$7"
-  local min_replicas="$8"
-  local max_replicas="$9"
-  local storage_mount_name="${10}"
-
-  cat >"$file_path" <<EOF
-location: $(yaml_quote "$LOCATION")
-name: $(yaml_quote "$app_name")
-resourceGroup: $(yaml_quote "$RESOURCE_GROUP")
-type: Microsoft.App/containerApps
-identity:
-  type: SystemAssigned
-properties:
-  managedEnvironmentId: $(yaml_quote "$ACA_ENV_ID")
-  configuration:
-    activeRevisionsMode: Single
-    ingress:
-      external: true
-      targetPort: 8000
-      transport: Auto
-      allowInsecure: false
-    secrets:
-      - name: ade-database-url
-        value: $(yaml_quote "$database_url")
-      - name: ade-secret-key
-        value: $(yaml_quote "$secret_key")
-  template:
-    containers:
-      - name: $(yaml_quote "$app_name")
-        image: $(yaml_quote "$image")
-        env:
-          - name: ADE_SERVICES
-            value: 'api,worker,web'
-          - name: ADE_PUBLIC_WEB_URL
-            value: $(yaml_quote "$web_url")
-          - name: ADE_DATABASE_AUTH_MODE
-            value: $(yaml_quote "$DATABASE_AUTH_MODE")
-          - name: ADE_DATABASE_URL
-            secretRef: ade-database-url
-          - name: ADE_SECRET_KEY
-            secretRef: ade-secret-key
-          - name: ADE_BLOB_ACCOUNT_URL
-            value: $(yaml_quote "https://${STORAGE_ACCOUNT_NAME}.blob.core.windows.net")
-          - name: ADE_BLOB_CONTAINER
-            value: $(yaml_quote "$blob_container")
-          - name: ADE_DATA_DIR
-            value: '/app/data'
-          - name: ADE_AUTH_DISABLED
-            value: 'false'
-        volumeMounts:
-          - volumeName: ade-data
-            mountPath: /app/data
-    scale:
-      minReplicas: ${min_replicas}
-      maxReplicas: ${max_replicas}
-    volumes:
-      - name: ade-data
-        storageType: AzureFile
-        storageName: $(yaml_quote "$storage_mount_name")
-EOF
-}
-
-deploy_containerapp_from_yaml() {
-  local app_name="$1"
-  local yaml_path="$2"
-  if az containerapp show --resource-group "$RESOURCE_GROUP" --name "$app_name" >/dev/null 2>&1; then
-    log "updating container app: $app_name"
-    az containerapp update \
-      --resource-group "$RESOURCE_GROUP" \
-      --name "$app_name" \
-      --yaml "$yaml_path" >/dev/null
-  else
-    log "creating container app: $app_name"
-    az containerapp create \
-      --resource-group "$RESOURCE_GROUP" \
-      --name "$app_name" \
-      --yaml "$yaml_path" >/dev/null
-  fi
-
-  az containerapp identity assign \
-    --resource-group "$RESOURCE_GROUP" \
-    --name "$app_name" \
-    --system-assigned >/dev/null
-}
-
 wait_for_http_200() {
   local url="$1"
   local attempts=30
@@ -664,6 +631,7 @@ DEV_MAX_REPLICAS="1"
 
 OPERATOR_IPS=()
 OPERATOR_IPS_CSV="${OPERATOR_IPS_CSV:-}"
+BICEP_TEMPLATE_FILE="${SCRIPT_DIR}/bicep/main.bicep"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -718,6 +686,7 @@ while [[ $# -gt 0 ]]; do
     --prod-max-replicas) PROD_MAX_REPLICAS="$2"; shift 2 ;;
     --dev-min-replicas) DEV_MIN_REPLICAS="$2"; shift 2 ;;
     --dev-max-replicas) DEV_MAX_REPLICAS="$2"; shift 2 ;;
+    --bicep-template-file) BICEP_TEMPLATE_FILE="$2"; shift 2 ;;
     --operator-ip)
       [[ $# -ge 2 ]] || die "--operator-ip requires a value"
       OPERATOR_IPS+=("$2")
@@ -843,8 +812,7 @@ require_cmd curl
 require_cmd psql
 
 if az extension show --name containerapp >/dev/null 2>&1; then
-  log "updating Azure CLI containerapp extension"
-  az extension update --name containerapp >/dev/null
+  log "Azure CLI containerapp extension already installed"
 else
   log "installing Azure CLI containerapp extension"
   az extension add --name containerapp >/dev/null
@@ -868,315 +836,47 @@ done
 log "ensuring resource group"
 az group create --name "$RESOURCE_GROUP" --location "$LOCATION" >/dev/null
 
-if az monitor log-analytics workspace show --resource-group "$RESOURCE_GROUP" --workspace-name "$LOG_ANALYTICS_WORKSPACE_NAME" >/dev/null 2>&1; then
-  log "log analytics workspace already exists: $LOG_ANALYTICS_WORKSPACE_NAME"
-else
-  log "creating log analytics workspace: $LOG_ANALYTICS_WORKSPACE_NAME"
-  az monitor log-analytics workspace create \
-    --resource-group "$RESOURCE_GROUP" \
-    --workspace-name "$LOG_ANALYTICS_WORKSPACE_NAME" \
-    --location "$LOCATION" >/dev/null
+if [[ ${#OPERATOR_IPS[@]} -eq 0 ]]; then
+  log "warning: no operator IPs provided; local PostgreSQL checks may fail outside Azure. Use --operator-ip or --operator-ips-csv if needed."
 fi
 
-LOG_ANALYTICS_WORKSPACE_CUSTOMER_ID="$(az monitor log-analytics workspace show \
-  --resource-group "$RESOURCE_GROUP" \
-  --workspace-name "$LOG_ANALYTICS_WORKSPACE_NAME" \
-  --query customerId -o tsv)"
+BICEP_DEPLOYMENT_NAME="ade-bootstrap-launch-infra"
+deploy_control_plane_bicep "$BICEP_DEPLOYMENT_NAME"
+
+LOG_ANALYTICS_WORKSPACE_CUSTOMER_ID="$(deployment_output_value "$BICEP_DEPLOYMENT_NAME" "logAnalyticsWorkspaceCustomerId")"
 require_non_empty "$LOG_ANALYTICS_WORKSPACE_CUSTOMER_ID" "log analytics workspace customer id"
 
-if az network vnet show --resource-group "$RESOURCE_GROUP" --name "$VNET_NAME" >/dev/null 2>&1; then
-  log "vnet already exists: $VNET_NAME"
-else
-  log "creating vnet: $VNET_NAME"
-  az network vnet create \
-    --resource-group "$RESOURCE_GROUP" \
-    --name "$VNET_NAME" \
-    --location "$LOCATION" \
-    --address-prefixes "$VNET_CIDR" \
-    --subnet-name "$ACA_SUBNET_NAME" \
-    --subnet-prefixes "$ACA_SUBNET_CIDR" >/dev/null
+ACA_ENV_ID="$(deployment_output_value "$BICEP_DEPLOYMENT_NAME" "acaEnvId")"
+if [[ -z "$ACA_ENV_ID" || "$ACA_ENV_ID" == "None" ]]; then
+  ACA_ENV_ID="$(az containerapp env show --resource-group "$RESOURCE_GROUP" --name "$ACA_ENV_NAME" --query id -o tsv 2>/dev/null || true)"
 fi
+require_non_empty "$ACA_ENV_ID" "ACA environment id"
 
-if az network vnet subnet show --resource-group "$RESOURCE_GROUP" --vnet-name "$VNET_NAME" --name "$ACA_SUBNET_NAME" >/dev/null 2>&1; then
-  log "subnet already exists: $ACA_SUBNET_NAME"
-else
-  log "creating subnet: $ACA_SUBNET_NAME"
-  az network vnet subnet create \
-    --resource-group "$RESOURCE_GROUP" \
-    --vnet-name "$VNET_NAME" \
-    --name "$ACA_SUBNET_NAME" \
-    --address-prefixes "$ACA_SUBNET_CIDR" >/dev/null
-fi
-
-SUBNET_DELEGATIONS="$(az network vnet subnet show \
-  --resource-group "$RESOURCE_GROUP" \
-  --vnet-name "$VNET_NAME" \
-  --name "$ACA_SUBNET_NAME" \
-  --query "delegations[].serviceName" \
-  -o tsv)"
-if ! printf '%s\n' "$SUBNET_DELEGATIONS" | grep -qx "Microsoft.App/environments"; then
-  log "delegating subnet to Microsoft.App/environments"
-  az network vnet subnet update \
-    --resource-group "$RESOURCE_GROUP" \
-    --vnet-name "$VNET_NAME" \
-    --name "$ACA_SUBNET_NAME" \
-    --delegations Microsoft.App/environments >/dev/null
-fi
-
-SUBNET_ENDPOINTS="$(az network vnet subnet show \
-  --resource-group "$RESOURCE_GROUP" \
-  --vnet-name "$VNET_NAME" \
-  --name "$ACA_SUBNET_NAME" \
-  --query "serviceEndpoints[].service" \
-  -o tsv)"
-if ! printf '%s\n' "$SUBNET_ENDPOINTS" | grep -qx "Microsoft.Storage"; then
-  log "enabling Microsoft.Storage service endpoint on ACA subnet"
-  az network vnet subnet update \
-    --resource-group "$RESOURCE_GROUP" \
-    --vnet-name "$VNET_NAME" \
-    --name "$ACA_SUBNET_NAME" \
-    --service-endpoints Microsoft.Storage >/dev/null
-fi
-
-ACA_SUBNET_ID="$(az network vnet subnet show --resource-group "$RESOURCE_GROUP" --vnet-name "$VNET_NAME" --name "$ACA_SUBNET_NAME" --query id -o tsv)"
-
-if az containerapp env show --resource-group "$RESOURCE_GROUP" --name "$ACA_ENV_NAME" >/dev/null 2>&1; then
-  log "container apps environment already exists: $ACA_ENV_NAME"
-  ACA_CURRENT_LOG_DESTINATION="$(az containerapp env show \
-    --resource-group "$RESOURCE_GROUP" \
-    --name "$ACA_ENV_NAME" \
-    --query properties.appLogsConfiguration.destination \
-    -o tsv 2>/dev/null || true)"
-  ACA_CURRENT_LOG_WORKSPACE_CUSTOMER_ID="$(az containerapp env show \
-    --resource-group "$RESOURCE_GROUP" \
-    --name "$ACA_ENV_NAME" \
-    --query properties.appLogsConfiguration.logAnalyticsConfiguration.customerId \
-    -o tsv 2>/dev/null || true)"
-  if [[ "$ACA_CURRENT_LOG_DESTINATION" == "log-analytics" && "$ACA_CURRENT_LOG_WORKSPACE_CUSTOMER_ID" == "$LOG_ANALYTICS_WORKSPACE_CUSTOMER_ID" ]]; then
-    log "container apps environment logging already targets: $LOG_ANALYTICS_WORKSPACE_NAME"
-  else
-    LOG_ANALYTICS_WORKSPACE_SHARED_KEY="$(az monitor log-analytics workspace get-shared-keys \
-      --resource-group "$RESOURCE_GROUP" \
-      --workspace-name "$LOG_ANALYTICS_WORKSPACE_NAME" \
-      --query primarySharedKey -o tsv)"
-    require_non_empty "$LOG_ANALYTICS_WORKSPACE_SHARED_KEY" "log analytics workspace shared key"
-    log "updating container apps environment logging workspace: $LOG_ANALYTICS_WORKSPACE_NAME"
-    az containerapp env update \
-      --resource-group "$RESOURCE_GROUP" \
-      --name "$ACA_ENV_NAME" \
-      --logs-destination log-analytics \
-      --logs-workspace-id "$LOG_ANALYTICS_WORKSPACE_CUSTOMER_ID" \
-      --logs-workspace-key "$LOG_ANALYTICS_WORKSPACE_SHARED_KEY" >/dev/null
-  fi
-else
-  LOG_ANALYTICS_WORKSPACE_SHARED_KEY="$(az monitor log-analytics workspace get-shared-keys \
-    --resource-group "$RESOURCE_GROUP" \
-    --workspace-name "$LOG_ANALYTICS_WORKSPACE_NAME" \
-    --query primarySharedKey -o tsv)"
-  require_non_empty "$LOG_ANALYTICS_WORKSPACE_SHARED_KEY" "log analytics workspace shared key"
-  log "creating container apps environment: $ACA_ENV_NAME"
-  az containerapp env create \
-    --resource-group "$RESOURCE_GROUP" \
-    --name "$ACA_ENV_NAME" \
-    --location "$LOCATION" \
-    --logs-destination log-analytics \
-    --logs-workspace-id "$LOG_ANALYTICS_WORKSPACE_CUSTOMER_ID" \
-    --logs-workspace-key "$LOG_ANALYTICS_WORKSPACE_SHARED_KEY" \
-    --infrastructure-subnet-resource-id "$ACA_SUBNET_ID" >/dev/null
-fi
-
-ACA_ENV_ID="$(az containerapp env show --resource-group "$RESOURCE_GROUP" --name "$ACA_ENV_NAME" --query id -o tsv)"
-
-if az postgres flexible-server show --resource-group "$RESOURCE_GROUP" --name "$POSTGRES_SERVER_NAME" >/dev/null 2>&1; then
-  log "postgres server already exists: $POSTGRES_SERVER_NAME"
-else
-  log "creating postgres flexible server: $POSTGRES_SERVER_NAME (requested version ${POSTGRES_VERSION}, create major ${POSTGRES_VERSION_MAJOR})"
-  az postgres flexible-server create \
+POSTGRES_FQDN="$(deployment_output_value "$BICEP_DEPLOYMENT_NAME" "postgresFqdn")"
+if [[ -z "$POSTGRES_FQDN" || "$POSTGRES_FQDN" == "None" ]]; then
+  POSTGRES_FQDN="$(az postgres flexible-server show \
     --resource-group "$RESOURCE_GROUP" \
     --name "$POSTGRES_SERVER_NAME" \
-    --location "$LOCATION" \
-    --admin-user "$POSTGRES_ADMIN_USER" \
-    --admin-password "$POSTGRES_ADMIN_PASSWORD" \
-    --version "$POSTGRES_VERSION_MAJOR" \
-    --tier "$POSTGRES_TIER" \
-    --sku-name "$POSTGRES_SKU_NAME" \
-    --storage-size "$POSTGRES_STORAGE_SIZE_GB" \
-    --public-access Enabled >/dev/null
+    --query fullyQualifiedDomainName -o tsv 2>/dev/null || true)"
 fi
+require_non_empty "$POSTGRES_FQDN" "postgres fully qualified domain name"
 
-log "ensuring postgres authentication/network mode"
-az postgres flexible-server update \
-  --resource-group "$RESOURCE_GROUP" \
-  --name "$POSTGRES_SERVER_NAME" \
-  --public-access Enabled \
-  --microsoft-entra-auth Enabled \
-  --password-auth Enabled >/dev/null
-
-POSTGRES_FQDN="$(az postgres flexible-server show \
-  --resource-group "$RESOURCE_GROUP" \
-  --name "$POSTGRES_SERVER_NAME" \
-  --query fullyQualifiedDomainName -o tsv)"
-
-ensure_postgres_db "$POSTGRES_PROD_DB"
-if [[ "$DEPLOY_DEV" == "true" ]]; then
-  ensure_postgres_db "$POSTGRES_DEV_DB"
-fi
-
-if [[ "$ENABLE_FABRIC_AZURE_SERVICES_RULE" == "true" ]]; then
-  log "ensuring Fabric-compatible Azure-services firewall rule on PostgreSQL"
-  ensure_postgres_firewall_rule "allow-azure-services" "0.0.0.0" "0.0.0.0"
-fi
-
-if [[ ${#OPERATOR_IPS[@]} -gt 0 ]]; then
-  for ip in "${OPERATOR_IPS[@]}"; do
-    safe_ip="${ip//./-}"
-    ensure_postgres_firewall_rule "operator-${safe_ip}" "$ip" "$ip"
-  done
-fi
-
-if az postgres flexible-server microsoft-entra-admin show \
-  --resource-group "$RESOURCE_GROUP" \
-  --server-name "$POSTGRES_SERVER_NAME" \
-  --object-id "$ENTRA_ADMIN_OBJECT_ID" >/dev/null 2>&1; then
-  log "signed-in user is already an Entra admin on PostgreSQL"
-else
-  log "assigning signed-in user as PostgreSQL Entra admin"
-  az postgres flexible-server microsoft-entra-admin create \
-    --resource-group "$RESOURCE_GROUP" \
-    --server-name "$POSTGRES_SERVER_NAME" \
-    --display-name "$ENTRA_ADMIN_DISPLAY_NAME" \
-    --object-id "$ENTRA_ADMIN_OBJECT_ID" \
-    --type User >/dev/null
-fi
+wait_for_postgres_entra_admin || die "signed-in Entra admin assignment is not ready on PostgreSQL after waiting"
 
 log "verifying PostgreSQL runtime server version against requested ${POSTGRES_VERSION}"
-ACTUAL_POSTGRES_VERSION="$(fetch_postgres_server_version)" || die "unable to query PostgreSQL server_version via Entra auth"
+ACTUAL_POSTGRES_VERSION="$(fetch_postgres_server_version)" || die "unable to query PostgreSQL server_version via Entra auth. Ensure this runner IP is allowed in PostgreSQL firewall rules (--operator-ip/--operator-ips-csv) and Entra admin assignment has propagated."
 verify_postgres_server_version "$POSTGRES_VERSION" "$ACTUAL_POSTGRES_VERSION"
 
-if az storage account show --resource-group "$RESOURCE_GROUP" --name "$STORAGE_ACCOUNT_NAME" >/dev/null 2>&1; then
-  log "storage account already exists: $STORAGE_ACCOUNT_NAME"
-else
-  name_available="$(az storage account check-name --name "$STORAGE_ACCOUNT_NAME" --query nameAvailable -o tsv)"
-  if [[ "$name_available" != "true" ]]; then
-    die "storage account name '${STORAGE_ACCOUNT_NAME}' is not available. Set STORAGE_ACCOUNT_NAME or pass --storage-account-name."
-  fi
-  log "creating storage account: $STORAGE_ACCOUNT_NAME"
-  az storage account create \
-    --resource-group "$RESOURCE_GROUP" \
-    --name "$STORAGE_ACCOUNT_NAME" \
-    --location "$LOCATION" \
-    --kind StorageV2 \
-    --sku "$STORAGE_SKU" \
-    --allow-blob-public-access false >/dev/null
-fi
-
-log "ensuring storage firewall policy"
-az storage account update \
-  --resource-group "$RESOURCE_GROUP" \
-  --name "$STORAGE_ACCOUNT_NAME" \
-  --public-network-access Enabled \
-  --default-action Deny >/dev/null
-
-ensure_storage_subnet_rule "$ACA_SUBNET_ID"
-if [[ ${#OPERATOR_IPS[@]} -gt 0 ]]; then
-  for ip in "${OPERATOR_IPS[@]}"; do
-    ensure_storage_ip_rule "$ip"
-  done
-fi
-
-STORAGE_ACCOUNT_KEY="$(az storage account keys list \
-  --resource-group "$RESOURCE_GROUP" \
-  --account-name "$STORAGE_ACCOUNT_NAME" \
-  --query "[0].value" -o tsv)"
-
-log "ensuring blob containers"
-az storage container create \
-  --name "$BLOB_PROD_CONTAINER" \
-  --account-name "$STORAGE_ACCOUNT_NAME" \
-  --account-key "$STORAGE_ACCOUNT_KEY" >/dev/null
-if [[ "$DEPLOY_DEV" == "true" ]]; then
-  az storage container create \
-    --name "$BLOB_DEV_CONTAINER" \
-    --account-name "$STORAGE_ACCOUNT_NAME" \
-    --account-key "$STORAGE_ACCOUNT_KEY" >/dev/null
-fi
-
-log "ensuring Azure Files shares"
-az storage share create \
-  --name "$FILE_PROD_SHARE" \
-  --account-name "$STORAGE_ACCOUNT_NAME" \
-  --account-key "$STORAGE_ACCOUNT_KEY" \
-  --quota 1024 >/dev/null
-if [[ "$DEPLOY_DEV" == "true" ]]; then
-  az storage share create \
-    --name "$FILE_DEV_SHARE" \
-    --account-name "$STORAGE_ACCOUNT_NAME" \
-    --account-key "$STORAGE_ACCOUNT_KEY" \
-    --quota 1024 >/dev/null
-fi
-
-log "registering Azure Files mounts in ACA environment"
-az containerapp env storage set \
-  --resource-group "$RESOURCE_GROUP" \
-  --name "$ACA_ENV_NAME" \
-  --storage-name "$PROD_STORAGE_MOUNT_NAME" \
-  --access-mode ReadWrite \
-  --azure-file-account-name "$STORAGE_ACCOUNT_NAME" \
-  --azure-file-account-key "$STORAGE_ACCOUNT_KEY" \
-  --azure-file-share-name "$FILE_PROD_SHARE" >/dev/null
-if [[ "$DEPLOY_DEV" == "true" ]]; then
-  az containerapp env storage set \
-    --resource-group "$RESOURCE_GROUP" \
-    --name "$ACA_ENV_NAME" \
-    --storage-name "$DEV_STORAGE_MOUNT_NAME" \
-    --access-mode ReadWrite \
-    --azure-file-account-name "$STORAGE_ACCOUNT_NAME" \
-    --azure-file-account-key "$STORAGE_ACCOUNT_KEY" \
-    --azure-file-share-name "$FILE_DEV_SHARE" >/dev/null
-fi
-
-PROD_DATABASE_URL="postgresql+psycopg://${PROD_DB_ROLE_NAME}@${POSTGRES_FQDN}:5432/${POSTGRES_PROD_DB}?sslmode=require"
-if [[ "$DEPLOY_DEV" == "true" ]]; then
-  DEV_DATABASE_URL="postgresql+psycopg://${DEV_DB_ROLE_NAME}@${POSTGRES_FQDN}:5432/${POSTGRES_DEV_DB}?sslmode=require"
-fi
-
-TMP_DIR="$(mktemp -d)"
-trap 'rm -rf "$TMP_DIR"' EXIT
-
-PROD_YAML="$TMP_DIR/prod-containerapp.yaml"
-write_containerapp_yaml \
-  "$PROD_YAML" \
-  "$PROD_APP_NAME" \
-  "$PROD_IMAGE" \
-  "$PROD_WEB_URL" \
-  "$PROD_DATABASE_URL" \
-  "$PROD_SECRET_KEY" \
-  "$BLOB_PROD_CONTAINER" \
-  "$PROD_MIN_REPLICAS" \
-  "$PROD_MAX_REPLICAS" \
-  "$PROD_STORAGE_MOUNT_NAME"
-
-deploy_containerapp_from_yaml "$PROD_APP_NAME" "$PROD_YAML"
-if [[ "$DEPLOY_DEV" == "true" ]]; then
-  DEV_YAML="$TMP_DIR/dev-containerapp.yaml"
-  write_containerapp_yaml \
-    "$DEV_YAML" \
-    "$DEV_APP_NAME" \
-    "$DEV_IMAGE" \
-    "$DEV_WEB_URL" \
-    "$DEV_DATABASE_URL" \
-    "$DEV_SECRET_KEY" \
-    "$BLOB_DEV_CONTAINER" \
-    "$DEV_MIN_REPLICAS" \
-    "$DEV_MAX_REPLICAS" \
-    "$DEV_STORAGE_MOUNT_NAME"
-  deploy_containerapp_from_yaml "$DEV_APP_NAME" "$DEV_YAML"
-fi
-
 log "waiting for container app principal IDs"
-PROD_APP_PRINCIPAL_ID="$(wait_for_principal_id "$PROD_APP_NAME")" || die "unable to resolve principal ID for $PROD_APP_NAME"
+PROD_APP_PRINCIPAL_ID="$(deployment_output_value "$BICEP_DEPLOYMENT_NAME" "prodAppPrincipalId")"
+if [[ -z "$PROD_APP_PRINCIPAL_ID" || "$PROD_APP_PRINCIPAL_ID" == "None" ]]; then
+  PROD_APP_PRINCIPAL_ID="$(wait_for_principal_id "$PROD_APP_NAME")" || die "unable to resolve principal ID for $PROD_APP_NAME"
+fi
 if [[ "$DEPLOY_DEV" == "true" ]]; then
-  DEV_APP_PRINCIPAL_ID="$(wait_for_principal_id "$DEV_APP_NAME")" || die "unable to resolve principal ID for $DEV_APP_NAME"
+  DEV_APP_PRINCIPAL_ID="$(deployment_output_value "$BICEP_DEPLOYMENT_NAME" "devAppPrincipalId")"
+  if [[ -z "$DEV_APP_PRINCIPAL_ID" || "$DEV_APP_PRINCIPAL_ID" == "None" ]]; then
+    DEV_APP_PRINCIPAL_ID="$(wait_for_principal_id "$DEV_APP_NAME")" || die "unable to resolve principal ID for $DEV_APP_NAME"
+  fi
 fi
 
 PROD_BLOB_SCOPE="/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RESOURCE_GROUP}/providers/Microsoft.Storage/storageAccounts/${STORAGE_ACCOUNT_NAME}/blobServices/default/containers/${BLOB_PROD_CONTAINER}"
@@ -1201,10 +901,16 @@ else
   grant_db_privileges "$POSTGRES_PROD_DB" "$PROD_DB_ROLE_NAME"
 fi
 
-PROD_FQDN="$(az containerapp show --resource-group "$RESOURCE_GROUP" --name "$PROD_APP_NAME" --query properties.configuration.ingress.fqdn -o tsv)"
+PROD_FQDN="$(deployment_output_value "$BICEP_DEPLOYMENT_NAME" "prodAppFqdn")"
+if [[ -z "$PROD_FQDN" || "$PROD_FQDN" == "None" ]]; then
+  PROD_FQDN="$(az containerapp show --resource-group "$RESOURCE_GROUP" --name "$PROD_APP_NAME" --query properties.configuration.ingress.fqdn -o tsv)"
+fi
 DEV_FQDN=""
 if [[ "$DEPLOY_DEV" == "true" ]]; then
-  DEV_FQDN="$(az containerapp show --resource-group "$RESOURCE_GROUP" --name "$DEV_APP_NAME" --query properties.configuration.ingress.fqdn -o tsv)"
+  DEV_FQDN="$(deployment_output_value "$BICEP_DEPLOYMENT_NAME" "devAppFqdn")"
+  if [[ -z "$DEV_FQDN" || "$DEV_FQDN" == "None" ]]; then
+    DEV_FQDN="$(az containerapp show --resource-group "$RESOURCE_GROUP" --name "$DEV_APP_NAME" --query properties.configuration.ingress.fqdn -o tsv)"
+  fi
 fi
 
 if [[ "$VERIFY_DEPLOYMENT" == "true" ]]; then
@@ -1237,10 +943,7 @@ if [[ "$VERIFY_DEPLOYMENT" == "true" ]]; then
   [[ "$storage_default_action" == "Deny" ]] || die "storage firewall default action is not Deny"
 
   if [[ "$ENABLE_FABRIC_AZURE_SERVICES_RULE" == "true" ]]; then
-    az postgres flexible-server firewall-rule show \
-      --resource-group "$RESOURCE_GROUP" \
-      --name "$POSTGRES_SERVER_NAME" \
-      --rule-name allow-azure-services >/dev/null || die "missing PostgreSQL allow-azure-services firewall rule"
+    postgres_firewall_rule_show "allow-azure-services" || die "missing PostgreSQL allow-azure-services firewall rule"
   fi
 fi
 
