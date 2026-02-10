@@ -8,7 +8,7 @@ updates:
     directory: "/frontend"
     target-branch: "development"
     schedule:
-      interval: "monthly"
+      interval: "weekly"
     commit-message:
       prefix: "deps"
       include: "scope"
@@ -23,7 +23,7 @@ updates:
     directory: "/backend"
     target-branch: "development"
     schedule:
-      interval: "monthly"
+      interval: "weekly"
     commit-message:
       prefix: "deps"
       include: "scope"
