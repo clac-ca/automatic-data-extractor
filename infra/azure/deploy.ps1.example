@@ -1,0 +1,58 @@
+$ErrorActionPreference = "Stop"
+
+# Dependency: Azure CLI ("az")
+# Install on Windows: winget install --exact --id Microsoft.AzureCLI
+# Install on macOS: brew update && brew install azure-cli
+# Install on Ubuntu/Debian: curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+
+if (-not (Get-Command az -ErrorAction SilentlyContinue)) {
+    Write-Error "Azure CLI ('az') is required. Install with: winget install --exact --id Microsoft.AzureCLI"
+    exit 1
+}
+
+# Copy this file to deploy.ps1 and replace all REPLACE_* values.
+
+az login
+az account set --subscription "REPLACE_WITH_SUBSCRIPTION_ID"
+
+# Optional pre-step: ensure target resource group exists (safe to re-run)
+az group create --name "rg-ade-shared-canadacentral-001" --location "canadacentral"
+
+az deployment group create `
+  --resource-group "rg-ade-shared-canadacentral-001" `
+  --name "ade-production-and-dev-apps" `
+  --template-file infra/azure/main.bicep `
+  --parameters `
+    location="canadacentral" `
+    workload="ade" `
+    instance="001" `
+    vnetCidr="10.80.0.0/16" `
+    acaSubnetCidr="10.80.0.0/23" `
+    postgresAdminUser="adeadmin" `
+    postgresAdminPassword="REPLACE_WITH_STRONG_POSTGRES_PASSWORD" `
+    postgresVersion="16" `
+    postgresTier="Burstable" `
+    postgresSkuName="Standard_B1ms" `
+    postgresStorageSizeGb=32 `
+    postgresProdDatabaseName="ade" `
+    postgresDevDatabaseName="ade_dev" `
+    postgresEntraAdminObjectId="REPLACE_WITH_ENTRA_OBJECT_ID_GUID" `
+    postgresEntraAdminPrincipalName="REPLACE_WITH_ENTRA_UPN_OR_SERVICE_PRINCIPAL_NAME" `
+    postgresEntraAdminPrincipalType="User" `
+    postgresAllowAzureServicesRuleEnabled=true `
+    postgresAuthenticationMethod="microsoft_entra" `
+    storageSku="Standard_LRS" `
+    storageBlobAuthenticationMethod="microsoft_entra" `
+    allowedPublicIpAddresses='["REPLACE_WITH_PUBLIC_IPV4"]' `
+    prodContainerAppImage="ghcr.io/clac-ca/automatic-data-extractor:REPLACE_WITH_PROD_TAG" `
+    prodContainerAppPublicWebUrl="" `
+    prodContainerAppEnvAdeSecretKey="REPLACE_WITH_ADE_SECRET_KEY_32_PLUS_BYTES" `
+    prodContainerAppEnvOverrides='{"ADE_LOG_LEVEL":"INFO","ADE_LOG_FORMAT":"json"}' `
+    prodContainerAppMinReplicas=1 `
+    prodContainerAppMaxReplicas=2 `
+    devContainerAppImage="ghcr.io/clac-ca/automatic-data-extractor:REPLACE_WITH_DEV_TAG_OR_USE_PROD_IMAGE" `
+    devContainerAppPublicWebUrl="" `
+    devContainerAppEnvAdeSecretKey="REPLACE_WITH_DEV_ADE_SECRET_KEY_32_PLUS_BYTES_OR_EMPTY_TO_REUSE_PROD" `
+    devContainerAppEnvOverrides='{"ADE_LOG_LEVEL":"DEBUG","ADE_LOG_FORMAT":"json"}' `
+    devContainerAppMinReplicas=0 `
+    devContainerAppMaxReplicas=1
