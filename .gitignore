@@ -39,3 +39,4 @@ workpackages/**
 !workpackages/**/
 !workpackages/**/*.md
 !workpackages/**/*.py
+bootstrap_launch_infra.env

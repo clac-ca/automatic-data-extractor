@@ -19,6 +19,26 @@ scripts/azure/bootstrap_launch_infra.sh
 scripts/azure/bootstrap_launch_infra.env.example
 ```
 
+## Prerequisites
+
+- `az` (Azure CLI)
+- `psql` (PostgreSQL client)
+- `curl`
+- Azure login with rights on the target subscription
+
+The script auto-installs or updates the Azure CLI `containerapp` extension.
+
+## Preflight Commands
+
+```bash
+command -v az curl psql
+az --version
+psql --version
+az login
+az account set --subscription "<SUBSCRIPTION_ID>"
+az account show --query "{name:name,id:id,tenantId:tenantId}" -o table
+```
+
 ## Default Naming Convention
 
 When explicit names are not provided, the script generates names from:
