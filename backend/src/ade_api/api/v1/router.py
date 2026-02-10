@@ -22,15 +22,14 @@ from ade_api.features.users.router import router as users_router
 from ade_api.features.workspaces.members import router as workspace_members_router
 from ade_api.features.workspaces.router import router as workspaces_router
 from ade_api.meta.router import router as meta_router
-from ade_api.settings import Settings
 
 
-def create_api_router(settings: Settings) -> APIRouter:
+def create_api_router() -> APIRouter:
     api_router = APIRouter(prefix="/v1")
     api_router.include_router(health_router, prefix="/health", tags=["health"])
     api_router.include_router(info_router)
     api_router.include_router(meta_router)
-    api_router.include_router(create_auth_router(settings), prefix="/auth")
+    api_router.include_router(create_auth_router(), prefix="/auth")
     api_router.include_router(api_keys_router)
     api_router.include_router(users_router)
     api_router.include_router(rbac_router)
