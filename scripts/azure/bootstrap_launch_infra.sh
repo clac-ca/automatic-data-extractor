@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Quick start (prod + dev):
+#   Uses ./bootstrap_launch_infra.env and deploys full infrastructure + both apps.
+#   bash scripts/azure/bootstrap_launch_infra.sh --env-file ./bootstrap_launch_infra.env
+#
+# Quick start (prod-only):
+#   bash scripts/azure/bootstrap_launch_infra.sh --env-file ./bootstrap_launch_infra.env --deploy-dev false
+
 log() {
   printf '[bootstrap] %s\n' "$*"
 }
@@ -211,6 +218,14 @@ Notes:
   - This script intentionally does not create private endpoints.
   - PostgreSQL remains public for Fabric no-gateway mirroring and uses Entra auth for ADE runtime.
   - If POSTGRES_VERSION includes a minor (default 18.1), script enforces strict runtime match.
+
+Quick start:
+  cp scripts/azure/bootstrap_launch_infra.env.example ./bootstrap_launch_infra.env
+  # edit values in ./bootstrap_launch_infra.env
+  bash scripts/azure/bootstrap_launch_infra.sh --env-file ./bootstrap_launch_infra.env
+
+  # Optional: prod-only
+  bash scripts/azure/bootstrap_launch_infra.sh --env-file ./bootstrap_launch_infra.env --deploy-dev false
 EOF
 }
 
