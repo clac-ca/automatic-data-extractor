@@ -19,7 +19,7 @@ This documentation is written for people who operate ADE in production and contr
 
 1. [Local Quickstart](tutorials/local-quickstart.md)
 2. [Production Bootstrap (Azure Container Apps, Single Container)](tutorials/production-bootstrap.md)
-3. [Bootstrap Azure Launch Infra](how-to/bootstrap-azure-launch-infra.md)
+3. [Deploy Azure Infra with Bicep Scenarios](how-to/deploy-azure-bicep-scenarios.md)
 4. [Deploy to Production](how-to/deploy-production.md)
 5. [Operate Runs](how-to/operate-runs.md)
 6. [Triage Playbook](troubleshooting/triage-playbook.md)
@@ -47,7 +47,7 @@ This documentation is written for people who operate ADE in production and contr
 | --- | --- |
 | Run ADE locally | [Local Quickstart](tutorials/local-quickstart.md) |
 | Set up first production deployment in Azure | [Production Bootstrap](tutorials/production-bootstrap.md) |
-| Bootstrap shared launch infrastructure in Azure (prod + optional dev) | [Bootstrap Azure Launch Infra](how-to/bootstrap-azure-launch-infra.md) |
+| Bootstrap shared launch infrastructure in Azure (prod-only or prod+dev) | [Deploy Azure Infra with Bicep Scenarios](how-to/deploy-azure-bicep-scenarios.md) |
 | Deploy or update production safely | [Deploy to Production](how-to/deploy-production.md) |
 | Improve processing capacity | [Scale and Tune Throughput](how-to/scale-and-tune-throughput.md) |
 | Run migrations or resets safely | [Run Migrations and Resets](how-to/run-migrations-and-resets.md) |
@@ -74,7 +74,7 @@ This documentation is written for people who operate ADE in production and contr
   - [Local Quickstart](tutorials/local-quickstart.md)
   - [Production Bootstrap](tutorials/production-bootstrap.md)
 - How-to
-  - [Bootstrap Azure Launch Infra](how-to/bootstrap-azure-launch-infra.md)
+  - [Deploy Azure Infra with Bicep Scenarios](how-to/deploy-azure-bicep-scenarios.md)
   - [Run Local Dev Loop](how-to/run-local-dev-loop.md)
   - [Deploy to Production](how-to/deploy-production.md)
   - [Scale and Tune Throughput](how-to/scale-and-tune-throughput.md)
@@ -108,6 +108,7 @@ This documentation is written for people who operate ADE in production and contr
   - [Defaults Matrix](reference/defaults-matrix.md)
   - [Runtime Lifecycle](reference/runtime-lifecycle.md)
   - [Release Process](reference/release-process.md)
+  - [Azure Infra Bicep Reference](reference/azure-bicep-parameters-and-naming.md)
 - Explanation
   - [System Architecture](explanation/system-architecture.md)
   - [Reliability and Failure Model](explanation/reliability-and-failure-model.md)

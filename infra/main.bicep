@@ -1,70 +1,49 @@
-@description('Azure location for all resources.')
-param location string
+@minLength(1)
+@description('Azure location for deployed resources.')
+param location string = resourceGroup().location
 
 @description('Deploy dev resources alongside prod resources.')
-param deployDev bool = true
+param deployDev bool = false
 
-@description('Virtual network name.')
-param vnetName string
+@minLength(1)
+@description('CAF workload token used in generated names.')
+param workload string = 'ade'
 
-@description('Container Apps subnet name inside the VNet.')
-param acaSubnetName string
+@minLength(1)
+@description('CAF instance token used in generated names.')
+param instance string = '001'
 
-@description('Container Apps environment name.')
-param acaEnvName string
+@description('CIDR for the shared virtual network.')
+param vnetCidr string = '10.80.0.0/16'
 
-@description('Log Analytics workspace name.')
-param logAnalyticsWorkspaceName string
-
-@description('PostgreSQL flexible server name.')
-param postgresServerName string
-
-@description('Storage account name.')
-param storageAccountName string
-
-@description('Prod Container App name.')
-param prodAppName string
-
-@description('Dev Container App name.')
-param devAppName string = ''
-
-@description('ACA environment storage mount name for prod app.')
-param prodStorageMountName string
-
-@description('ACA environment storage mount name for dev app.')
-param devStorageMountName string = ''
-
-@description('VNet CIDR range.')
-param vnetCidr string
-
-@description('ACA subnet CIDR range.')
-param acaSubnetCidr string
+@description('CIDR for the Container Apps delegated subnet.')
+param acaSubnetCidr string = '10.80.0.0/23'
 
 @description('PostgreSQL administrator login name.')
-param postgresAdminUser string
+param postgresAdminUser string = 'adeadmin'
 
 @secure()
 @description('PostgreSQL administrator login password.')
 param postgresAdminPassword string
 
-@description('PostgreSQL major version to provision (for example, 18).')
-param postgresVersionMajor string
+@description('PostgreSQL major version (for example, 16).')
+param postgresVersion string = '16'
 
 @description('PostgreSQL tier (for example, Burstable).')
-param postgresTier string
+param postgresTier string = 'Burstable'
 
 @description('PostgreSQL SKU name (for example, Standard_B1ms).')
-param postgresSkuName string
+param postgresSkuName string = 'Standard_B1ms'
 
 @minValue(32)
 @description('PostgreSQL storage size in GiB.')
-param postgresStorageSizeGb int
+param postgresStorageSizeGb int = 32
 
 @description('Prod PostgreSQL database name.')
-param postgresProdDb string
+param postgresProdDb string = 'ade'
 
 @description('Dev PostgreSQL database name.')
-param postgresDevDb string = ''
+param postgresDevDb string = 'ade_dev'
 
 @description('Signed-in Entra object ID to set as PostgreSQL Entra admin.')
 param postgresEntraAdminObjectId string
@@ -80,37 +59,25 @@ param postgresEntraAdminPrincipalName string
 @description('PostgreSQL Entra admin principal type.')
 param postgresEntraAdminPrincipalType string = 'User'
 
-@description('Enable the PostgreSQL 0.0.0.0 allow-azure-services firewall rule for Fabric compatibility.')
+@description('Enable the 0.0.0.0 allow-azure-services firewall rule for Fabric compatibility.')
 param enableFabricAzureServicesRule bool = true
 
 @description('Operator IPv4 addresses to allow in PostgreSQL and Storage firewall rules.')
 param operatorIps array = []
 
 @description('Storage account SKU name.')
-param storageSku string
+param storageSku string = 'Standard_LRS'
 
-@description('Prod blob container name.')
-param blobProdContainer string
-
-@description('Dev blob container name.')
-param blobDevContainer string = ''
-
-@description('Prod Azure Files share name.')
-param fileProdShare string
-
-@description('Dev Azure Files share name.')
-param fileDevShare string = ''
-
-@description('Prod app image reference.')
+@description('Prod app container image.')
 param prodImage string
 
-@description('Dev app image reference.')
+@description('Dev app container image. Defaults to prod image when omitted.')
 param devImage string = ''
 
-@description('Prod public web URL.')
+@description('Prod app public URL.')
 param prodWebUrl string
 
-@description('Dev public web URL.')
+@description('Dev app public URL. Defaults to prod URL when omitted.')
 param devWebUrl string = ''
 
 @secure()
@@ -118,29 +85,61 @@ param devWebUrl string = ''
 param prodSecretKey string
 
 @secure()
-@description('Dev ADE secret key value.')
+@description('Dev ADE secret key value. Defaults to prod secret when omitted.')
 param devSecretKey string = ''
 
 @description('ADE database authentication mode.')
 param databaseAuthMode string = 'managed_identity'
 
+@minValue(0)
 @description('Prod app minimum replicas.')
 param prodMinReplicas int = 1
 
+@minValue(1)
 @description('Prod app maximum replicas.')
 param prodMaxReplicas int = 2
 
+@minValue(0)
 @description('Dev app minimum replicas.')
 param devMinReplicas int = 0
 
+@minValue(1)
 @description('Dev app maximum replicas.')
 param devMaxReplicas int = 1
 
-@description('Prod DB role/user name used in ADE_DATABASE_URL.')
-param prodDbRoleName string
+var regionToken = toLower(replace(location, ' ', ''))
+var uniqueShort = toLower(take(uniqueString(subscription().id, resourceGroup().id, workload, regionToken, instance), 4))
 
-@description('Dev DB role/user name used in ADE_DATABASE_URL.')
-param devDbRoleName string = ''
+var sharedEnvToken = 'shared'
+var prodEnvToken = 'prod'
+var devEnvToken = 'dev'
+
+var vnetName = take('vnet-${workload}-${sharedEnvToken}-${regionToken}-${instance}', 64)
+var acaSubnetName = take('snet-${workload}-${sharedEnvToken}-${regionToken}-${instance}-aca', 80)
+var acaEnvName = take('cae-${workload}-${sharedEnvToken}-${regionToken}-${instance}', 60)
+var logAnalyticsWorkspaceName = take('log-${workload}-${sharedEnvToken}-${regionToken}-${instance}', 63)
+var postgresServerName = take('psql-${workload}-${sharedEnvToken}-${regionToken}-${instance}-${uniqueShort}', 63)
+
+var storageAccountName = toLower('st${uniqueString(subscription().id, resourceGroup().id, workload, regionToken, instance)}')
+
+var prodAppName = take('ca-${workload}-${prodEnvToken}-${regionToken}-${instance}', 32)
+var devAppName = take('ca-${workload}-${devEnvToken}-${regionToken}-${instance}', 32)
+
+var prodBlobContainerName = toLower(take('${workload}-${prodEnvToken}', 63))
+var devBlobContainerName = toLower(take('${workload}-${devEnvToken}', 63))
+var prodFileShareName = toLower(take('${workload}-data-${prodEnvToken}', 63))
+var devFileShareName = toLower(take('${workload}-data-${devEnvToken}', 63))
+
+var prodStorageMountName = take('share-${workload}-${prodEnvToken}-${instance}', 32)
+var devStorageMountName = take('share-${workload}-${devEnvToken}-${instance}', 32)
+
+var effectiveDevImage = empty(devImage) ? prodImage : devImage
+var effectiveDevWebUrl = empty(devWebUrl) ? prodWebUrl : devWebUrl
+var effectiveDevSecretKey = empty(devSecretKey) ? prodSecretKey : devSecretKey
+
+var prodDatabaseUrl = 'postgresql+psycopg://${prodAppName}@${postgresServer.properties.fullyQualifiedDomainName}:5432/${postgresProdDb}?sslmode=require'
+var devDatabaseUrl = 'postgresql+psycopg://${devAppName}@${postgresServer.properties.fullyQualifiedDomainName}:5432/${postgresDevDb}?sslmode=require'
+var blobAccountUrl = 'https://${storageAccount.name}.blob.${environment().suffixes.storage}'
 
 var operatorFirewallRules = [for ip in operatorIps: {
   name: 'operator-${replace(ip, '.', '-')}'
@@ -165,23 +164,6 @@ var storageIpRules = [for ip in operatorIps: {
   action: 'Allow'
   value: ip
 }]
-
-resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
-  name: logAnalyticsWorkspaceName
-  location: location
-  properties: {
-    sku: {
-      name: 'PerGB2018'
-    }
-    retentionInDays: 30
-    features: {
-      disableLocalAuth: false
-      enableLogAccessUsingOnlyResourcePermissions: true
-    }
-    publicNetworkAccessForIngestion: 'Enabled'
-    publicNetworkAccessForQuery: 'Enabled'
-  }
-}
 
 resource vnet 'Microsoft.Network/virtualNetworks@2023-09-01' = {
   name: vnetName
@@ -221,11 +203,27 @@ resource acaSubnet 'Microsoft.Network/virtualNetworks/subnets@2023-09-01' existi
   name: acaSubnetName
 }
 
-resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2023-05-01' = {
+resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
+  name: logAnalyticsWorkspaceName
+  location: location
+  properties: {
+    sku: {
+      name: 'PerGB2018'
+    }
+    retentionInDays: 30
+    features: {
+      disableLocalAuth: false
+      enableLogAccessUsingOnlyResourcePermissions: true
+    }
+    publicNetworkAccessForIngestion: 'Enabled'
+    publicNetworkAccessForQuery: 'Enabled'
+  }
+}
+
+resource managedEnvironment 'Microsoft.App/managedEnvironments@2023-05-01' = {
   name: acaEnvName
   location: location
   properties: {
-    // Preserve at least one profile on updates; the RP rejects empty profile sets.
     workloadProfiles: [
       {
         name: 'Consumption'
@@ -245,7 +243,7 @@ resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2023-05-01'
   }
 }
 
-resource postgresServer 'Microsoft.DBforPostgreSQL/flexibleServers@2025-08-01' = {
+resource postgresServer 'Microsoft.DBforPostgreSQL/flexibleServers@2024-08-01' = {
   name: postgresServerName
   location: location
   sku: {
@@ -255,7 +253,7 @@ resource postgresServer 'Microsoft.DBforPostgreSQL/flexibleServers@2025-08-01' =
   properties: {
     administratorLogin: postgresAdminUser
     administratorLoginPassword: postgresAdminPassword
-    version: any(postgresVersionMajor)
+    version: any(postgresVersion)
     storage: {
       storageSizeGB: postgresStorageSizeGb
     }
@@ -270,7 +268,7 @@ resource postgresServer 'Microsoft.DBforPostgreSQL/flexibleServers@2025-08-01' =
   }
 }
 
-resource postgresProdDatabase 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2025-08-01' = {
+resource postgresProdDatabase 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2024-08-01' = {
   parent: postgresServer
   name: postgresProdDb
   properties: {
@@ -279,7 +277,7 @@ resource postgresProdDatabase 'Microsoft.DBforPostgreSQL/flexibleServers/databas
   }
 }
 
-resource postgresDevDatabase 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2025-08-01' = if (deployDev) {
+resource postgresDevDatabase 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2024-08-01' = if (deployDev) {
   parent: postgresServer
   name: postgresDevDb
   properties: {
@@ -288,7 +286,7 @@ resource postgresDevDatabase 'Microsoft.DBforPostgreSQL/flexibleServers/database
   }
 }
 
-resource postgresFirewallRuleResources 'Microsoft.DBforPostgreSQL/flexibleServers/firewallRules@2025-08-01' = [for rule in postgresFirewallRules: {
+resource postgresFirewallRuleResources 'Microsoft.DBforPostgreSQL/flexibleServers/firewallRules@2024-08-01' = [for rule in postgresFirewallRules: {
   parent: postgresServer
   name: rule.name
   properties: {
@@ -297,7 +295,7 @@ resource postgresFirewallRuleResources 'Microsoft.DBforPostgreSQL/flexibleServer
   }
 }]
 
-resource postgresEntraAdmin 'Microsoft.DBforPostgreSQL/flexibleServers/administrators@2025-08-01' = {
+resource postgresEntraAdmin 'Microsoft.DBforPostgreSQL/flexibleServers/administrators@2024-08-01' = {
   parent: postgresServer
   name: postgresEntraAdminObjectId
   properties: {
@@ -337,17 +335,17 @@ resource blobService 'Microsoft.Storage/storageAccounts/blobServices@2023-05-01'
   name: 'default'
 }
 
-resource prodBlobContainerResource 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-05-01' = {
+resource prodBlobContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-05-01' = {
   parent: blobService
-  name: blobProdContainer
+  name: prodBlobContainerName
   properties: {
     publicAccess: 'None'
   }
 }
 
-resource devBlobContainerResource 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-05-01' = if (deployDev) {
+resource devBlobContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-05-01' = if (deployDev) {
   parent: blobService
-  name: blobDevContainer
+  name: devBlobContainerName
   properties: {
     publicAccess: 'None'
   }
@@ -358,61 +356,58 @@ resource fileService 'Microsoft.Storage/storageAccounts/fileServices@2023-05-01'
   name: 'default'
 }
 
-resource prodFileShareResource 'Microsoft.Storage/storageAccounts/fileServices/shares@2023-05-01' = {
+resource prodFileShare 'Microsoft.Storage/storageAccounts/fileServices/shares@2023-05-01' = {
   parent: fileService
-  name: fileProdShare
+  name: prodFileShareName
   properties: {
     shareQuota: 1024
   }
 }
 
-resource devFileShareResource 'Microsoft.Storage/storageAccounts/fileServices/shares@2023-05-01' = if (deployDev) {
+resource devFileShare 'Microsoft.Storage/storageAccounts/fileServices/shares@2023-05-01' = if (deployDev) {
   parent: fileService
-  name: fileDevShare
+  name: devFileShareName
   properties: {
     shareQuota: 1024
   }
 }
 
 var storageAccountKey = storageAccount.listKeys().keys[0].value
-var postgresFqdn = postgresServer.properties.fullyQualifiedDomainName
-var prodDatabaseUrl = 'postgresql+psycopg://${prodDbRoleName}@${postgresFqdn}:5432/${postgresProdDb}?sslmode=require'
-var devDatabaseUrl = 'postgresql+psycopg://${devDbRoleName}@${postgresFqdn}:5432/${postgresDevDb}?sslmode=require'
 
 resource prodEnvStorage 'Microsoft.App/managedEnvironments/storages@2023-05-01' = {
-  parent: containerAppsEnvironment
+  parent: managedEnvironment
   name: prodStorageMountName
   properties: {
     azureFile: {
       accessMode: 'ReadWrite'
       accountName: storageAccount.name
       accountKey: storageAccountKey
-      shareName: fileProdShare
+      shareName: prodFileShareName
     }
   }
 }
 
 resource devEnvStorage 'Microsoft.App/managedEnvironments/storages@2023-05-01' = if (deployDev) {
-  parent: containerAppsEnvironment
+  parent: managedEnvironment
   name: devStorageMountName
   properties: {
     azureFile: {
       accessMode: 'ReadWrite'
       accountName: storageAccount.name
       accountKey: storageAccountKey
-      shareName: fileDevShare
+      shareName: devFileShareName
     }
   }
 }
 
-resource prodContainerApp 'Microsoft.App/containerApps@2023-05-01' = {
+resource prodApp 'Microsoft.App/containerApps@2023-05-01' = {
   name: prodAppName
   location: location
   identity: {
     type: 'SystemAssigned'
   }
   properties: {
-    managedEnvironmentId: containerAppsEnvironment.id
+    managedEnvironmentId: managedEnvironment.id
     configuration: {
       activeRevisionsMode: 'Single'
       ingress: {
@@ -460,11 +455,11 @@ resource prodContainerApp 'Microsoft.App/containerApps@2023-05-01' = {
             }
             {
               name: 'ADE_BLOB_ACCOUNT_URL'
-              value: 'https://${storageAccountName}.blob.${environment().suffixes.storage}'
+              value: blobAccountUrl
             }
             {
               name: 'ADE_BLOB_CONTAINER'
-              value: blobProdContainer
+              value: prodBlobContainerName
             }
             {
               name: 'ADE_DATA_DIR'
@@ -498,14 +493,14 @@ resource prodContainerApp 'Microsoft.App/containerApps@2023-05-01' = {
   }
 }
 
-resource devContainerApp 'Microsoft.App/containerApps@2023-05-01' = if (deployDev) {
+resource devApp 'Microsoft.App/containerApps@2023-05-01' = if (deployDev) {
   name: devAppName
   location: location
   identity: {
     type: 'SystemAssigned'
   }
   properties: {
-    managedEnvironmentId: containerAppsEnvironment.id
+    managedEnvironmentId: managedEnvironment.id
     configuration: {
       activeRevisionsMode: 'Single'
       ingress: {
@@ -521,7 +516,7 @@ resource devContainerApp 'Microsoft.App/containerApps@2023-05-01' = if (deployDe
         }
         {
           name: 'ade-secret-key'
-          value: devSecretKey
+          value: effectiveDevSecretKey
         }
       ]
     }
@@ -529,7 +524,7 @@ resource devContainerApp 'Microsoft.App/containerApps@2023-05-01' = if (deployDe
       containers: [
         {
           name: devAppName
-          image: devImage
+          image: effectiveDevImage
           env: [
             {
               name: 'ADE_SERVICES'
@@ -537,7 +532,7 @@ resource devContainerApp 'Microsoft.App/containerApps@2023-05-01' = if (deployDe
             }
             {
               name: 'ADE_PUBLIC_WEB_URL'
-              value: devWebUrl
+              value: effectiveDevWebUrl
             }
             {
               name: 'ADE_DATABASE_AUTH_MODE'
@@ -553,11 +548,11 @@ resource devContainerApp 'Microsoft.App/containerApps@2023-05-01' = if (deployDe
             }
             {
               name: 'ADE_BLOB_ACCOUNT_URL'
-              value: 'https://${storageAccountName}.blob.${environment().suffixes.storage}'
+              value: blobAccountUrl
             }
             {
               name: 'ADE_BLOB_CONTAINER'
-              value: blobDevContainer
+              value: devBlobContainerName
             }
             {
               name: 'ADE_DATA_DIR'
@@ -591,11 +586,47 @@ resource devContainerApp 'Microsoft.App/containerApps@2023-05-01' = if (deployDe
   }
 }
 
-output acaEnvId string = containerAppsEnvironment.id
-output logAnalyticsWorkspaceCustomerId string = logAnalyticsWorkspace.properties.customerId
-output postgresFqdn string = postgresFqdn
-output postgresVersion string = postgresServer.properties.version
-output prodAppPrincipalId string = prodContainerApp.identity.principalId
-output devAppPrincipalId string = deployDev ? devContainerApp!.identity.principalId : ''
-output prodAppFqdn string = prodContainerApp.properties.configuration.ingress.fqdn
-output devAppFqdn string = deployDev ? devContainerApp!.properties.configuration.ingress.fqdn : ''
+var blobRoleDefinitionId = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')
+
+resource prodBlobRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(prodBlobContainer.id, prodApp.name, blobRoleDefinitionId)
+  scope: prodBlobContainer
+  properties: {
+    roleDefinitionId: blobRoleDefinitionId
+    principalId: prodApp.identity.principalId!
+    principalType: 'ServicePrincipal'
+  }
+}
+
+resource devBlobRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (deployDev) {
+  name: guid(devBlobContainer!.id, devApp!.name, blobRoleDefinitionId)
+  scope: devBlobContainer!
+  properties: {
+    roleDefinitionId: blobRoleDefinitionId
+    principalId: devApp!.identity.principalId!
+    principalType: 'ServicePrincipal'
+  }
+}
+
+output deployDev bool = deployDev
+output acaEnvName string = managedEnvironment.name
+output acaEnvId string = managedEnvironment.id
+output vnetName string = vnet.name
+output acaSubnetId string = acaSubnet.id
+output logAnalyticsWorkspaceName string = logAnalyticsWorkspace.name
+output postgresServerName string = postgresServer.name
+output postgresFqdn string = postgresServer.properties.fullyQualifiedDomainName
+output postgresVersion string = string(postgresServer.properties.version)
+output postgresProdDb string = postgresProdDb
+output postgresDevDb string = deployDev ? postgresDevDb : ''
+output storageAccountName string = storageAccount.name
+output prodBlobContainerName string = prodBlobContainerName
+output devBlobContainerName string = deployDev ? devBlobContainerName : ''
+output prodFileShareName string = prodFileShareName
+output devFileShareName string = deployDev ? devFileShareName : ''
+output prodAppName string = prodApp.name
+output prodAppPrincipalId string = prodApp.identity.principalId!
+output prodAppFqdn string = prodApp.properties.configuration.ingress.fqdn!
+output devAppName string = deployDev ? devApp!.name : ''
+output devAppPrincipalId string = deployDev ? devApp!.identity.principalId! : ''
+output devAppFqdn string = deployDev ? devApp!.properties.configuration.ingress.fqdn! : ''

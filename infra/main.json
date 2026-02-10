@@ -1,0 +1,890 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.40.2.10011",
+      "templateHash": "4645691159619179093"
+    }
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "minLength": 1,
+      "metadata": {
+        "description": "Azure location for deployed resources."
+      }
+    },
+    "deployDev": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Deploy dev resources alongside prod resources."
+      }
+    },
+    "workload": {
+      "type": "string",
+      "defaultValue": "ade",
+      "minLength": 1,
+      "metadata": {
+        "description": "CAF workload token used in generated names."
+      }
+    },
+    "instance": {
+      "type": "string",
+      "defaultValue": "001",
+      "minLength": 1,
+      "metadata": {
+        "description": "CAF instance token used in generated names."
+      }
+    },
+    "vnetCidr": {
+      "type": "string",
+      "defaultValue": "10.80.0.0/16",
+      "metadata": {
+        "description": "CIDR for the shared virtual network."
+      }
+    },
+    "acaSubnetCidr": {
+      "type": "string",
+      "defaultValue": "10.80.0.0/23",
+      "metadata": {
+        "description": "CIDR for the Container Apps delegated subnet."
+      }
+    },
+    "postgresAdminUser": {
+      "type": "string",
+      "defaultValue": "adeadmin",
+      "metadata": {
+        "description": "PostgreSQL administrator login name."
+      }
+    },
+    "postgresAdminPassword": {
+      "type": "securestring",
+      "metadata": {
+        "description": "PostgreSQL administrator login password."
+      }
+    },
+    "postgresVersion": {
+      "type": "string",
+      "defaultValue": "16",
+      "metadata": {
+        "description": "PostgreSQL major version (for example, 16)."
+      }
+    },
+    "postgresTier": {
+      "type": "string",
+      "defaultValue": "Burstable",
+      "metadata": {
+        "description": "PostgreSQL tier (for example, Burstable)."
+      }
+    },
+    "postgresSkuName": {
+      "type": "string",
+      "defaultValue": "Standard_B1ms",
+      "metadata": {
+        "description": "PostgreSQL SKU name (for example, Standard_B1ms)."
+      }
+    },
+    "postgresStorageSizeGb": {
+      "type": "int",
+      "defaultValue": 32,
+      "minValue": 32,
+      "metadata": {
+        "description": "PostgreSQL storage size in GiB."
+      }
+    },
+    "postgresProdDb": {
+      "type": "string",
+      "defaultValue": "ade",
+      "metadata": {
+        "description": "Prod PostgreSQL database name."
+      }
+    },
+    "postgresDevDb": {
+      "type": "string",
+      "defaultValue": "ade_dev",
+      "metadata": {
+        "description": "Dev PostgreSQL database name."
+      }
+    },
+    "postgresEntraAdminObjectId": {
+      "type": "string",
+      "metadata": {
+        "description": "Signed-in Entra object ID to set as PostgreSQL Entra admin."
+      }
+    },
+    "postgresEntraAdminPrincipalName": {
+      "type": "string",
+      "metadata": {
+        "description": "Signed-in Entra display name to set as PostgreSQL Entra admin principal name."
+      }
+    },
+    "postgresEntraAdminPrincipalType": {
+      "type": "string",
+      "defaultValue": "User",
+      "allowedValues": [
+        "User",
+        "Group",
+        "ServicePrincipal"
+      ],
+      "metadata": {
+        "description": "PostgreSQL Entra admin principal type."
+      }
+    },
+    "enableFabricAzureServicesRule": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Enable the 0.0.0.0 allow-azure-services firewall rule for Fabric compatibility."
+      }
+    },
+    "operatorIps": {
+      "type": "array",
+      "defaultValue": [],
+      "metadata": {
+        "description": "Operator IPv4 addresses to allow in PostgreSQL and Storage firewall rules."
+      }
+    },
+    "storageSku": {
+      "type": "string",
+      "defaultValue": "Standard_LRS",
+      "metadata": {
+        "description": "Storage account SKU name."
+      }
+    },
+    "prodImage": {
+      "type": "string",
+      "metadata": {
+        "description": "Prod app container image."
+      }
+    },
+    "devImage": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Dev app container image. Defaults to prod image when omitted."
+      }
+    },
+    "prodWebUrl": {
+      "type": "string",
+      "metadata": {
+        "description": "Prod app public URL."
+      }
+    },
+    "devWebUrl": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Dev app public URL. Defaults to prod URL when omitted."
+      }
+    },
+    "prodSecretKey": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Prod ADE secret key value."
+      }
+    },
+    "devSecretKey": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Dev ADE secret key value. Defaults to prod secret when omitted."
+      }
+    },
+    "databaseAuthMode": {
+      "type": "string",
+      "defaultValue": "managed_identity",
+      "metadata": {
+        "description": "ADE database authentication mode."
+      }
+    },
+    "prodMinReplicas": {
+      "type": "int",
+      "defaultValue": 1,
+      "minValue": 0,
+      "metadata": {
+        "description": "Prod app minimum replicas."
+      }
+    },
+    "prodMaxReplicas": {
+      "type": "int",
+      "defaultValue": 2,
+      "minValue": 1,
+      "metadata": {
+        "description": "Prod app maximum replicas."
+      }
+    },
+    "devMinReplicas": {
+      "type": "int",
+      "defaultValue": 0,
+      "minValue": 0,
+      "metadata": {
+        "description": "Dev app minimum replicas."
+      }
+    },
+    "devMaxReplicas": {
+      "type": "int",
+      "defaultValue": 1,
+      "minValue": 1,
+      "metadata": {
+        "description": "Dev app maximum replicas."
+      }
+    }
+  },
+  "variables": {
+    "copy": [
+      {
+        "name": "operatorFirewallRules",
+        "count": "[length(parameters('operatorIps'))]",
+        "input": {
+          "name": "[format('operator-{0}', replace(parameters('operatorIps')[copyIndex('operatorFirewallRules')], '.', '-'))]",
+          "startIpAddress": "[parameters('operatorIps')[copyIndex('operatorFirewallRules')]]",
+          "endIpAddress": "[parameters('operatorIps')[copyIndex('operatorFirewallRules')]]"
+        }
+      },
+      {
+        "name": "storageIpRules",
+        "count": "[length(parameters('operatorIps'))]",
+        "input": {
+          "action": "Allow",
+          "value": "[parameters('operatorIps')[copyIndex('storageIpRules')]]"
+        }
+      }
+    ],
+    "regionToken": "[toLower(replace(parameters('location'), ' ', ''))]",
+    "uniqueShort": "[toLower(take(uniqueString(subscription().id, resourceGroup().id, parameters('workload'), variables('regionToken'), parameters('instance')), 4))]",
+    "sharedEnvToken": "shared",
+    "prodEnvToken": "prod",
+    "devEnvToken": "dev",
+    "vnetName": "[take(format('vnet-{0}-{1}-{2}-{3}', parameters('workload'), variables('sharedEnvToken'), variables('regionToken'), parameters('instance')), 64)]",
+    "acaSubnetName": "[take(format('snet-{0}-{1}-{2}-{3}-aca', parameters('workload'), variables('sharedEnvToken'), variables('regionToken'), parameters('instance')), 80)]",
+    "acaEnvName": "[take(format('cae-{0}-{1}-{2}-{3}', parameters('workload'), variables('sharedEnvToken'), variables('regionToken'), parameters('instance')), 60)]",
+    "logAnalyticsWorkspaceName": "[take(format('log-{0}-{1}-{2}-{3}', parameters('workload'), variables('sharedEnvToken'), variables('regionToken'), parameters('instance')), 63)]",
+    "postgresServerName": "[take(format('psql-{0}-{1}-{2}-{3}-{4}', parameters('workload'), variables('sharedEnvToken'), variables('regionToken'), parameters('instance'), variables('uniqueShort')), 63)]",
+    "storageAccountName": "[toLower(format('st{0}', uniqueString(subscription().id, resourceGroup().id, parameters('workload'), variables('regionToken'), parameters('instance'))))]",
+    "prodAppName": "[take(format('ca-{0}-{1}-{2}-{3}', parameters('workload'), variables('prodEnvToken'), variables('regionToken'), parameters('instance')), 32)]",
+    "devAppName": "[take(format('ca-{0}-{1}-{2}-{3}', parameters('workload'), variables('devEnvToken'), variables('regionToken'), parameters('instance')), 32)]",
+    "prodBlobContainerName": "[toLower(take(format('{0}-{1}', parameters('workload'), variables('prodEnvToken')), 63))]",
+    "devBlobContainerName": "[toLower(take(format('{0}-{1}', parameters('workload'), variables('devEnvToken')), 63))]",
+    "prodFileShareName": "[toLower(take(format('{0}-data-{1}', parameters('workload'), variables('prodEnvToken')), 63))]",
+    "devFileShareName": "[toLower(take(format('{0}-data-{1}', parameters('workload'), variables('devEnvToken')), 63))]",
+    "prodStorageMountName": "[take(format('share-{0}-{1}-{2}', parameters('workload'), variables('prodEnvToken'), parameters('instance')), 32)]",
+    "devStorageMountName": "[take(format('share-{0}-{1}-{2}', parameters('workload'), variables('devEnvToken'), parameters('instance')), 32)]",
+    "effectiveDevImage": "[if(empty(parameters('devImage')), parameters('prodImage'), parameters('devImage'))]",
+    "effectiveDevWebUrl": "[if(empty(parameters('devWebUrl')), parameters('prodWebUrl'), parameters('devWebUrl'))]",
+    "effectiveDevSecretKey": "[if(empty(parameters('devSecretKey')), parameters('prodSecretKey'), parameters('devSecretKey'))]",
+    "blobAccountUrl": "[format('https://{0}.blob.{1}', variables('storageAccountName'), environment().suffixes.storage)]",
+    "postgresFirewallRules": "[concat(if(parameters('enableFabricAzureServicesRule'), createArray(createObject('name', 'allow-azure-services', 'startIpAddress', '0.0.0.0', 'endIpAddress', '0.0.0.0')), createArray()), variables('operatorFirewallRules'))]",
+    "blobRoleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Network/virtualNetworks",
+      "apiVersion": "2023-09-01",
+      "name": "[variables('vnetName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "addressSpace": {
+          "addressPrefixes": [
+            "[parameters('vnetCidr')]"
+          ]
+        },
+        "subnets": [
+          {
+            "name": "[variables('acaSubnetName')]",
+            "properties": {
+              "addressPrefix": "[parameters('acaSubnetCidr')]",
+              "delegations": [
+                {
+                  "name": "aca-environments-delegation",
+                  "properties": {
+                    "serviceName": "Microsoft.App/environments"
+                  }
+                }
+              ],
+              "serviceEndpoints": [
+                {
+                  "service": "Microsoft.Storage"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2023-09-01",
+      "name": "[variables('logAnalyticsWorkspaceName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "sku": {
+          "name": "PerGB2018"
+        },
+        "retentionInDays": 30,
+        "features": {
+          "disableLocalAuth": false,
+          "enableLogAccessUsingOnlyResourcePermissions": true
+        },
+        "publicNetworkAccessForIngestion": "Enabled",
+        "publicNetworkAccessForQuery": "Enabled"
+      }
+    },
+    {
+      "type": "Microsoft.App/managedEnvironments",
+      "apiVersion": "2023-05-01",
+      "name": "[variables('acaEnvName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "workloadProfiles": [
+          {
+            "name": "Consumption",
+            "workloadProfileType": "Consumption"
+          }
+        ],
+        "appLogsConfiguration": {
+          "destination": "log-analytics",
+          "logAnalyticsConfiguration": {
+            "customerId": "[reference(resourceId('Microsoft.OperationalInsights/workspaces', variables('logAnalyticsWorkspaceName')), '2023-09-01').customerId]",
+            "sharedKey": "[listKeys(resourceId('Microsoft.OperationalInsights/workspaces', variables('logAnalyticsWorkspaceName')), '2023-09-01').primarySharedKey]"
+          }
+        },
+        "vnetConfiguration": {
+          "infrastructureSubnetId": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), variables('acaSubnetName'))]"
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.OperationalInsights/workspaces', variables('logAnalyticsWorkspaceName'))]",
+        "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.DBforPostgreSQL/flexibleServers",
+      "apiVersion": "2024-08-01",
+      "name": "[variables('postgresServerName')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "[parameters('postgresSkuName')]",
+        "tier": "[parameters('postgresTier')]"
+      },
+      "properties": {
+        "administratorLogin": "[parameters('postgresAdminUser')]",
+        "administratorLoginPassword": "[parameters('postgresAdminPassword')]",
+        "version": "[parameters('postgresVersion')]",
+        "storage": {
+          "storageSizeGB": "[parameters('postgresStorageSizeGb')]"
+        },
+        "network": {
+          "publicNetworkAccess": "Enabled"
+        },
+        "authConfig": {
+          "activeDirectoryAuth": "Enabled",
+          "passwordAuth": "Enabled",
+          "tenantId": "[tenant().tenantId]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.DBforPostgreSQL/flexibleServers/databases",
+      "apiVersion": "2024-08-01",
+      "name": "[format('{0}/{1}', variables('postgresServerName'), parameters('postgresProdDb'))]",
+      "properties": {
+        "charset": "UTF8",
+        "collation": "en_US.utf8"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', variables('postgresServerName'))]"
+      ]
+    },
+    {
+      "condition": "[parameters('deployDev')]",
+      "type": "Microsoft.DBforPostgreSQL/flexibleServers/databases",
+      "apiVersion": "2024-08-01",
+      "name": "[format('{0}/{1}', variables('postgresServerName'), parameters('postgresDevDb'))]",
+      "properties": {
+        "charset": "UTF8",
+        "collation": "en_US.utf8"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', variables('postgresServerName'))]"
+      ]
+    },
+    {
+      "copy": {
+        "name": "postgresFirewallRuleResources",
+        "count": "[length(variables('postgresFirewallRules'))]"
+      },
+      "type": "Microsoft.DBforPostgreSQL/flexibleServers/firewallRules",
+      "apiVersion": "2024-08-01",
+      "name": "[format('{0}/{1}', variables('postgresServerName'), variables('postgresFirewallRules')[copyIndex()].name)]",
+      "properties": {
+        "startIpAddress": "[variables('postgresFirewallRules')[copyIndex()].startIpAddress]",
+        "endIpAddress": "[variables('postgresFirewallRules')[copyIndex()].endIpAddress]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', variables('postgresServerName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.DBforPostgreSQL/flexibleServers/administrators",
+      "apiVersion": "2024-08-01",
+      "name": "[format('{0}/{1}', variables('postgresServerName'), parameters('postgresEntraAdminObjectId'))]",
+      "properties": {
+        "principalName": "[parameters('postgresEntraAdminPrincipalName')]",
+        "principalType": "[parameters('postgresEntraAdminPrincipalType')]",
+        "tenantId": "[tenant().tenantId]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', variables('postgresServerName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2023-05-01",
+      "name": "[variables('storageAccountName')]",
+      "location": "[parameters('location')]",
+      "kind": "StorageV2",
+      "sku": {
+        "name": "[parameters('storageSku')]"
+      },
+      "properties": {
+        "allowBlobPublicAccess": false,
+        "publicNetworkAccess": "Enabled",
+        "minimumTlsVersion": "TLS1_2",
+        "supportsHttpsTrafficOnly": true,
+        "networkAcls": {
+          "defaultAction": "Deny",
+          "virtualNetworkRules": [
+            {
+              "action": "Allow",
+              "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), variables('acaSubnetName'))]"
+            }
+          ],
+          "ipRules": "[variables('storageIpRules')]"
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/blobServices",
+      "apiVersion": "2023-05-01",
+      "name": "[format('{0}/{1}', variables('storageAccountName'), 'default')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+      "apiVersion": "2023-05-01",
+      "name": "[format('{0}/{1}/{2}', variables('storageAccountName'), 'default', variables('prodBlobContainerName'))]",
+      "properties": {
+        "publicAccess": "None"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts/blobServices', variables('storageAccountName'), 'default')]"
+      ]
+    },
+    {
+      "condition": "[parameters('deployDev')]",
+      "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+      "apiVersion": "2023-05-01",
+      "name": "[format('{0}/{1}/{2}', variables('storageAccountName'), 'default', variables('devBlobContainerName'))]",
+      "properties": {
+        "publicAccess": "None"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts/blobServices', variables('storageAccountName'), 'default')]"
+      ]
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/fileServices",
+      "apiVersion": "2023-05-01",
+      "name": "[format('{0}/{1}', variables('storageAccountName'), 'default')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/fileServices/shares",
+      "apiVersion": "2023-05-01",
+      "name": "[format('{0}/{1}/{2}', variables('storageAccountName'), 'default', variables('prodFileShareName'))]",
+      "properties": {
+        "shareQuota": 1024
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts/fileServices', variables('storageAccountName'), 'default')]"
+      ]
+    },
+    {
+      "condition": "[parameters('deployDev')]",
+      "type": "Microsoft.Storage/storageAccounts/fileServices/shares",
+      "apiVersion": "2023-05-01",
+      "name": "[format('{0}/{1}/{2}', variables('storageAccountName'), 'default', variables('devFileShareName'))]",
+      "properties": {
+        "shareQuota": 1024
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts/fileServices', variables('storageAccountName'), 'default')]"
+      ]
+    },
+    {
+      "type": "Microsoft.App/managedEnvironments/storages",
+      "apiVersion": "2023-05-01",
+      "name": "[format('{0}/{1}', variables('acaEnvName'), variables('prodStorageMountName'))]",
+      "properties": {
+        "azureFile": {
+          "accessMode": "ReadWrite",
+          "accountName": "[variables('storageAccountName')]",
+          "accountKey": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2023-05-01').keys[0].value]",
+          "shareName": "[variables('prodFileShareName')]"
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.App/managedEnvironments', variables('acaEnvName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+      ]
+    },
+    {
+      "condition": "[parameters('deployDev')]",
+      "type": "Microsoft.App/managedEnvironments/storages",
+      "apiVersion": "2023-05-01",
+      "name": "[format('{0}/{1}', variables('acaEnvName'), variables('devStorageMountName'))]",
+      "properties": {
+        "azureFile": {
+          "accessMode": "ReadWrite",
+          "accountName": "[variables('storageAccountName')]",
+          "accountKey": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2023-05-01').keys[0].value]",
+          "shareName": "[variables('devFileShareName')]"
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.App/managedEnvironments', variables('acaEnvName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.App/containerApps",
+      "apiVersion": "2023-05-01",
+      "name": "[variables('prodAppName')]",
+      "location": "[parameters('location')]",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "properties": {
+        "managedEnvironmentId": "[resourceId('Microsoft.App/managedEnvironments', variables('acaEnvName'))]",
+        "configuration": {
+          "activeRevisionsMode": "Single",
+          "ingress": {
+            "external": true,
+            "targetPort": 8000,
+            "transport": "Auto",
+            "allowInsecure": false
+          },
+          "secrets": [
+            {
+              "name": "ade-database-url",
+              "value": "[format('postgresql+psycopg://{0}@{1}:5432/{2}?sslmode=require', variables('prodAppName'), reference(resourceId('Microsoft.DBforPostgreSQL/flexibleServers', variables('postgresServerName')), '2024-08-01').fullyQualifiedDomainName, parameters('postgresProdDb'))]"
+            },
+            {
+              "name": "ade-secret-key",
+              "value": "[parameters('prodSecretKey')]"
+            }
+          ]
+        },
+        "template": {
+          "containers": [
+            {
+              "name": "[variables('prodAppName')]",
+              "image": "[parameters('prodImage')]",
+              "env": [
+                {
+                  "name": "ADE_SERVICES",
+                  "value": "api,worker,web"
+                },
+                {
+                  "name": "ADE_PUBLIC_WEB_URL",
+                  "value": "[parameters('prodWebUrl')]"
+                },
+                {
+                  "name": "ADE_DATABASE_AUTH_MODE",
+                  "value": "[parameters('databaseAuthMode')]"
+                },
+                {
+                  "name": "ADE_DATABASE_URL",
+                  "secretRef": "ade-database-url"
+                },
+                {
+                  "name": "ADE_SECRET_KEY",
+                  "secretRef": "ade-secret-key"
+                },
+                {
+                  "name": "ADE_BLOB_ACCOUNT_URL",
+                  "value": "[variables('blobAccountUrl')]"
+                },
+                {
+                  "name": "ADE_BLOB_CONTAINER",
+                  "value": "[variables('prodBlobContainerName')]"
+                },
+                {
+                  "name": "ADE_DATA_DIR",
+                  "value": "/app/data"
+                },
+                {
+                  "name": "ADE_AUTH_DISABLED",
+                  "value": "false"
+                }
+              ],
+              "volumeMounts": [
+                {
+                  "volumeName": "ade-data",
+                  "mountPath": "/app/data"
+                }
+              ]
+            }
+          ],
+          "scale": {
+            "minReplicas": "[parameters('prodMinReplicas')]",
+            "maxReplicas": "[parameters('prodMaxReplicas')]"
+          },
+          "volumes": [
+            {
+              "name": "ade-data",
+              "storageType": "AzureFile",
+              "storageName": "[variables('prodStorageMountName')]"
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.App/managedEnvironments', variables('acaEnvName'))]",
+        "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', variables('postgresServerName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+      ]
+    },
+    {
+      "condition": "[parameters('deployDev')]",
+      "type": "Microsoft.App/containerApps",
+      "apiVersion": "2023-05-01",
+      "name": "[variables('devAppName')]",
+      "location": "[parameters('location')]",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "properties": {
+        "managedEnvironmentId": "[resourceId('Microsoft.App/managedEnvironments', variables('acaEnvName'))]",
+        "configuration": {
+          "activeRevisionsMode": "Single",
+          "ingress": {
+            "external": true,
+            "targetPort": 8000,
+            "transport": "Auto",
+            "allowInsecure": false
+          },
+          "secrets": [
+            {
+              "name": "ade-database-url",
+              "value": "[format('postgresql+psycopg://{0}@{1}:5432/{2}?sslmode=require', variables('devAppName'), reference(resourceId('Microsoft.DBforPostgreSQL/flexibleServers', variables('postgresServerName')), '2024-08-01').fullyQualifiedDomainName, parameters('postgresDevDb'))]"
+            },
+            {
+              "name": "ade-secret-key",
+              "value": "[variables('effectiveDevSecretKey')]"
+            }
+          ]
+        },
+        "template": {
+          "containers": [
+            {
+              "name": "[variables('devAppName')]",
+              "image": "[variables('effectiveDevImage')]",
+              "env": [
+                {
+                  "name": "ADE_SERVICES",
+                  "value": "api,worker,web"
+                },
+                {
+                  "name": "ADE_PUBLIC_WEB_URL",
+                  "value": "[variables('effectiveDevWebUrl')]"
+                },
+                {
+                  "name": "ADE_DATABASE_AUTH_MODE",
+                  "value": "[parameters('databaseAuthMode')]"
+                },
+                {
+                  "name": "ADE_DATABASE_URL",
+                  "secretRef": "ade-database-url"
+                },
+                {
+                  "name": "ADE_SECRET_KEY",
+                  "secretRef": "ade-secret-key"
+                },
+                {
+                  "name": "ADE_BLOB_ACCOUNT_URL",
+                  "value": "[variables('blobAccountUrl')]"
+                },
+                {
+                  "name": "ADE_BLOB_CONTAINER",
+                  "value": "[variables('devBlobContainerName')]"
+                },
+                {
+                  "name": "ADE_DATA_DIR",
+                  "value": "/app/data"
+                },
+                {
+                  "name": "ADE_AUTH_DISABLED",
+                  "value": "false"
+                }
+              ],
+              "volumeMounts": [
+                {
+                  "volumeName": "ade-data",
+                  "mountPath": "/app/data"
+                }
+              ]
+            }
+          ],
+          "scale": {
+            "minReplicas": "[parameters('devMinReplicas')]",
+            "maxReplicas": "[parameters('devMaxReplicas')]"
+          },
+          "volumes": [
+            {
+              "name": "ade-data",
+              "storageType": "AzureFile",
+              "storageName": "[variables('devStorageMountName')]"
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.App/managedEnvironments', variables('acaEnvName'))]",
+        "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', variables('postgresServerName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "scope": "[resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', variables('storageAccountName'), 'default', variables('prodBlobContainerName'))]",
+      "name": "[guid(resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', variables('storageAccountName'), 'default', variables('prodBlobContainerName')), variables('prodAppName'), variables('blobRoleDefinitionId'))]",
+      "properties": {
+        "roleDefinitionId": "[variables('blobRoleDefinitionId')]",
+        "principalId": "[reference(resourceId('Microsoft.App/containerApps', variables('prodAppName')), '2023-05-01', 'full').identity.principalId]",
+        "principalType": "ServicePrincipal"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.App/containerApps', variables('prodAppName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', variables('storageAccountName'), 'default', variables('prodBlobContainerName'))]"
+      ]
+    },
+    {
+      "condition": "[parameters('deployDev')]",
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "name": "[guid(resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', variables('storageAccountName'), 'default', variables('devBlobContainerName')), variables('devAppName'), variables('blobRoleDefinitionId'))]",
+      "properties": {
+        "roleDefinitionId": "[variables('blobRoleDefinitionId')]",
+        "principalId": "[reference(resourceId('Microsoft.App/containerApps', variables('devAppName')), '2023-05-01', 'full').identity.principalId]",
+        "principalType": "ServicePrincipal"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.App/containerApps', variables('devAppName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', variables('storageAccountName'), 'default', variables('devBlobContainerName'))]"
+      ]
+    }
+  ],
+  "outputs": {
+    "deployDev": {
+      "type": "bool",
+      "value": "[parameters('deployDev')]"
+    },
+    "acaEnvName": {
+      "type": "string",
+      "value": "[variables('acaEnvName')]"
+    },
+    "acaEnvId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.App/managedEnvironments', variables('acaEnvName'))]"
+    },
+    "vnetName": {
+      "type": "string",
+      "value": "[variables('vnetName')]"
+    },
+    "acaSubnetId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), variables('acaSubnetName'))]"
+    },
+    "logAnalyticsWorkspaceName": {
+      "type": "string",
+      "value": "[variables('logAnalyticsWorkspaceName')]"
+    },
+    "postgresServerName": {
+      "type": "string",
+      "value": "[variables('postgresServerName')]"
+    },
+    "postgresFqdn": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.DBforPostgreSQL/flexibleServers', variables('postgresServerName')), '2024-08-01').fullyQualifiedDomainName]"
+    },
+    "postgresVersion": {
+      "type": "string",
+      "value": "[string(reference(resourceId('Microsoft.DBforPostgreSQL/flexibleServers', variables('postgresServerName')), '2024-08-01').version)]"
+    },
+    "postgresProdDb": {
+      "type": "string",
+      "value": "[parameters('postgresProdDb')]"
+    },
+    "postgresDevDb": {
+      "type": "string",
+      "value": "[if(parameters('deployDev'), parameters('postgresDevDb'), '')]"
+    },
+    "storageAccountName": {
+      "type": "string",
+      "value": "[variables('storageAccountName')]"
+    },
+    "prodBlobContainerName": {
+      "type": "string",
+      "value": "[variables('prodBlobContainerName')]"
+    },
+    "devBlobContainerName": {
+      "type": "string",
+      "value": "[if(parameters('deployDev'), variables('devBlobContainerName'), '')]"
+    },
+    "prodFileShareName": {
+      "type": "string",
+      "value": "[variables('prodFileShareName')]"
+    },
+    "devFileShareName": {
+      "type": "string",
+      "value": "[if(parameters('deployDev'), variables('devFileShareName'), '')]"
+    },
+    "prodAppName": {
+      "type": "string",
+      "value": "[variables('prodAppName')]"
+    },
+    "prodAppPrincipalId": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.App/containerApps', variables('prodAppName')), '2023-05-01', 'full').identity.principalId]"
+    },
+    "prodAppFqdn": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.App/containerApps', variables('prodAppName')), '2023-05-01').configuration.ingress.fqdn]"
+    },
+    "devAppName": {
+      "type": "string",
+      "value": "[if(parameters('deployDev'), variables('devAppName'), '')]"
+    },
+    "devAppPrincipalId": {
+      "type": "string",
+      "value": "[if(parameters('deployDev'), reference(resourceId('Microsoft.App/containerApps', variables('devAppName')), '2023-05-01', 'full').identity.principalId, '')]"
+    },
+    "devAppFqdn": {
+      "type": "string",
+      "value": "[if(parameters('deployDev'), reference(resourceId('Microsoft.App/containerApps', variables('devAppName')), '2023-05-01').configuration.ingress.fqdn, '')]"
+    }
+  }
+}

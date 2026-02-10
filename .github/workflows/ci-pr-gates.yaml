@@ -373,3 +373,33 @@ jobs:
           uv run ade web lint
           uv run ade web typecheck
           uv run ade web test
+
+  infra-bicep-artifacts:
+    name: Infra Bicep Artifact Drift
+    needs: changes
+    if: ${{ github.event_name != 'pull_request' || needs.changes.outputs.docs_only != 'true' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Regenerate Bicep JSON artifacts
+        run: |
+          docker run --rm \
+            -v "$PWD":/work \
+            -w /work \
+            mcr.microsoft.com/azure-cli:2.67.0 \
+            sh -lc '
+              az bicep install
+              az bicep build --file infra/main.bicep --outfile infra/main.json
+              az bicep build-params --file infra/main.prod.bicepparam --outfile infra/main.prod.parameters.json
+              az bicep build-params --file infra/main.proddev.bicepparam --outfile infra/main.proddev.parameters.json
+            '
+
+      - name: Assert generated infra artifacts are committed
+        run: |
+          git diff --exit-code -- \
+            infra/main.json \
+            infra/main.prod.parameters.json \
+            infra/main.proddev.parameters.json

@@ -1,0 +1,50 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": {
+      "value": "canadacentral"
+    },
+    "deployDev": {
+      "value": false
+    },
+    "workload": {
+      "value": "ade"
+    },
+    "instance": {
+      "value": "001"
+    },
+    "postgresAdminUser": {
+      "value": "adeadmin"
+    },
+    "postgresAdminPassword": {
+      "value": "change-me-postgres-password"
+    },
+    "postgresEntraAdminObjectId": {
+      "value": "00000000-0000-0000-0000-000000000000"
+    },
+    "postgresEntraAdminPrincipalName": {
+      "value": "operator@example.com"
+    },
+    "postgresEntraAdminPrincipalType": {
+      "value": "User"
+    },
+    "enableFabricAzureServicesRule": {
+      "value": true
+    },
+    "operatorIps": {
+      "value": [
+        "203.0.113.10"
+      ]
+    },
+    "prodImage": {
+      "value": "ghcr.io/clac-ca/automatic-data-extractor:vX.Y.Z"
+    },
+    "prodWebUrl": {
+      "value": "https://ade.example.com"
+    },
+    "prodSecretKey": {
+      "value": "change-me-prod-secret-key-32-bytes-min"
+    }
+  }
+}
