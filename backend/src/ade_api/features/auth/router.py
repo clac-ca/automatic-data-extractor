@@ -19,7 +19,7 @@ from ade_api.core.http import (
 )
 from ade_api.core.http.csrf import clear_csrf_cookie, set_csrf_cookie
 from ade_api.db import get_db_write
-from ade_api.settings import Settings
+from ade_api.settings import Settings, get_settings
 from ade_db.models import User
 
 from ..authn.schemas import (
@@ -46,7 +46,7 @@ from .service import AuthService, SetupAlreadyCompletedError
 from .sso_router import router as sso_router
 
 
-def create_auth_router(settings: Settings) -> APIRouter:
+def create_auth_router() -> APIRouter:
     router = APIRouter(tags=["auth"])
     router.include_router(sso_router, prefix="", tags=["auth"])
 
@@ -69,6 +69,7 @@ def create_auth_router(settings: Settings) -> APIRouter:
     async def complete_setup(
         payload: AuthSetupRequest,
         request: Request,
+        settings: Annotated[Settings, Depends(get_settings)],
     ) -> Response:
         from ade_api.db import get_session_factory
         from ade_api.features.authn.service import AuthnService
@@ -127,6 +128,7 @@ def create_auth_router(settings: Settings) -> APIRouter:
     def login_local(
         payload: AuthLoginRequest,
         db: Annotated[Session, Depends(get_db_write)],
+        settings: Annotated[Settings, Depends(get_settings)],
     ) -> Response | AuthLoginMfaRequired:
         service = AuthnService(session=db, settings=settings)
         try:
@@ -173,6 +175,7 @@ def create_auth_router(settings: Settings) -> APIRouter:
     def logout_local(
         user: Annotated[User, Security(require_authenticated)],
         db: Annotated[Session, Depends(get_db_write)],
+        settings: Annotated[Settings, Depends(get_settings)],
     ) -> Response:
         service = AuthnService(session=db, settings=settings)
         service.revoke_all_sessions_for_user(user_id=user.id)
@@ -189,6 +192,7 @@ def create_auth_router(settings: Settings) -> APIRouter:
     def password_forgot(
         payload: AuthPasswordForgotRequest,
         db: Annotated[Session, Depends(get_db_write)],
+        settings: Annotated[Settings, Depends(get_settings)],
     ) -> Response:
         service = AuthnService(session=db, settings=settings)
         service.forgot_password(email=str(payload.email))
@@ -202,6 +206,7 @@ def create_auth_router(settings: Settings) -> APIRouter:
     def password_reset(
         payload: AuthPasswordResetRequest,
         db: Annotated[Session, Depends(get_db_write)],
+        settings: Annotated[Settings, Depends(get_settings)],
     ) -> Response:
         service = AuthnService(session=db, settings=settings)
         service.reset_password(
@@ -220,6 +225,7 @@ def create_auth_router(settings: Settings) -> APIRouter:
         payload: AuthPasswordChangeRequest,
         user: Annotated[User, Security(require_authenticated)],
         db: Annotated[Session, Depends(get_db_write)],
+        settings: Annotated[Settings, Depends(get_settings)],
     ) -> Response:
         service = AuthnService(session=db, settings=settings)
         service.change_password(
@@ -239,6 +245,7 @@ def create_auth_router(settings: Settings) -> APIRouter:
     def mfa_enroll_start(
         user: Annotated[User, Security(require_authenticated)],
         db: Annotated[Session, Depends(get_db_write)],
+        settings: Annotated[Settings, Depends(get_settings)],
     ) -> AuthMfaEnrollStartResponse:
         service = AuthnService(session=db, settings=settings)
         uri, issuer, account_name = service.start_totp_enrollment(user=user)
@@ -258,6 +265,7 @@ def create_auth_router(settings: Settings) -> APIRouter:
         principal: Annotated[AuthenticatedPrincipal, Depends(get_current_principal)],
         user: Annotated[User, Security(require_authenticated)],
         db: Annotated[Session, Depends(get_db_write)],
+        settings: Annotated[Settings, Depends(get_settings)],
     ) -> AuthMfaStatusResponse:
         service = AuthnService(session=db, settings=settings)
         enabled, enrolled_at, recovery_codes_remaining = service.get_totp_status(user=user)
@@ -286,6 +294,7 @@ def create_auth_router(settings: Settings) -> APIRouter:
         payload: AuthMfaEnrollConfirmRequest,
         user: Annotated[User, Security(require_authenticated)],
         db: Annotated[Session, Depends(get_db_write)],
+        settings: Annotated[Settings, Depends(get_settings)],
     ) -> AuthMfaEnrollConfirmResponse:
         service = AuthnService(session=db, settings=settings)
         recovery_codes = service.confirm_totp_enrollment(user=user, code=payload.code)
@@ -302,6 +311,7 @@ def create_auth_router(settings: Settings) -> APIRouter:
         payload: AuthMfaRecoveryRegenerateRequest,
         user: Annotated[User, Security(require_authenticated)],
         db: Annotated[Session, Depends(get_db_write)],
+        settings: Annotated[Settings, Depends(get_settings)],
     ) -> AuthMfaEnrollConfirmResponse:
         service = AuthnService(session=db, settings=settings)
         recovery_codes = service.regenerate_recovery_codes(user=user, code=payload.code)
@@ -316,6 +326,7 @@ def create_auth_router(settings: Settings) -> APIRouter:
     def mfa_verify_challenge(
         payload: AuthMfaChallengeVerifyRequest,
         db: Annotated[Session, Depends(get_db_write)],
+        settings: Annotated[Settings, Depends(get_settings)],
     ) -> Response:
         service = AuthnService(session=db, settings=settings)
         login_result = service.verify_challenge(
@@ -344,6 +355,7 @@ def create_auth_router(settings: Settings) -> APIRouter:
     def mfa_disable(
         user: Annotated[User, Security(require_authenticated)],
         db: Annotated[Session, Depends(get_db_write)],
+        settings: Annotated[Settings, Depends(get_settings)],
     ) -> Response:
         service = AuthnService(session=db, settings=settings)
         service.disable_totp(user=user)
