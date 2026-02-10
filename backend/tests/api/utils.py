@@ -64,7 +64,10 @@ async def login(
     )
     assert response.status_code == 200, response.text
 
-    settings = get_settings()
+    app = _resolve_test_app(client)
+    settings = getattr(app.state, "settings", None) if app is not None else None
+    if settings is None:
+        settings = get_settings()
     csrf_cookie = client.cookies.get(settings.session_csrf_cookie_name)
     assert csrf_cookie, "CSRF cookie missing after login"
 

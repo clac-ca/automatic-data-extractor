@@ -1,9 +1,11 @@
 """Routes exposing ADE metadata."""
 
-from fastapi import APIRouter, status
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, status
 
 from ade_api.infra.versions import read_web_version
-from ade_api.settings import get_settings
+from ade_api.settings import Settings, get_settings
 
 from .schemas import VersionsResponse
 
@@ -16,10 +18,8 @@ router = APIRouter(prefix="/meta", tags=["meta"])
     status_code=status.HTTP_200_OK,
     summary="Installed ADE versions",
 )
-def read_versions() -> VersionsResponse:
+def read_versions(settings: Annotated[Settings, Depends(get_settings)]) -> VersionsResponse:
     """Return installed backend/web versions and worker engine resolution mode."""
-
-    settings = get_settings()
     return VersionsResponse(
         backend=settings.app_version,
         engine="per-config",

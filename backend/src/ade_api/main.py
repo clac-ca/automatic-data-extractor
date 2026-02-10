@@ -71,7 +71,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # Middleware, routers, and OpenAPI configuration.
     register_middleware(app, settings=settings)
     app.include_router(ops_router, include_in_schema=False)
-    app.include_router(create_api_router(settings), prefix=API_PREFIX)
+    app.include_router(create_api_router(), prefix=API_PREFIX)
     configure_openapi(app, settings)
 
     return app
