@@ -5,6 +5,7 @@
 Create launch-ready Azure infrastructure for ADE with:
 
 - one VNet-integrated Azure Container Apps environment
+- one Log Analytics workspace for ACA diagnostics logs
 - one shared PostgreSQL Flexible Server (`Burstable`, `B1ms`, `1 vCore`, `2 GiB`, `32 GiB storage`)
 - one shared Storage Account (Blob + Azure Files)
 - one required prod app (`api,worker,web`)
@@ -55,6 +56,7 @@ Generated defaults:
 - `VNET_NAME`: `vnet-<stem>[-<suffix>]`
 - `ACA_SUBNET_NAME`: `snet-<stem>-aca[-<suffix>]`
 - `ACA_ENV_NAME`: `cae-<stem>-<location>[-<suffix>]`
+- `LOG_ANALYTICS_WORKSPACE_NAME`: `log-<stem>[-<suffix>]`
 - `PROD_APP_NAME`: `ca-<stem>-prod[-<suffix>]`
 - `DEV_APP_NAME`: `ca-<stem>-dev[-<suffix>]` (only when `DEPLOY_DEV=true`)
 - `PROD_STORAGE_MOUNT_NAME`: `share-<stem>-prod[-<suffix>]`

@@ -173,6 +173,7 @@ Optional:
   --aca-subnet-name <name>                   (default: snet-<stem>-aca[-<suffix>])
   --aca-subnet-cidr <cidr>                   (default: 10.80.0.0/23)
   --aca-env-name <name>                      (default: cae-<stem>-<location>[-<suffix>])
+  --log-analytics-workspace-name <name>      (default: log-<stem>[-<suffix>])
   --postgres-server-name <name>              (default: psql-<stem>-<location>[-<suffix>])
   --postgres-prod-db <name>                  (default: ade)
   --postgres-dev-db <name>                   (default: ade_dev)
@@ -604,6 +605,7 @@ VNET_CIDR="10.80.0.0/16"
 ACA_SUBNET_NAME=""
 ACA_SUBNET_CIDR="10.80.0.0/23"
 ACA_ENV_NAME=""
+LOG_ANALYTICS_WORKSPACE_NAME=""
 
 POSTGRES_SERVER_NAME=""
 POSTGRES_ADMIN_USER=""
@@ -666,6 +668,7 @@ while [[ $# -gt 0 ]]; do
     --aca-subnet-name) ACA_SUBNET_NAME="$2"; shift 2 ;;
     --aca-subnet-cidr) ACA_SUBNET_CIDR="$2"; shift 2 ;;
     --aca-env-name) ACA_ENV_NAME="$2"; shift 2 ;;
+    --log-analytics-workspace-name) LOG_ANALYTICS_WORKSPACE_NAME="$2"; shift 2 ;;
     --postgres-server-name) POSTGRES_SERVER_NAME="$2"; shift 2 ;;
     --postgres-admin-user) POSTGRES_ADMIN_USER="$2"; shift 2 ;;
     --postgres-admin-password) POSTGRES_ADMIN_PASSWORD="$2"; shift 2 ;;
@@ -763,6 +766,9 @@ fi
 if [[ -z "$ACA_ENV_NAME" ]]; then
   ACA_ENV_NAME="$(append_suffix_dash "cae-${STEM_DASH}-${LOCATION_TOKEN}" "$SUFFIX_DASH")"
 fi
+if [[ -z "$LOG_ANALYTICS_WORKSPACE_NAME" ]]; then
+  LOG_ANALYTICS_WORKSPACE_NAME="$(append_suffix_dash "log-${STEM_DASH}" "$SUFFIX_DASH")"
+fi
 if [[ -z "$POSTGRES_SERVER_NAME" ]]; then
   POSTGRES_SERVER_NAME="$(append_suffix_dash "psql-${STEM_DASH}-${LOCATION_TOKEN}" "$SUFFIX_DASH")"
 fi
@@ -794,6 +800,7 @@ fi
 [[ "$DATABASE_AUTH_MODE" == "managed_identity" ]] || die "only --database-auth-mode managed_identity is supported"
 [[ "$POSTGRES_SERVER_NAME" =~ ^[a-z][a-z0-9-]{1,61}[a-z0-9]$ ]] || die "postgres server name must be 3-63 chars, lowercase alnum/hyphen, start with letter, end with alnum. Override with POSTGRES_SERVER_NAME or --postgres-server-name."
 [[ "$STORAGE_ACCOUNT_NAME" =~ ^[a-z0-9]{3,24}$ ]] || die "storage account name must be 3-24 lowercase letters/numbers. Override with STORAGE_ACCOUNT_NAME or --storage-account-name."
+[[ "$LOG_ANALYTICS_WORKSPACE_NAME" =~ ^[a-z0-9][a-z0-9-]{2,61}[a-z0-9]$ ]] || die "log analytics workspace name must be 4-63 chars, lowercase alnum/hyphen, start/end with alnum. Override with LOG_ANALYTICS_WORKSPACE_NAME or --log-analytics-workspace-name."
 
 if [[ "$DEPLOY_DEV" == "true" ]]; then
   require_non_empty "$DEV_WEB_URL" "dev-web-url (required when --deploy-dev=true)"
@@ -845,6 +852,22 @@ done
 
 log "ensuring resource group"
 az group create --name "$RESOURCE_GROUP" --location "$LOCATION" >/dev/null
+
+if az monitor log-analytics workspace show --resource-group "$RESOURCE_GROUP" --workspace-name "$LOG_ANALYTICS_WORKSPACE_NAME" >/dev/null 2>&1; then
+  log "log analytics workspace already exists: $LOG_ANALYTICS_WORKSPACE_NAME"
+else
+  log "creating log analytics workspace: $LOG_ANALYTICS_WORKSPACE_NAME"
+  az monitor log-analytics workspace create \
+    --resource-group "$RESOURCE_GROUP" \
+    --workspace-name "$LOG_ANALYTICS_WORKSPACE_NAME" \
+    --location "$LOCATION" >/dev/null
+fi
+
+LOG_ANALYTICS_WORKSPACE_CUSTOMER_ID="$(az monitor log-analytics workspace show \
+  --resource-group "$RESOURCE_GROUP" \
+  --workspace-name "$LOG_ANALYTICS_WORKSPACE_NAME" \
+  --query customerId -o tsv)"
+require_non_empty "$LOG_ANALYTICS_WORKSPACE_CUSTOMER_ID" "log analytics workspace customer id"
 
 if az network vnet show --resource-group "$RESOURCE_GROUP" --name "$VNET_NAME" >/dev/null 2>&1; then
   log "vnet already exists: $VNET_NAME"
@@ -908,12 +931,46 @@ ACA_SUBNET_ID="$(az network vnet subnet show \
 
 if az containerapp env show --resource-group "$RESOURCE_GROUP" --name "$ACA_ENV_NAME" >/dev/null 2>&1; then
   log "container apps environment already exists: $ACA_ENV_NAME"
+  ACA_CURRENT_LOG_DESTINATION="$(az containerapp env show \
+    --resource-group "$RESOURCE_GROUP" \
+    --name "$ACA_ENV_NAME" \
+    --query properties.appLogsConfiguration.destination \
+    -o tsv 2>/dev/null || true)"
+  ACA_CURRENT_LOG_WORKSPACE_CUSTOMER_ID="$(az containerapp env show \
+    --resource-group "$RESOURCE_GROUP" \
+    --name "$ACA_ENV_NAME" \
+    --query properties.appLogsConfiguration.logAnalyticsConfiguration.customerId \
+    -o tsv 2>/dev/null || true)"
+  if [[ "$ACA_CURRENT_LOG_DESTINATION" == "log-analytics" && "$ACA_CURRENT_LOG_WORKSPACE_CUSTOMER_ID" == "$LOG_ANALYTICS_WORKSPACE_CUSTOMER_ID" ]]; then
+    log "container apps environment logging already targets: $LOG_ANALYTICS_WORKSPACE_NAME"
+  else
+    LOG_ANALYTICS_WORKSPACE_SHARED_KEY="$(az monitor log-analytics workspace get-shared-keys \
+      --resource-group "$RESOURCE_GROUP" \
+      --workspace-name "$LOG_ANALYTICS_WORKSPACE_NAME" \
+      --query primarySharedKey -o tsv)"
+    require_non_empty "$LOG_ANALYTICS_WORKSPACE_SHARED_KEY" "log analytics workspace shared key"
+    log "updating container apps environment logging workspace: $LOG_ANALYTICS_WORKSPACE_NAME"
+    az containerapp env update \
+      --resource-group "$RESOURCE_GROUP" \
+      --name "$ACA_ENV_NAME" \
+      --logs-destination log-analytics \
+      --logs-workspace-id "$LOG_ANALYTICS_WORKSPACE_CUSTOMER_ID" \
+      --logs-workspace-key "$LOG_ANALYTICS_WORKSPACE_SHARED_KEY" >/dev/null
+  fi
 else
+  LOG_ANALYTICS_WORKSPACE_SHARED_KEY="$(az monitor log-analytics workspace get-shared-keys \
+    --resource-group "$RESOURCE_GROUP" \
+    --workspace-name "$LOG_ANALYTICS_WORKSPACE_NAME" \
+    --query primarySharedKey -o tsv)"
+  require_non_empty "$LOG_ANALYTICS_WORKSPACE_SHARED_KEY" "log analytics workspace shared key"
   log "creating container apps environment: $ACA_ENV_NAME"
   az containerapp env create \
     --resource-group "$RESOURCE_GROUP" \
     --name "$ACA_ENV_NAME" \
     --location "$LOCATION" \
+    --logs-destination log-analytics \
+    --logs-workspace-id "$LOG_ANALYTICS_WORKSPACE_CUSTOMER_ID" \
+    --logs-workspace-key "$LOG_ANALYTICS_WORKSPACE_SHARED_KEY" \
     --infrastructure-subnet-resource-id "$ACA_SUBNET_ID" >/dev/null
 fi
 
@@ -1187,6 +1244,7 @@ Resource group:          ${RESOURCE_GROUP}
 Location:                ${LOCATION}
 VNet / Subnet:           ${VNET_NAME} / ${ACA_SUBNET_NAME}
 ACA environment:         ${ACA_ENV_NAME}
+Log Analytics workspace: ${LOG_ANALYTICS_WORKSPACE_NAME}
 PostgreSQL server:       ${POSTGRES_SERVER_NAME}
 PostgreSQL version:      requested ${POSTGRES_VERSION} / actual ${ACTUAL_POSTGRES_VERSION}
 PostgreSQL FQDN:         ${POSTGRES_FQDN}
