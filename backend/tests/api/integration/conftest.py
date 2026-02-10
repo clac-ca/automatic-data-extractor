@@ -145,8 +145,12 @@ def empty_database_settings(
 
 
 @pytest.fixture()
-def settings(base_settings: Settings) -> Settings:
-    return base_settings.model_copy()
+def settings(app: FastAPI, base_settings: Settings) -> Settings:
+    # Keep the shared app on a fresh settings object per test.
+    current = base_settings.model_copy()
+    app.state.settings_ref["value"] = current
+    app.state.settings = current
+    return current
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -248,21 +252,28 @@ def db_session(db_sessionmaker) -> Iterator[Session]:
         session.close()
 
 
-@pytest.fixture()
-def app(
-    settings: Settings,
-    db_sessionmaker,
-    migrated_db,
-) -> FastAPI:
-    app = create_app(settings=settings)
+@pytest.fixture(scope="session")
+def app(base_settings: Settings) -> FastAPI:
+    app_settings = base_settings.model_copy()
+    app = create_app(settings=app_settings)
 
-    settings_ref = {"value": settings}
+    settings_ref = {"value": app_settings}
     app.state.settings_ref = settings_ref
     app.state.settings = settings_ref["value"]
     app.dependency_overrides[get_settings] = lambda: settings_ref["value"]
+    app.state.test_db_sessionmaker = None
+
+    def _resolve_sessionmaker():
+        sessionmaker_override = getattr(app.state, "test_db_sessionmaker", None)
+        if sessionmaker_override is not None:
+            return sessionmaker_override
+        app_sessionmaker = getattr(app.state, "db_sessionmaker", None)
+        if app_sessionmaker is not None:
+            return app_sessionmaker
+        raise RuntimeError("Database sessionmaker not initialized for integration test app.")
 
     def _get_db_write_override():
-        session = db_sessionmaker()
+        session = _resolve_sessionmaker()()
         try:
             yield session
             session.commit()
@@ -273,7 +284,7 @@ def app(
             session.close()
 
     def _get_db_read_override():
-        session = db_sessionmaker()
+        session = _resolve_sessionmaker()()
         try:
             yield session
             session.commit()
@@ -288,20 +299,37 @@ def app(
     return app
 
 
+@pytest.fixture()
+def _bind_test_db_sessionmaker(app: FastAPI, db_sessionmaker) -> Iterator[None]:
+    previous = getattr(app.state, "test_db_sessionmaker", None)
+    previous_app_sessionmaker = getattr(app.state, "db_sessionmaker", None)
+    app.state.test_db_sessionmaker = db_sessionmaker
+    # Some integration helpers resolve app.state.db_sessionmaker directly.
+    app.state.db_sessionmaker = db_sessionmaker
+    try:
+        yield
+    finally:
+        app.state.test_db_sessionmaker = previous
+        app.state.db_sessionmaker = previous_app_sessionmaker
+
+
+@pytest_asyncio.fixture(scope="session")
+async def started_app(app: FastAPI) -> AsyncIterator[FastAPI]:
+    async with LifespanManager(app):
+        yield app
+
+
 @pytest_asyncio.fixture()
 async def async_client(
-    app: FastAPI,
-    db_sessionmaker,
-    migrated_db: Engine,
+    started_app: FastAPI,
+    settings: Settings,
+    _bind_test_db_sessionmaker,
 ) -> AsyncIterator[AsyncClient]:
-    async with LifespanManager(app):
-        app.state.db_sessionmaker = db_sessionmaker
-        app.state.db_engine = migrated_db
-        async with AsyncClient(
-            transport=ASGITransport(app=app),
-            base_url="http://testserver",
-        ) as client:
-            yield client
+    async with AsyncClient(
+        transport=ASGITransport(app=started_app),
+        base_url="http://testserver",
+    ) as client:
+        yield client
 
 
 @pytest.fixture()
