@@ -7,7 +7,6 @@ Canonical deployment docs live in:
 Use that guide for:
 
 - scenario choice (`prod` vs `prod+dev`)
-- Azure CLI deployment with `.bicepparam`
-- Azure Portal deployment with generated ARM JSON artifacts
+- Azure CLI deployment with `infra/main.bicep` and direct `--parameters`
 - managed identity PostgreSQL role mapping step
-- artifact regeneration and teardown
+- teardown

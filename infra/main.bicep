@@ -45,10 +45,10 @@ param postgresProdDb string = 'ade'
 @description('Dev PostgreSQL database name.')
 param postgresDevDb string = 'ade_dev'
 
-@description('Signed-in Entra object ID to set as PostgreSQL Entra admin.')
+@description('Entra object ID to set as PostgreSQL Entra admin.')
 param postgresEntraAdminObjectId string
 
-@description('Signed-in Entra display name to set as PostgreSQL Entra admin principal name.')
+@description('Entra principal name (UPN/app/group name) to set as PostgreSQL Entra admin principal name.')
 param postgresEntraAdminPrincipalName string
 
 @allowed([
@@ -59,11 +59,11 @@ param postgresEntraAdminPrincipalName string
 @description('PostgreSQL Entra admin principal type.')
 param postgresEntraAdminPrincipalType string = 'User'
 
-@description('Enable the 0.0.0.0 allow-azure-services firewall rule for Fabric compatibility.')
-param enableFabricAzureServicesRule bool = true
+@description('Enable PostgreSQL firewall rule equivalent to "Allow public access from any Azure service within Azure to this server" (0.0.0.0 rule).')
+param enablePostgresAllowAzureServicesRule bool = true
 
-@description('Operator IPv4 addresses to allow in PostgreSQL and Storage firewall rules.')
-param operatorIps array = []
+@description('Allowed public IPv4 addresses for PostgreSQL firewall rules and Azure Storage IP network rules.')
+param allowedPublicIpAddresses array = []
 
 @description('Storage account SKU name.')
 param storageSku string = 'Standard_LRS'
@@ -88,7 +88,11 @@ param prodSecretKey string
 @description('Dev ADE secret key value. Defaults to prod secret when omitted.')
 param devSecretKey string = ''
 
-@description('ADE database authentication mode.')
+@allowed([
+  'password'
+  'managed_identity'
+])
+@description('ADE database authentication mode. Use password for quick start or managed_identity for recommended production auth.')
 param databaseAuthMode string = 'managed_identity'
 
 @minValue(0)
@@ -136,19 +140,24 @@ var devStorageMountName = take('share-${workload}-${devEnvToken}-${instance}', 3
 var effectiveDevImage = empty(devImage) ? prodImage : devImage
 var effectiveDevWebUrl = empty(devWebUrl) ? prodWebUrl : devWebUrl
 var effectiveDevSecretKey = empty(devSecretKey) ? prodSecretKey : devSecretKey
+var useManagedIdentityDbAuth = databaseAuthMode == 'managed_identity'
 
-var prodDatabaseUrl = 'postgresql+psycopg://${prodAppName}@${postgresServer.properties.fullyQualifiedDomainName}:5432/${postgresProdDb}?sslmode=require'
-var devDatabaseUrl = 'postgresql+psycopg://${devAppName}@${postgresServer.properties.fullyQualifiedDomainName}:5432/${postgresDevDb}?sslmode=require'
+var prodDatabaseUrl = useManagedIdentityDbAuth
+  ? 'postgresql+psycopg://${prodAppName}@${postgresServer.properties.fullyQualifiedDomainName}:5432/${postgresProdDb}?sslmode=require'
+  : 'postgresql+psycopg://${uriComponent(postgresAdminUser)}:${uriComponent(postgresAdminPassword)}@${postgresServer.properties.fullyQualifiedDomainName}:5432/${postgresProdDb}?sslmode=require'
+var devDatabaseUrl = useManagedIdentityDbAuth
+  ? 'postgresql+psycopg://${devAppName}@${postgresServer.properties.fullyQualifiedDomainName}:5432/${postgresDevDb}?sslmode=require'
+  : 'postgresql+psycopg://${uriComponent(postgresAdminUser)}:${uriComponent(postgresAdminPassword)}@${postgresServer.properties.fullyQualifiedDomainName}:5432/${postgresDevDb}?sslmode=require'
 var blobAccountUrl = 'https://${storageAccount.name}.blob.${environment().suffixes.storage}'
 
-var operatorFirewallRules = [for ip in operatorIps: {
-  name: 'operator-${replace(ip, '.', '-')}'
+var allowedIpFirewallRules = [for ip in allowedPublicIpAddresses: {
+  name: 'allow-ip-${replace(ip, '.', '-')}'
   startIpAddress: ip
   endIpAddress: ip
 }]
 
 var postgresFirewallRules = concat(
-  enableFabricAzureServicesRule
+  enablePostgresAllowAzureServicesRule
     ? [
         {
           name: 'allow-azure-services'
@@ -157,10 +166,10 @@ var postgresFirewallRules = concat(
         }
       ]
     : [],
-  operatorFirewallRules
+  allowedIpFirewallRules
 )
 
-var storageIpRules = [for ip in operatorIps: {
+var storageIpRules = [for ip in allowedPublicIpAddresses: {
   action: 'Allow'
   value: ip
 }]
