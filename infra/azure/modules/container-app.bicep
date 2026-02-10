@@ -228,6 +228,9 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = if (deploy) {
       ]
     }
   }
+  dependsOn: [
+    managedEnvironmentStorage
+  ]
 }
 
 output containerAppName string = deploy ? containerApp!.name : ''

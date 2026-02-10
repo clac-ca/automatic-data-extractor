@@ -41,6 +41,20 @@ Access automation:
 - Azure RBAC assignments for the access-control groups
 - PostgreSQL Entra bootstrap for app managed identities + DB group grants (when PostgreSQL auth mode includes Entra)
 
+## Resource Naming
+
+The template uses deterministic names so re-runs in the same resource group keep the same names while still reducing global-name collisions.
+
+- Shared suffix: first 5 chars of `uniqueString(resourceGroup().id)`
+- Storage account pattern: `st<workload><env><region><instance><suffix>`
+  - Current shared-environment token is `sh`
+  - Region token is the first 3 chars of the location token
+- PostgreSQL server pattern: `psql-<workload>-shared-<region>-<instance>-<suffix>`
+
+Example:
+- Storage account: `stadeshcan001a1b2c`
+- PostgreSQL server: `psql-ade-shared-canadacentral-001-a1b2c`
+
 ## Access-Control Model
 
 Group naming contract (derived from `accessControlGroupNamePrefix`):

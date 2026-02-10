@@ -157,9 +157,15 @@ param developmentContainerAppMinimumReplicas int = 0
 param developmentContainerAppMaximumReplicas int = 1
 
 var locationToken = toLower(replace(location, ' ', ''))
-var uniqueResourceSuffix = toLower(take(uniqueString(subscription().id, resourceGroup().id, workload, locationToken, instance), 4))
+var locationShortToken = take(locationToken, 3)
+var deterministicResourceSuffix = toLower(take(uniqueString(resourceGroup().id), 5))
+var normalizedWorkloadToken = toLower(replace(replace(replace(replace(workload, '-', ''), '_', ''), ' ', ''), '.', ''))
+var normalizedInstanceToken = toLower(replace(replace(replace(replace(instance, '-', ''), '_', ''), ' ', ''), '.', ''))
+var postgresqlWorkloadToken = toLower(replace(replace(replace(workload, '_', '-'), ' ', '-'), '.', '-'))
+var postgresqlInstanceToken = toLower(replace(replace(replace(instance, '_', '-'), ' ', '-'), '.', '-'))
 
 var sharedEnvironmentToken = 'shared'
+var sharedEnvironmentShortToken = 'sh'
 var productionEnvironmentToken = 'prod'
 var developmentEnvironmentToken = 'dev'
 
@@ -167,11 +173,11 @@ var virtualNetworkName = take('vnet-${workload}-${sharedEnvironmentToken}-${loca
 var containerAppsSubnetName = take('snet-${workload}-${sharedEnvironmentToken}-${locationToken}-${instance}-aca', 80)
 var containerAppsManagedEnvironmentName = take('cae-${workload}-${sharedEnvironmentToken}-${locationToken}-${instance}', 60)
 var logAnalyticsWorkspaceName = take('log-${workload}-${sharedEnvironmentToken}-${locationToken}-${instance}', 63)
-var postgresqlServerName = take('psql-${workload}-${sharedEnvironmentToken}-${locationToken}-${instance}-${uniqueResourceSuffix}', 63)
+var postgresqlServerName = take('psql-${postgresqlWorkloadToken}-${sharedEnvironmentToken}-${locationToken}-${postgresqlInstanceToken}-${deterministicResourceSuffix}', 63)
 var postgresqlBootstrapManagedIdentityName = take('id-${workload}-${sharedEnvironmentToken}-${locationToken}-${instance}-postgresql-bootstrap', 128)
 var postgresqlBootstrapDeploymentScriptName = take('mod-${workload}-${locationToken}-${instance}-postgresql-bootstrap', 64)
 
-var storageAccountName = toLower('st${uniqueString(subscription().id, resourceGroup().id, workload, locationToken, instance)}')
+var storageAccountName = toLower(take('st${normalizedWorkloadToken}${sharedEnvironmentShortToken}${locationShortToken}${normalizedInstanceToken}${deterministicResourceSuffix}', 24))
 
 var productionContainerAppName = take('ca-${workload}-${productionEnvironmentToken}-${locationToken}-${instance}', 32)
 var developmentContainerAppName = take('ca-${workload}-${developmentEnvironmentToken}-${locationToken}-${instance}', 32)
