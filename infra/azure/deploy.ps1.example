@@ -55,6 +55,9 @@ $productionContainerAppSecretKey = "<ADE_SECRET_KEY>"
 $productionContainerAppEnvironmentOverrides = '{"ADE_LOG_LEVEL":"INFO","ADE_LOG_FORMAT":"json","ADE_AUTH_DISABLED":"false"}'
 $productionContainerAppMinimumReplicas = "1"
 $productionContainerAppMaximumReplicas = "1"
+$productionContainerAppScalePollingIntervalSeconds = "30"
+$productionContainerAppScaleCooldownPeriodSeconds = "300"
+$productionContainerAppScaleHttpConcurrentRequests = "10"
 
 $developmentContainerAppImage = "ghcr.io/clac-ca/automatic-data-extractor:<DEVELOPMENT_RUNTIME_TAG>"
 $developmentContainerAppPublicWebUrl = ""
@@ -62,6 +65,9 @@ $developmentContainerAppSecretKey = ""
 $developmentContainerAppEnvironmentOverrides = '{"ADE_LOG_LEVEL":"DEBUG","ADE_LOG_FORMAT":"json","ADE_AUTH_DISABLED":"false"}'
 $developmentContainerAppMinimumReplicas = "0"
 $developmentContainerAppMaximumReplicas = "1"
+$developmentContainerAppScalePollingIntervalSeconds = "30"
+$developmentContainerAppScaleCooldownPeriodSeconds = "1800"
+$developmentContainerAppScaleHttpConcurrentRequests = "10"
 
 # -----------------------------
 # Inputs: SSO bootstrap
@@ -505,6 +511,9 @@ $deploymentParameters = @(
     "productionContainerAppEnvironmentOverrides=$productionContainerAppEnvironmentOverrides"
     "productionContainerAppMinimumReplicas=$productionContainerAppMinimumReplicas"
     "productionContainerAppMaximumReplicas=$productionContainerAppMaximumReplicas"
+    "productionContainerAppScalePollingIntervalSeconds=$productionContainerAppScalePollingIntervalSeconds"
+    "productionContainerAppScaleCooldownPeriodSeconds=$productionContainerAppScaleCooldownPeriodSeconds"
+    "productionContainerAppScaleHttpConcurrentRequests=$productionContainerAppScaleHttpConcurrentRequests"
 )
 
 foreach ($entry in $groupMappings.GetEnumerator()) {
@@ -519,6 +528,9 @@ if ($deployDevelopmentEnvironment) {
         "developmentContainerAppEnvironmentOverrides=$developmentContainerAppEnvironmentOverrides"
         "developmentContainerAppMinimumReplicas=$developmentContainerAppMinimumReplicas"
         "developmentContainerAppMaximumReplicas=$developmentContainerAppMaximumReplicas"
+        "developmentContainerAppScalePollingIntervalSeconds=$developmentContainerAppScalePollingIntervalSeconds"
+        "developmentContainerAppScaleCooldownPeriodSeconds=$developmentContainerAppScaleCooldownPeriodSeconds"
+        "developmentContainerAppScaleHttpConcurrentRequests=$developmentContainerAppScaleHttpConcurrentRequests"
     )
 }
 
