@@ -1,0 +1,113 @@
+name: Create Rebuild Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_release_tag:
+        description: Stable release tag to rebuild (vX.Y.Z)
+        required: true
+      reason:
+        description: Short reason for rebuild release
+        required: true
+
+concurrency:
+  group: rebuild-${{ inputs.base_release_tag }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  rebuild-release:
+    name: Create rebuild tag and prerelease
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+
+    steps:
+      - name: Validate release token
+        run: |
+          if [ -z "${GH_TOKEN}" ]; then
+            echo "RELEASE_PLEASE_TOKEN is required for rebuild releases." >&2
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+
+      - name: Configure git author
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Resolve rebuild tag
+        id: rebuild
+        env:
+          BASE_RELEASE_TAG: ${{ inputs.base_release_tag }}
+        run: |
+          set -euo pipefail
+
+          if ! [[ "${BASE_RELEASE_TAG}" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            echo "base_release_tag must match vX.Y.Z (for example v1.8.0)." >&2
+            exit 1
+          fi
+
+          git fetch --tags --force origin
+
+          if ! git rev-parse "${BASE_RELEASE_TAG}^{commit}" >/dev/null 2>&1; then
+            echo "Base release tag does not exist: ${BASE_RELEASE_TAG}" >&2
+            exit 1
+          fi
+
+          base_sha="$(git rev-parse "${BASE_RELEASE_TAG}^{commit}")"
+          max_suffix=0
+
+          while IFS= read -r existing_tag; do
+            if [[ "${existing_tag}" =~ ^${BASE_RELEASE_TAG}-r([0-9]+)$ ]]; then
+              suffix="${BASH_REMATCH[1]}"
+              if [ "${suffix}" -gt "${max_suffix}" ]; then
+                max_suffix="${suffix}"
+              fi
+            fi
+          done < <(git tag -l "${BASE_RELEASE_TAG}-r*")
+
+          next_suffix=$((max_suffix + 1))
+          rebuild_tag="${BASE_RELEASE_TAG}-r${next_suffix}"
+
+          if git rev-parse -q --verify "refs/tags/${rebuild_tag}" >/dev/null 2>&1; then
+            echo "Refusing to overwrite existing rebuild tag: ${rebuild_tag}" >&2
+            exit 1
+          fi
+
+          echo "base_sha=${base_sha}" >> "$GITHUB_OUTPUT"
+          echo "rebuild_tag=${rebuild_tag}" >> "$GITHUB_OUTPUT"
+
+      - name: Create rebuild tag
+        env:
+          BASE_RELEASE_TAG: ${{ inputs.base_release_tag }}
+          REBUILD_TAG: ${{ steps.rebuild.outputs.rebuild_tag }}
+          BASE_SHA: ${{ steps.rebuild.outputs.base_sha }}
+          REASON: ${{ inputs.reason }}
+        run: |
+          set -euo pipefail
+          tag_message="$(printf 'Rebuild %s\n\nBase: %s\nReason: %s\n' "${REBUILD_TAG}" "${BASE_RELEASE_TAG}" "${REASON}")"
+          git tag -a "${REBUILD_TAG}" "${BASE_SHA}" -m "${tag_message}"
+          git push origin "refs/tags/${REBUILD_TAG}"
+
+      - name: Create prerelease
+        env:
+          BASE_RELEASE_TAG: ${{ inputs.base_release_tag }}
+          REBUILD_TAG: ${{ steps.rebuild.outputs.rebuild_tag }}
+          BASE_SHA: ${{ steps.rebuild.outputs.base_sha }}
+          REASON: ${{ inputs.reason }}
+        run: |
+          set -euo pipefail
+          release_notes="$(printf 'Rebuild of %s\n\n- Base tag: %s\n- Base commit: %s\n- Reason: %s\n' "${BASE_RELEASE_TAG}" "${BASE_RELEASE_TAG}" "${BASE_SHA}" "${REASON}")"
+          gh release create "${REBUILD_TAG}" \
+            --target "${BASE_SHA}" \
+            --title "${REBUILD_TAG}" \
+            --prerelease \
+            --notes "${release_notes}"

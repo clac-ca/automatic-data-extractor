@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { fetchMfaStatus, type MfaStatusResponse } from "@/api/auth/api";
 import { mapUiError } from "@/api/uiErrors";
+import { navigateToPostAuthPath } from "@/lib/navigation/postAuthRedirect";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { MfaSetupFlow } from "@/features/mfa-setup";
@@ -99,8 +100,8 @@ export default function MfaSetupPage() {
         onRefreshMfaStatus={refreshStatus}
         allowSkip={Boolean(mfaStatus?.skipAllowed)}
         onboardingRequired={Boolean(mfaStatus?.onboardingRequired)}
-        onSkip={() => navigate(returnTo, { replace: true })}
-        onFlowComplete={() => navigate(returnTo, { replace: true })}
+        onSkip={() => navigateToPostAuthPath(navigate, returnTo, { replace: true })}
+        onFlowComplete={() => navigateToPostAuthPath(navigate, returnTo, { replace: true })}
       />
     </div>
   );

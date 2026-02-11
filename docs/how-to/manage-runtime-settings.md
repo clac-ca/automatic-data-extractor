@@ -12,8 +12,11 @@ Update runtime-admin settings with one consistent model:
 
 - Authentication policy now uses `auth.mode` and method-scoped settings.
 - Old auth runtime keys are removed.
-- Old auth env vars are removed and invalid (`ADE_AUTH_EXTERNAL_ENABLED`, `ADE_AUTH_FORCE_SSO`, `ADE_AUTH_SSO_AUTO_PROVISION`, `ADE_AUTH_ENFORCE_LOCAL_MFA`).
-- Existing environments should reset `application_settings.data` to `{}` (or seed the new shape) before starting the updated app.
+- Old auth env vars are removed and invalid
+  (`ADE_AUTH_EXTERNAL_ENABLED`, `ADE_AUTH_FORCE_SSO`,
+  `ADE_AUTH_SSO_AUTO_PROVISION`, `ADE_AUTH_ENFORCE_LOCAL_MFA`).
+- Existing environments should reset `application_settings.data` to `{}`
+  (or seed the new shape) before starting the updated app.
 
 ## Permissions
 

@@ -2,7 +2,8 @@
 
 Use this page as the source of truth for capacity/security defaults across app code and compose files.
 
-Azure Container Apps production deployments should set values explicitly in app env vars/secrets and not rely on compose defaults.
+Azure Container Apps production deployments should set values explicitly in app
+env vars/secrets and not rely on compose defaults.
 
 ## Capacity Defaults
 

@@ -81,7 +81,8 @@ If API and worker need independent scaling, move to the split topology from [Sys
 az containerapp logs show --name ade-app --resource-group <resource-group> --tail 200
 ```
 
-3. Continue with [Operate Runs](operate-runs.md) and [Triage Playbook](../troubleshooting/triage-playbook.md).
+1. Continue with [Operate Runs](operate-runs.md) and
+   [Triage Playbook](../troubleshooting/triage-playbook.md).
 
 ## Azure Reference
 

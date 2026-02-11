@@ -2,7 +2,8 @@
 
 ## Purpose
 
-Explain ADE security decisions in plain language: who can access ADE, how ADE authenticates, and how production network access should be restricted.
+Explain ADE security decisions in plain language: who can access ADE, how ADE
+authenticates, and how production network access should be restricted.
 
 ## Authentication Modes
 
@@ -34,7 +35,9 @@ Runtime authorization is role/permission driven. Do not rely on legacy `is_super
 
 ## Local MFA Enforcement Model
 
-- `auth.password.mfaRequired` (or env override `ADE_AUTH_PASSWORD_MFA_REQUIRED=true`) enforces MFA onboarding for password-authenticated sessions.
+- `auth.password.mfaRequired` (or env override
+  `ADE_AUTH_PASSWORD_MFA_REQUIRED=true`) enforces MFA onboarding for
+  password-authenticated sessions.
 - When enabled, users signed in with built-in auth must complete TOTP enrollment before most protected endpoints are accessible.
 - SSO and API key sessions are not forced by this setting.
 

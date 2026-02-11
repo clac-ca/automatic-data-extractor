@@ -8,6 +8,7 @@ import { ApiError } from "@/api";
 import { fetchMfaStatus, sessionKeys } from "@/api/auth/api";
 import { useSetupStatusQuery } from "@/hooks/auth/useSetupStatusQuery";
 import { completeSetup } from "@/api/setup/api";
+import { navigateToPostAuthPath } from "@/lib/navigation/postAuthRedirect";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/form-field";
@@ -152,7 +153,7 @@ export default function SetupScreen() {
         navigate(buildRedirectPath("/mfa/setup", nextPath), { replace: true });
         return;
       }
-      navigate(nextPath, { replace: true });
+      navigateToPostAuthPath(navigate, nextPath, { replace: true });
     } catch (error: unknown) {
       if (error instanceof ApiError) {
         const detail = error.problem?.detail;

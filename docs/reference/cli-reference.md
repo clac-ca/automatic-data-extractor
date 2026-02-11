@@ -54,6 +54,15 @@ Common API options:
 - `ade-api start --processes N`
 - `ade-api dev --processes N` (disables reload when `N > 1`)
 
+API docs (opt-in):
+
+- Set `ADE_API_DOCS_ENABLED=true` to expose:
+  - ReDoc at `/api`
+  - Swagger UI at `/api/swagger`
+  - OpenAPI JSON at `/api/openapi.json`
+- Set `ADE_API_DOCS_ACCESS_MODE=authenticated` (default) to require sign-in, or `public` for unauthenticated docs.
+- No CLI "open docs" helper is provided; use the URLs above directly.
+
 ## Worker CLI: `ade-worker`
 
 | Command | What it does |

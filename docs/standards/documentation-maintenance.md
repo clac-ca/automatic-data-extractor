@@ -20,15 +20,23 @@ Update docs whenever these change:
 1. update affected docs pages
 2. fix or update links
 3. run docs checks locally
-4. verify key paths from `docs/index.md`
+4. verify key paths from `docs/README.md`
 
 ## Local Checks
 
 ```bash
-npx --yes markdownlint-cli2 "docs/**/*.md" "README.md" "CONTRIBUTING.md" "backend/**/README.md"
+DOCS_FILES="$(find docs -type f -name '*.md' ! -path 'docs/audits/*' -print)"
+npx --yes markdownlint-cli2 --config .docs.markdownlint-cli2.jsonc $DOCS_FILES
+python3 scripts/docs/check_api_docs_coverage.py
+```
+
+Docs lint configuration is defined in `.docs.markdownlint-cli2.jsonc`.
+
+If `lychee` is installed locally, you can optionally run link checks:
+
+```bash
 FILES="$(find docs -type f -name '*.md' -print) README.md CONTRIBUTING.md $(find backend -mindepth 2 -maxdepth 2 -name README.md -print)"
 lychee --no-progress $FILES
-python3 scripts/docs/check_api_docs_coverage.py
 ```
 
 ## Done Criteria

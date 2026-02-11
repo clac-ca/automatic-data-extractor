@@ -42,6 +42,8 @@ If one of these is missing, production startup will fail.
 | `ADE_DB_MIGRATE_ON_START` | root CLI | optional | `true` | auto-runs migrations with `ade start/dev` |
 | `ADE_API_PORT` | API CLI (`ade-api`) | optional | `8001` | API bind port for native CLI runs |
 | `ADE_WEB_PORT` | web CLI (`ade web dev`) | optional | `8000` | Vite web dev server port for native CLI runs |
+| `ADE_API_DOCS_ENABLED` | API | optional | `false` | enable built-in API docs: ReDoc at `/api`, Swagger UI at `/api/swagger`, and OpenAPI JSON at `/api/openapi.json` |
+| `ADE_API_DOCS_ACCESS_MODE` | API | optional | `authenticated` | docs access policy when enabled: `authenticated` (default) or `public` |
 | `ADE_INTERNAL_API_URL` | web/nginx/vite | optional | `http://localhost:8001` | must be origin only (no path/query) |
 | `ADE_DATA_DIR` | API, worker | optional | `backend/data` (repo) or `/app/data` (container) | writable runtime data path; mount this path for persistence in ACA |
 
@@ -201,7 +203,8 @@ These production controls are configured in Azure resources, not with `ADE_*` va
 - Storage firewall default deny plus IP rules
 - Storage VNet rules with service endpoints for ACA subnet access
 
-If you use public endpoints with allowlists, review these rules whenever app outbound IPs or operator network locations change.
+If you use public endpoints with allowlists, review these rules whenever app
+outbound IPs or operator network locations change.
 
 ## Managed Identity Patterns (Azure)
 

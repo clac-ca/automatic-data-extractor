@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Awaitable, Callable
 from typing import cast
 
@@ -12,6 +13,7 @@ from starlette.responses import Response
 
 from .api.v1.router import create_api_router
 from .app.lifecycles import create_application_lifespan
+from .common.api_docs import register_api_docs_routes
 from .common.exceptions import (
     api_error_handler,
     http_exception_handler,
@@ -28,6 +30,7 @@ from .settings import Settings, get_settings
 
 API_PREFIX = "/api"
 type HttpExceptionHandler = Callable[[Request, Exception], Response | Awaitable[Response]]
+logger = logging.getLogger(__name__)
 
 
 def _as_http_exception_handler(handler: Callable[..., Response]) -> HttpExceptionHandler:
@@ -40,18 +43,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
     setup_logging(settings)
 
-    docs_url = settings.docs_url if settings.api_docs_enabled else None
-    redoc_url = settings.redoc_url if settings.api_docs_enabled else None
-    openapi_url = settings.openapi_url if settings.api_docs_enabled else None
-
     lifespan = create_application_lifespan(settings=settings)
 
     app = FastAPI(
         title=settings.app_name,
         version=settings.app_version,
-        docs_url=docs_url,
-        redoc_url=redoc_url,
-        openapi_url=openapi_url,
+        docs_url=None,
+        redoc_url=None,
+        openapi_url=None,
         debug=False,
         lifespan=lifespan,
     )
@@ -71,8 +70,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # Middleware, routers, and OpenAPI configuration.
     register_middleware(app, settings=settings)
     app.include_router(ops_router, include_in_schema=False)
-    app.include_router(create_api_router(settings), prefix=API_PREFIX)
+    app.include_router(create_api_router(), prefix=API_PREFIX)
     configure_openapi(app, settings)
+    if settings.api_docs_enabled:
+        register_api_docs_routes(app, settings=settings)
+        logger.info(
+            "api.docs.enabled",
+            extra={
+                "access_mode": settings.api_docs_access_mode,
+                "redoc_url": settings.redoc_url,
+                "swagger_url": settings.docs_url,
+                "openapi_url": settings.openapi_url,
+            },
+        )
 
     return app
 

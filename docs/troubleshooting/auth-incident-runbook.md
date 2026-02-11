@@ -1,59 +1,74 @@
 # Auth Incident Runbook
 
-## Scope
+## Symptom
 
-Use this runbook for auth-related production incidents:
+Use this runbook when any of these conditions are true:
 
 - account lockout spikes
-- SSO outage or callback failures
-- admin access loss
-- auth token abuse signals
+- SSO authorization or callback failures
+- global-admin access loss
+- suspected token abuse
 
-## Immediate Triage
+## Diagnosis
 
-1. Confirm impact scope:
-- all users vs subset
-- local auth vs SSO vs API key
-2. Confirm recent changes:
-- deploy, config, secret rotation
-3. Validate health and logs:
-- auth failures
-- CSRF failures
-- SSO callback/provider errors
-- API key auth failures
+### Immediate Triage
 
-## Account Lockout Recovery
+1. Confirm impact scope.
 
-1. Identify affected user(s).
-2. Verify failed-login counters and lock window.
-3. Use admin tooling to restore access as appropriate.
-4. Require password reset and MFA verification if suspicious activity exists.
+   - all users or subset
+   - password auth, SSO, or API key
 
-## SSO Outage Fallback
+1. Confirm recent changes.
 
-1. Confirm provider outage/misconfiguration.
-2. If `auth.mode=idp_only` and member access is blocked, use global-admin password + MFA break-glass login.
-3. Ensure global-admin MFA remains enabled.
-4. Temporarily change mode to `password_and_idp` only if required for continuity and approved by incident lead.
+   - deploys
+   - config updates
+   - secret rotations
 
-## Admin Access Recovery
+1. Validate health and logs.
 
-1. Use a global-admin account with MFA to regain control.
-2. Validate `/api/v1/admin/settings` and provider status.
-3. Re-establish expected policy (`auth.mode`, `auth.password.*`, `auth.identityProvider.jitProvisioningEnabled`).
+   - auth failures
+   - CSRF failures
+   - SSO callback/provider failures
+   - API key auth failures
 
-## Secret Rotation Verification
+## Action
 
-After rotating auth-related secrets:
+### Account Lockout Recovery
 
-1. Verify local login works.
-2. Verify session creation/validation works.
-3. Verify provider secret decrypt/encrypt flows still work.
-4. Verify password reset and MFA flows still pass.
+1. Identify affected users.
+1. Check failed-login counters and lockout windows.
+1. Restore access using approved admin controls.
+1. Require password reset and MFA verification when suspicious activity exists.
 
-## Incident Closeout
+### SSO Outage Fallback
 
-1. Document root cause and timeline.
-2. Record user impact and duration.
-3. Add remediation action items with owners.
-4. Update auth docs/tests if behavior changed.
+1. Confirm provider outage or misconfiguration.
+1. If `auth.mode=idp_only` blocks member access, use global-admin break-glass
+   password + MFA login.
+1. Keep global-admin MFA enabled.
+1. Move to `password_and_idp` only with incident-lead approval.
+
+### Admin Access Recovery
+
+1. Regain access with a global-admin account protected by MFA.
+1. Validate `/api/v1/admin/settings` and provider status.
+1. Re-apply expected auth policy fields:
+   `auth.mode`, `auth.password.*`,
+   `auth.identityProvider.jitProvisioningEnabled`.
+
+## Verify
+
+After remediation, confirm:
+
+1. local login works
+1. session creation and validation work
+1. provider secret decrypt/encrypt flows work
+1. password reset and MFA flows pass
+
+## Escalation
+
+Escalate immediately if:
+
+- access cannot be restored with break-glass procedure
+- suspicious auth activity continues after remediation
+- policy state cannot be reconciled with expected production settings
