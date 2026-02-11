@@ -10,17 +10,17 @@ Move from symptom to confirmed cause quickly, with the fewest checks possible.
    - one user
    - one workspace
    - all users
-2. Confirm deployment model:
+1. Confirm deployment model:
    - Azure Container Apps production
    - local Docker Compose dev
-3. Check health endpoints:
+1. Check health endpoints:
 
 ```bash
 curl -sS <web-url>/api/v1/health
 curl -sS <web-url>/api/v1/info
 ```
 
-4. Pull recent app logs:
+1. Pull recent app logs:
 
 ```bash
 az containerapp logs show --name ade-app --resource-group <resource-group> --tail 200
