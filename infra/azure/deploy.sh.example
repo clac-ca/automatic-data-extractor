@@ -56,6 +56,9 @@ production_container_app_secret_key="<ADE_SECRET_KEY>"
 production_container_app_environment_overrides='{"ADE_LOG_LEVEL":"INFO","ADE_LOG_FORMAT":"json","ADE_AUTH_DISABLED":"false"}'
 production_container_app_minimum_replicas="1"
 production_container_app_maximum_replicas="1"
+production_container_app_scale_polling_interval_seconds="30"
+production_container_app_scale_cooldown_period_seconds="300"
+production_container_app_scale_http_concurrent_requests="10"
 
 development_container_app_image="ghcr.io/clac-ca/automatic-data-extractor:<DEVELOPMENT_RUNTIME_TAG>"
 development_container_app_public_web_url=""
@@ -63,6 +66,9 @@ development_container_app_secret_key=""
 development_container_app_environment_overrides='{"ADE_LOG_LEVEL":"DEBUG","ADE_LOG_FORMAT":"json","ADE_AUTH_DISABLED":"false"}'
 development_container_app_minimum_replicas="0"
 development_container_app_maximum_replicas="1"
+development_container_app_scale_polling_interval_seconds="30"
+development_container_app_scale_cooldown_period_seconds="1800"
+development_container_app_scale_http_concurrent_requests="10"
 
 # -----------------------------
 # Inputs: SSO bootstrap
@@ -418,6 +424,9 @@ params=(
   "productionContainerAppEnvironmentOverrides=$production_container_app_environment_overrides"
   "productionContainerAppMinimumReplicas=$production_container_app_minimum_replicas"
   "productionContainerAppMaximumReplicas=$production_container_app_maximum_replicas"
+  "productionContainerAppScalePollingIntervalSeconds=$production_container_app_scale_polling_interval_seconds"
+  "productionContainerAppScaleCooldownPeriodSeconds=$production_container_app_scale_cooldown_period_seconds"
+  "productionContainerAppScaleHttpConcurrentRequests=$production_container_app_scale_http_concurrent_requests"
 )
 
 for mapping in "${mappings[@]}"; do
@@ -433,6 +442,9 @@ if [ "$deploy_development_environment" = "true" ]; then
     "developmentContainerAppEnvironmentOverrides=$development_container_app_environment_overrides"
     "developmentContainerAppMinimumReplicas=$development_container_app_minimum_replicas"
     "developmentContainerAppMaximumReplicas=$development_container_app_maximum_replicas"
+    "developmentContainerAppScalePollingIntervalSeconds=$development_container_app_scale_polling_interval_seconds"
+    "developmentContainerAppScaleCooldownPeriodSeconds=$development_container_app_scale_cooldown_period_seconds"
+    "developmentContainerAppScaleHttpConcurrentRequests=$development_container_app_scale_http_concurrent_requests"
   )
 fi
 
