@@ -60,7 +60,7 @@ class Settings(
     app_name: str = "Automatic Data Extractor API"
     app_version: str = "unknown"
     app_commit_sha: str = "unknown"
-    api_docs_enabled: bool = False
+    api_docs_enabled: bool = True
     api_docs_access_mode: Literal["authenticated", "public"] = "authenticated"
     docs_url: str = "/api/swagger"
     redoc_url: str = "/api"
