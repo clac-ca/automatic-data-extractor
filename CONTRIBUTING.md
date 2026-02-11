@@ -43,3 +43,29 @@ We use **Conventional Commits**:
 - Runtime version metadata (`ADE_APP_VERSION`, `ADE_APP_COMMIT_SHA`) is injected by CI; do not set these in `.env` for normal runtime config
 - Deployable image versions are published as release tags (`vX.Y.Z`); production should deploy pinned tags via `ADE_DOCKER_TAG=vX.Y.Z`
 - See `docs/reference/release-process.md` for details
+
+## Quick Flows
+
+### Normal release (hands-off)
+1. Merge conventional commits to `main`.
+2. Release Please opens/updates a release PR.
+3. Merge the release PR.
+4. GitHub release publish triggers container publish.
+
+### Rebuild release (`vX.Y.Z-rN`)
+1. Run the rebuild workflow (`.github/workflows/rebuild-release.yaml`) with:
+   - `base_release_tag=vX.Y.Z`
+   - `reason=<short reason>`
+2. Workflow auto-creates next rebuild tag (`vX.Y.Z-rN`) and a prerelease.
+3. Prerelease publish triggers container publish for rebuild tag only.
+
+### PR merge to `development` (default)
+1. Open PR against `development`.
+2. Wait for required checks.
+3. Merge PR (PR-first; avoid direct branch merges by default).
+
+### Production pinning
+- Preferred: pin by digest (`ghcr.io/<org>/<repo>@sha256:...`).
+- Acceptable: immutable release tags (`vX.Y.Z` or `vX.Y.Z-rN`).
+
+See `AGENTS.md` for coding-agent operational commands and `docs/reference/release-process.md` for full release/tag behavior.

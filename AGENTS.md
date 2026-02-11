@@ -144,6 +144,91 @@ ade-engine process batch \
 - Production deployments should pin immutable release tags via `ADE_DOCKER_TAG=vX.Y.Z`.
 - See `CONTRIBUTING.md` for the full collaboration and release flow.
 
+## Agent operations (common requests)
+
+Use these when developers ask for common Git/GitHub actions.
+
+### Commit task changes
+- Run relevant checks first (`cd backend && uv run ade test` or scoped service tests).
+- Stage only task files.
+- Use Conventional Commit messages.
+
+```bash
+git status --short
+git add <files...>
+git commit -m "fix(scope): concise summary"
+```
+
+### Create PR to `development`
+- Branch from `development`.
+- Keep PR focused to one topic.
+- Include test evidence in PR body.
+
+```bash
+git checkout development
+git pull --ff-only
+git checkout -b <topic-branch>
+git push -u origin <topic-branch>
+gh pr create --base development --fill
+```
+
+### Merge to `development` (PR-first default)
+- Do not merge directly by default.
+- Merge after required checks are green.
+
+```bash
+gh pr checks <pr-number>
+gh pr merge <pr-number> --squash --delete-branch
+```
+
+### Trigger and verify Release Please
+- Release Please runs from pushes to `main`.
+- Agent may verify release PR/tag creation status.
+
+```bash
+gh run list --workflow release-please.yaml --limit 5
+gh pr list --search "chore(main): release"
+gh release list --limit 10
+```
+
+### Create rebuild release (`vX.Y.Z-rN`)
+- Use workflow dispatch (`rebuild-release.yaml`) with base stable tag + reason.
+- Workflow auto-computes next `-rN`, creates tag, and creates prerelease.
+
+```bash
+gh workflow run .github/workflows/rebuild-release.yaml \
+  -f base_release_tag=v1.8.0 \
+  -f reason="Rebuild with updated base image"
+gh run list --workflow rebuild-release.yaml --limit 5
+```
+
+### Verify image publication
+
+```bash
+gh run list --workflow docker-image.yaml --limit 5
+docker buildx imagetools inspect ghcr.io/<org>/<repo>:main
+docker buildx imagetools inspect ghcr.io/<org>/<repo>:development
+docker buildx imagetools inspect ghcr.io/<org>/<repo>:vX.Y.Z
+```
+
+### Manual GHCR cleanup (dry-run then execute)
+- Use cleanup workflow manually; no schedule.
+
+```bash
+gh workflow run .github/workflows/ghcr-package-cleanup.yaml \
+  -f package_name=automatic-data-extractor \
+  -f keep_tags=main,development \
+  -f keep_tag_regex='^v[0-9]+\\.[0-9]+\\.[0-9]+(-r[0-9]+)?$' \
+  -f retention_days=30 \
+  -f dry_run=true
+```
+
+## Release and merge guardrails
+- No manual edits to `VERSION` or `CHANGELOG.md` for normal releases.
+- Never overwrite existing `vX.Y.Z` or `vX.Y.Z-rN` tags.
+- PR-first workflow is default for merges to `development`.
+- Keep releases aligned with Release Please; avoid ad-hoc custom versioning.
+
 ## 🤖 Agent rules
 
 1. Always run `cd backend && uv run ade test` (or the affected service tests) before committing and run the relevant frontend/backend checks for touched areas.
