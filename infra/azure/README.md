@@ -26,6 +26,8 @@ Yes.
 - Group create/get is idempotent
 - PostgreSQL bootstrap/grants are idempotent
 
+Important: this deployment owns the resources it configures. Re-running can overwrite manual portal changes (for example ingress/custom domain settings if they are not modeled in IaC or post-deploy scripts).
+
 ## Canonical Deploy Scripts
 
 - Bash: `infra/azure/deploy.sh.example`
@@ -70,11 +72,27 @@ Copy-Item infra/azure/deploy.ps1.example infra/azure/deploy.ps1
 | PostgreSQL | version/SKU/storage/firewall/allowlist/db names |
 | Storage | `storage_account_sku_name` |
 | Access control | `access_control_group_name_prefix` |
-| Container apps | images, replicas, app env overrides, secret key |
+| Container apps | images, replicas, scale polling/cooldown/http concurrency, app env overrides, secret key |
 | SSO bootstrap | enable flag, secret lifetime, auth mode, optional encryption key |
 | Bootstrap admin | optional Entra login/object ID/type |
 
 If bootstrap admin login/object ID are blank, scripts auto-resolve the current signed-in `az` user.
+
+## Container App Health + Scale Defaults
+
+Deploy scripts and Bicep defaults configure probes and autoscale behavior aligned with ADE routes:
+
+- Startup probe: `GET /api/v1/health`
+- Liveness probe: `GET /api/v1/health`
+- Readiness probe: `GET /api/v1/health`
+- HTTP scaling rule: concurrency target per replica (`*_scale_http_concurrent_requests`)
+- Polling interval: `*_scale_polling_interval_seconds`
+- Cooldown period: `*_scale_cooldown_period_seconds`
+
+Development defaults are tuned for cost efficiency:
+
+- `development_container_app_minimum_replicas=0`
+- `development_container_app_scale_cooldown_period_seconds=1800` (30 minutes)
 
 ## SSO Auto-Provisioning
 
