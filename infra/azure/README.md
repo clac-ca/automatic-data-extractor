@@ -71,9 +71,66 @@ Copy-Item infra/azure/deploy.ps1.example infra/azure/deploy.ps1
 | Storage | `storage_account_sku_name` |
 | Access control | `access_control_group_name_prefix` |
 | Container apps | images, replicas, app env overrides, secret key |
+| SSO bootstrap | enable flag, secret lifetime, auth mode, optional encryption key |
 | Bootstrap admin | optional Entra login/object ID/type |
 
 If bootstrap admin login/object ID are blank, scripts auto-resolve the current signed-in `az` user.
+
+## SSO Auto-Provisioning
+
+Deploy scripts can provision ADE SSO automatically with minimal setup:
+
+- Separate Entra app registrations are used for production and development.
+- ADE provider ID is `entra` in each environment.
+- ADE provider label is always `Microsoft Entra ID`.
+- Callback URI is set to `<ADE_PUBLIC_WEB_URL>/api/v1/auth/sso/callback`.
+- `ADE_AUTH_SSO_PROVIDERS_JSON` is stored as a Container Apps secret reference.
+- Scripts configure Entra optional claims automatically: `email`, `upn`, `verified_primary_email`, `xms_edov`.
+
+### Identity Model (Standard)
+
+ADE now uses Entra's immutable identity claims for sign-in identity:
+
+- user key: `tid:oid` (tenant ID + object ID)
+- email is profile data, not primary identity
+- email resolution order: `email` -> `preferred_username` -> `upn`
+- login does not depend on `email_verified` claims
+- if an existing ADE account is matched by email, ADE requires a verification signal (`email_verified`, `verified_primary_email`, or `xms_edov`) before linking
+- this is an intentional breaking auth-model change (no legacy fallback path)
+
+Default script behavior:
+
+- `enable_sso_bootstrap=true`
+- `sso_client_secret_years=99`
+- `sso_auth_mode=password_and_idp`
+- `sso_idp_jit_provisioning_enabled=true`
+
+### Entra App Naming Convention
+
+The script defaults to CAF-style display names:
+
+- `appreg-<workload>-prod-<region>-<instance>-sso-web`
+- `appreg-<workload>-dev-<region>-<instance>-sso-web`
+
+Examples:
+
+- `appreg-ade-prod-canadacentral-001-sso-web`
+- `appreg-ade-dev-canadacentral-001-sso-web`
+
+### Required Entra Permissions
+
+The deploy identity must be able to:
+
+- create/update app registrations
+- create app credentials (client secrets)
+- update app optional claims
+- read app registrations
+
+Typical roles are `Application Administrator` or `Application Developer` (tenant policy dependent).
+
+### 99-Year Secret Caveat
+
+The script requests `--years 99` when creating client secrets. Some tenants block long-lived secrets by policy. If blocked, deployment fails fast with an explicit error so you can lower `sso_client_secret_years`.
 
 ## Local Convenience Script
 
