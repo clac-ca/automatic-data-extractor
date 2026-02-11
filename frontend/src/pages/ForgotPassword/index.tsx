@@ -8,6 +8,7 @@ import { requestPasswordReset } from "@/api/auth/api";
 import { useAuthProvidersQuery } from "@/hooks/auth/useAuthProvidersQuery";
 import { useSessionQuery } from "@/hooks/auth/useSessionQuery";
 import { useSetupStatusQuery } from "@/hooks/auth/useSetupStatusQuery";
+import { navigateToPostAuthPath } from "@/lib/navigation/postAuthRedirect";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/form-field";
@@ -90,7 +91,7 @@ export default function ForgotPasswordScreen() {
     if (!session) {
       return;
     }
-    navigate(pickReturnTo(session.return_to, returnTo), { replace: true });
+    navigateToPostAuthPath(navigate, pickReturnTo(session.return_to, returnTo), { replace: true });
   }, [navigate, returnTo, session]);
 
   useEffect(() => {

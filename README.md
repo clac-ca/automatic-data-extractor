@@ -17,6 +17,33 @@ docker compose up --build -d
 
 Open `http://localhost:8000`.
 
+API docs are opt-in. To enable built-in ReDoc + Swagger UI:
+
+```bash
+echo "ADE_API_DOCS_ENABLED=true" >> .env
+echo "ADE_API_DOCS_ACCESS_MODE=public" >> .env
+docker compose up --build -d
+```
+
+Use `ADE_API_DOCS_ACCESS_MODE=authenticated` (default) to require sign-in.
+After editing `.env`, rerun `docker compose up --build -d` so running
+containers reload the new settings.
+
+Docs endpoints:
+
+- `http://localhost:8000/api` (ReDoc)
+- `http://localhost:8000/api/swagger` (Swagger UI)
+- `http://localhost:8000/api/openapi.json` (OpenAPI JSON)
+
+Common docs troubleshooting:
+
+| Symptom | Likely cause | Fix |
+| --- | --- | --- |
+| `404` on docs URLs | docs disabled | set `ADE_API_DOCS_ENABLED=true` and restart |
+| `/api` renders SPA instead of ReDoc | stale web container/nginx template | rebuild/restart with `docker compose up --build -d` |
+| `csrf_failed` in Swagger "Try it out" | session auth without valid CSRF state | sign in first or use `X-API-Key` auth |
+| requests target wrong host | mismatched public URL | set `ADE_PUBLIC_WEB_URL` to the external web URL |
+
 Stop:
 
 ```bash

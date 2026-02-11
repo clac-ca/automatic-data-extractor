@@ -2,7 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Automatic Data Extractor API",
-    "version": "unknown"
+    "version": "unknown",
+    "description": "ADE API reference. Use ReDoc at `/api` for endpoint documentation and Swagger UI at `/api/swagger` for interactive requests.\n\nAuthentication supports browser session cookies and `X-API-Key` header credentials. Every response includes `X-Request-Id` for tracing and support diagnostics."
   },
   "paths": {
     "/api/v1/health": {
@@ -107,8 +108,6 @@
     "/api/v1/auth/sso/providers": {
       "get": {
         "tags": [
-          "auth",
-          "auth",
           "auth"
         ],
         "summary": "Return active SSO providers",
@@ -140,8 +139,6 @@
     "/api/v1/auth/sso/authorize": {
       "get": {
         "tags": [
-          "auth",
-          "auth",
           "auth"
         ],
         "summary": "Start SSO authorization",
@@ -204,8 +201,6 @@
     "/api/v1/auth/sso/callback": {
       "get": {
         "tags": [
-          "auth",
-          "auth",
           "auth"
         ],
         "summary": "Complete SSO authorization",
@@ -353,6 +348,15 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/AuthLoginRequest"
+              },
+              "examples": {
+                "passwordLogin": {
+                  "summary": "Password sign-in request",
+                  "value": {
+                    "email": "operator@example.com",
+                    "password": "CorrectHorseBatteryStaple!"
+                  }
+                }
               }
             }
           },
@@ -373,6 +377,22 @@
                     }
                   ],
                   "title": "Response Login Local Api V1 Auth Login Post"
+                },
+                "examples": {
+                  "loginSuccess": {
+                    "summary": "Password sign-in success",
+                    "value": {
+                      "mfaSetupRecommended": true,
+                      "mfaSetupRequired": false,
+                      "passwordChangeRequired": false
+                    }
+                  },
+                  "mfaChallenge": {
+                    "summary": "MFA challenge required",
+                    "value": {
+                      "challengeToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjaGFsIjoiY2hhbGxlbmdlIn0.signature"
+                    }
+                  }
                 }
               }
             },
@@ -20834,6 +20854,68 @@
   "servers": [
     {
       "url": "http://localhost:8000"
+    }
+  ],
+  "tags": [
+    {
+      "name": "admin-settings",
+      "description": "Tenant-wide runtime settings and policy controls."
+    },
+    {
+      "name": "api-keys",
+      "description": "API key lifecycle endpoints for users and administrators."
+    },
+    {
+      "name": "auth",
+      "description": "Interactive sign-in, password, MFA, and setup workflows."
+    },
+    {
+      "name": "configurations",
+      "description": "Workspace configuration package lifecycle and files."
+    },
+    {
+      "name": "documents",
+      "description": "Document upload, metadata, listing, and streaming updates."
+    },
+    {
+      "name": "health",
+      "description": "Service health and liveness checks."
+    },
+    {
+      "name": "info",
+      "description": "Runtime metadata and service identity."
+    },
+    {
+      "name": "me",
+      "description": "Authenticated user profile and effective permissions."
+    },
+    {
+      "name": "meta",
+      "description": "Installed ADE component version metadata."
+    },
+    {
+      "name": "presence",
+      "description": "Realtime workspace presence events and channels."
+    },
+    {
+      "name": "rbac",
+      "description": "Role and permission management endpoints."
+    },
+    {
+      "name": "runs",
+      "description": "Run creation, orchestration, output, and events."
+    },
+    {
+      "name": "sso",
+      "description": "Administrative SSO provider management endpoints."
+    },
+    {
+      "name": "users",
+      "description": "User administration endpoints."
+    },
+    {
+      "name": "workspaces",
+      "description": "Workspace lifecycle and membership management."
     }
   ],
   "security": [
