@@ -1,0 +1,403 @@
+$ErrorActionPreference = "Stop"
+
+# -----------------------------
+# Inputs: Azure context
+# -----------------------------
+$subscriptionId = "<SUBSCRIPTION_ID>"
+$resourceGroupName = "rg-ade-shared-canadacentral-001"
+$location = "canadacentral"
+$deploymentName = "ade-azure-$((Get-Date).ToString('yyyyMMdd-HHmmss'))"
+
+# -----------------------------
+# Inputs: Naming
+# -----------------------------
+$workload = "ade"
+$instance = "001"
+
+# -----------------------------
+# Inputs: Deployment mode
+# Set to $true to deploy an extra development app/database alongside production.
+# -----------------------------
+$deployDevelopmentEnvironment = $true
+
+# -----------------------------
+# Inputs: PostgreSQL
+# -----------------------------
+$virtualNetworkAddressPrefix = "10.80.0.0/16"
+$containerAppsSubnetAddressPrefix = "10.80.0.0/23"
+$postgresqlVersion = "18"
+$postgresqlSkuTier = "Burstable"
+$postgresqlSkuName = "Standard_B1ms"
+$postgresqlStorageSizeGb = "32"
+$postgresqlProductionDatabaseName = "ade"
+$postgresqlDevelopmentDatabaseName = "ade_dev"
+$postgresqlAllowPublicAccessFromAzureServices = $true
+$publicIpv4Allowlist = '["<ADMIN_PUBLIC_IPV4>"]'
+
+# -----------------------------
+# Inputs: Storage
+# -----------------------------
+$storageAccountSkuName = "Standard_LRS"
+
+# -----------------------------
+# Inputs: Access control groups
+# Script auto-creates/resolves canonical groups with this prefix.
+# -----------------------------
+$accessControlGroupNamePrefix = "ade"
+
+# -----------------------------
+# Inputs: Container apps
+# Use runtime image tags (not devcontainer tags).
+# -----------------------------
+$productionContainerAppImage = "ghcr.io/clac-ca/automatic-data-extractor:<PRODUCTION_RUNTIME_TAG>"
+$productionContainerAppPublicWebUrl = ""
+$productionContainerAppSecretKey = "<ADE_SECRET_KEY>"
+$productionContainerAppEnvironmentOverrides = '{"ADE_LOG_LEVEL":"INFO","ADE_LOG_FORMAT":"json","ADE_AUTH_DISABLED":"false"}'
+$productionContainerAppMinimumReplicas = "1"
+$productionContainerAppMaximumReplicas = "1"
+
+$developmentContainerAppImage = "ghcr.io/clac-ca/automatic-data-extractor:<DEVELOPMENT_RUNTIME_TAG>"
+$developmentContainerAppPublicWebUrl = ""
+$developmentContainerAppSecretKey = ""
+$developmentContainerAppEnvironmentOverrides = '{"ADE_LOG_LEVEL":"DEBUG","ADE_LOG_FORMAT":"json","ADE_AUTH_DISABLED":"false"}'
+$developmentContainerAppMinimumReplicas = "0"
+$developmentContainerAppMaximumReplicas = "1"
+
+# -----------------------------
+# Inputs: PostgreSQL bootstrap admin (optional)
+# Leave blank to auto-resolve from current signed-in az user.
+# -----------------------------
+$postgresqlBootstrapEntraAdminLogin = ""
+$postgresqlBootstrapEntraAdminObjectId = ""
+$postgresqlBootstrapEntraAdminType = "User"
+
+function Require-Command {
+    param([Parameter(Mandatory = $true)][string]$Name)
+    if (-not (Get-Command $Name -ErrorAction SilentlyContinue)) {
+        throw "Required command not found: $Name"
+    }
+}
+
+function Ensure-AzLogin {
+    az account show | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        az login --use-device-code | Out-Null
+    }
+}
+
+function Get-GroupMailNickname {
+    param([Parameter(Mandatory = $true)][string]$GroupName)
+
+    $normalized = ($GroupName.ToLower() -replace '[^a-z0-9]', '')
+    if ([string]::IsNullOrWhiteSpace($normalized)) {
+        $normalized = 'adegroup'
+    }
+    if ($normalized.Length -gt 48) {
+        $normalized = $normalized.Substring(0, 48)
+    }
+
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($GroupName)
+    $hashBytes = $sha.ComputeHash($bytes)
+    $hashHex = ([System.BitConverter]::ToString($hashBytes)).Replace('-', '').ToLower().Substring(0, 8)
+    $nickname = "$normalized$hashHex"
+    if ($nickname.Length -gt 64) {
+        $nickname = $nickname.Substring(0, 64)
+    }
+    return $nickname
+}
+
+function Get-OrCreateGroupObjectId {
+    param([Parameter(Mandatory = $true)][string]$GroupName)
+
+    $objectId = az ad group list --filter "displayName eq '$GroupName'" --query '[0].id' -o tsv 2>$null
+    if (-not [string]::IsNullOrWhiteSpace($objectId)) {
+        return $objectId
+    }
+
+    az ad group create --display-name $GroupName --mail-nickname (Get-GroupMailNickname -GroupName $GroupName) --query id -o tsv | Out-Null
+
+    $objectId = az ad group list --filter "displayName eq '$GroupName'" --query '[0].id' -o tsv 2>$null
+    if ([string]::IsNullOrWhiteSpace($objectId)) {
+        throw "Failed to resolve object ID for group '$GroupName'."
+    }
+
+    return $objectId
+}
+
+function Get-DeploymentOutputValue {
+    param([Parameter(Mandatory = $true)][string]$OutputName)
+
+    $value = az deployment group show `
+      --subscription $subscriptionId `
+      --resource-group $resourceGroupName `
+      --name $deploymentName `
+      --query "properties.outputs.$OutputName.value" `
+      -o tsv 2>$null
+
+    if ($value -eq "null") { return "" }
+    return $value
+}
+
+function Wait-PostgresqlReady {
+    param([Parameter(Mandatory = $true)][string]$ServerName)
+
+    $maxAttempts = 30
+    $waitSeconds = 20
+
+    for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+        $state = az postgres flexible-server show --subscription $subscriptionId --resource-group $resourceGroupName --name $ServerName --query state -o tsv 2>$null
+        if ($state -eq "Ready") {
+            return
+        }
+
+        if ($attempt -eq $maxAttempts) {
+            throw "PostgreSQL server '$ServerName' did not reach Ready state (last state: $state)."
+        }
+
+        Start-Sleep -Seconds $waitSeconds
+    }
+}
+
+function Set-PostgresqlEntraAdminWithRetry {
+    param(
+        [Parameter(Mandatory = $true)][string]$ServerName,
+        [Parameter(Mandatory = $true)][string]$DisplayName,
+        [Parameter(Mandatory = $true)][string]$ObjectId,
+        [Parameter(Mandatory = $true)][string]$PrincipalType
+    )
+
+    $maxAttempts = 20
+    $waitSeconds = 15
+
+    for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+        az postgres flexible-server microsoft-entra-admin create `
+          --subscription $subscriptionId `
+          --resource-group $resourceGroupName `
+          --server-name $ServerName `
+          --display-name $DisplayName `
+          --object-id $ObjectId `
+          --type $PrincipalType `
+          --only-show-errors | Out-Null
+
+        if ($LASTEXITCODE -eq 0) {
+            return
+        }
+
+        if ($attempt -eq $maxAttempts) {
+            throw "Failed to set PostgreSQL Entra admin '$DisplayName'."
+        }
+
+        Start-Sleep -Seconds $waitSeconds
+    }
+}
+
+function Get-PostgresqlToken {
+    return az account get-access-token --resource-type oss-rdbms --query accessToken -o tsv
+}
+
+function Invoke-SqlWithRetry {
+    param(
+        [Parameter(Mandatory = $true)][string]$ServerFqdn,
+        [Parameter(Mandatory = $true)][string]$Login,
+        [Parameter(Mandatory = $true)][string]$Database,
+        [Parameter(Mandatory = $true)][string]$Sql
+    )
+
+    $maxAttempts = 20
+    $waitSeconds = 15
+
+    for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+        $env:PGPASSWORD = Get-PostgresqlToken
+        $env:PGCONNECT_TIMEOUT = "15"
+
+        & psql "host=$ServerFqdn port=5432 dbname=$Database user=$Login sslmode=require" --set ON_ERROR_STOP=on --quiet --command $Sql 2>&1 | Out-Null
+        if ($LASTEXITCODE -eq 0) {
+            return
+        }
+
+        if ($attempt -eq $maxAttempts) {
+            throw "SQL execution failed after $maxAttempts attempts on database '$Database'."
+        }
+
+        Start-Sleep -Seconds $waitSeconds
+    }
+}
+
+function Create-PrincipalRoleIfMissing {
+    param(
+        [Parameter(Mandatory = $true)][string]$ServerFqdn,
+        [Parameter(Mandatory = $true)][string]$Login,
+        [Parameter(Mandatory = $true)][string]$RoleName,
+        [Parameter(Mandatory = $true)][string]$ObjectId,
+        [Parameter(Mandatory = $true)][string]$PrincipalType
+    )
+
+    $sql = "DO `$`$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = '$RoleName') THEN PERFORM pg_catalog.pgaadauth_create_principal_with_oid('$RoleName', '$ObjectId', '$PrincipalType', false, false); END IF; END `$`$;"
+    Invoke-SqlWithRetry -ServerFqdn $ServerFqdn -Login $Login -Database "postgres" -Sql $sql
+}
+
+function Apply-AppRoleGrants {
+    param(
+        [Parameter(Mandatory = $true)][string]$ServerFqdn,
+        [Parameter(Mandatory = $true)][string]$Login,
+        [Parameter(Mandatory = $true)][string]$DatabaseName,
+        [Parameter(Mandatory = $true)][string]$RoleName
+    )
+
+    Invoke-SqlWithRetry -ServerFqdn $ServerFqdn -Login $Login -Database "postgres" -Sql "GRANT CONNECT, CREATE, TEMP ON DATABASE `"$DatabaseName`" TO `"$RoleName`";"
+    Invoke-SqlWithRetry -ServerFqdn $ServerFqdn -Login $Login -Database $DatabaseName -Sql "GRANT USAGE, CREATE ON SCHEMA public TO `"$RoleName`";"
+    Invoke-SqlWithRetry -ServerFqdn $ServerFqdn -Login $Login -Database $DatabaseName -Sql "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO `"$RoleName`";"
+    Invoke-SqlWithRetry -ServerFqdn $ServerFqdn -Login $Login -Database $DatabaseName -Sql "GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO `"$RoleName`";"
+}
+
+function Apply-DatabaseGroupGrants {
+    param(
+        [Parameter(Mandatory = $true)][string]$ServerFqdn,
+        [Parameter(Mandatory = $true)][string]$Login,
+        [Parameter(Mandatory = $true)][string]$DatabaseName,
+        [Parameter(Mandatory = $true)][string]$ReadWriteRole,
+        [Parameter(Mandatory = $true)][string]$ReadOnlyRole
+    )
+
+    Invoke-SqlWithRetry -ServerFqdn $ServerFqdn -Login $Login -Database "postgres" -Sql "GRANT CONNECT, TEMP ON DATABASE `"$DatabaseName`" TO `"$ReadWriteRole`";"
+    Invoke-SqlWithRetry -ServerFqdn $ServerFqdn -Login $Login -Database "postgres" -Sql "GRANT CONNECT ON DATABASE `"$DatabaseName`" TO `"$ReadOnlyRole`";"
+
+    Invoke-SqlWithRetry -ServerFqdn $ServerFqdn -Login $Login -Database $DatabaseName -Sql "GRANT USAGE, CREATE ON SCHEMA public TO `"$ReadWriteRole`";"
+    Invoke-SqlWithRetry -ServerFqdn $ServerFqdn -Login $Login -Database $DatabaseName -Sql "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO `"$ReadWriteRole`";"
+    Invoke-SqlWithRetry -ServerFqdn $ServerFqdn -Login $Login -Database $DatabaseName -Sql "GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO `"$ReadWriteRole`";"
+
+    Invoke-SqlWithRetry -ServerFqdn $ServerFqdn -Login $Login -Database $DatabaseName -Sql "GRANT USAGE ON SCHEMA public TO `"$ReadOnlyRole`";"
+    Invoke-SqlWithRetry -ServerFqdn $ServerFqdn -Login $Login -Database $DatabaseName -Sql "GRANT SELECT ON ALL TABLES IN SCHEMA public TO `"$ReadOnlyRole`";"
+    Invoke-SqlWithRetry -ServerFqdn $ServerFqdn -Login $Login -Database $DatabaseName -Sql "GRANT SELECT ON ALL SEQUENCES IN SCHEMA public TO `"$ReadOnlyRole`";"
+}
+
+Require-Command -Name "az"
+Require-Command -Name "psql"
+Ensure-AzLogin
+
+az account set --subscription $subscriptionId
+az group create --subscription $subscriptionId --name $resourceGroupName --location $location | Out-Null
+
+$groupMappings = [ordered]@{
+    resourceGroupOwnersEntraGroupObjectId = "rg-owners"
+    resourceGroupContributorsEntraGroupObjectId = "rg-contributors"
+    resourceGroupReadersEntraGroupObjectId = "rg-readers"
+    containerAppsAdminsEntraGroupObjectId = "ca-admins"
+    containerAppsOperatorsEntraGroupObjectId = "ca-operators"
+    containerAppsReadersEntraGroupObjectId = "ca-readers"
+    databaseAdminsEntraGroupObjectId = "db-admins"
+    databaseReadWriteEntraGroupObjectId = "db-readwrite"
+    databaseReadOnlyEntraGroupObjectId = "db-readonly"
+    storageAdminsEntraGroupObjectId = "st-admins"
+    storageReadWriteEntraGroupObjectId = "st-readwrite"
+    storageReadOnlyEntraGroupObjectId = "st-readonly"
+}
+
+$groupIds = @{}
+foreach ($entry in $groupMappings.GetEnumerator()) {
+    $groupName = "$accessControlGroupNamePrefix-$($entry.Value)"
+    $groupIds[$entry.Key] = Get-OrCreateGroupObjectId -GroupName $groupName
+}
+
+$effectiveDevelopmentContainerAppImage = if ([string]::IsNullOrWhiteSpace($developmentContainerAppImage)) { $productionContainerAppImage } else { $developmentContainerAppImage }
+$effectiveDevelopmentContainerAppSecretKey = if ([string]::IsNullOrWhiteSpace($developmentContainerAppSecretKey)) { $productionContainerAppSecretKey } else { $developmentContainerAppSecretKey }
+
+$deploymentParameters = @(
+    "location=$location"
+    "workload=$workload"
+    "instance=$instance"
+    "deployDevelopmentEnvironment=$($deployDevelopmentEnvironment.ToString().ToLower())"
+    "virtualNetworkAddressPrefix=$virtualNetworkAddressPrefix"
+    "containerAppsSubnetAddressPrefix=$containerAppsSubnetAddressPrefix"
+    "postgresqlVersion=$postgresqlVersion"
+    "postgresqlSkuTier=$postgresqlSkuTier"
+    "postgresqlSkuName=$postgresqlSkuName"
+    "postgresqlStorageSizeGb=$postgresqlStorageSizeGb"
+    "postgresqlProductionDatabaseName=$postgresqlProductionDatabaseName"
+    "postgresqlDevelopmentDatabaseName=$postgresqlDevelopmentDatabaseName"
+    "postgresqlAllowPublicAccessFromAzureServices=$($postgresqlAllowPublicAccessFromAzureServices.ToString().ToLower())"
+    "publicIpv4Allowlist=$publicIpv4Allowlist"
+    "storageAccountSkuName=$storageAccountSkuName"
+    "productionContainerAppImage=$productionContainerAppImage"
+    "productionContainerAppPublicWebUrl=$productionContainerAppPublicWebUrl"
+    "productionContainerAppSecretKey=$productionContainerAppSecretKey"
+    "productionContainerAppEnvironmentOverrides=$productionContainerAppEnvironmentOverrides"
+    "productionContainerAppMinimumReplicas=$productionContainerAppMinimumReplicas"
+    "productionContainerAppMaximumReplicas=$productionContainerAppMaximumReplicas"
+)
+
+foreach ($entry in $groupMappings.GetEnumerator()) {
+    $deploymentParameters += "$($entry.Key)=$($groupIds[$entry.Key])"
+}
+
+if ($deployDevelopmentEnvironment) {
+    $deploymentParameters += @(
+        "developmentContainerAppImage=$effectiveDevelopmentContainerAppImage"
+        "developmentContainerAppPublicWebUrl=$developmentContainerAppPublicWebUrl"
+        "developmentContainerAppSecretKey=$effectiveDevelopmentContainerAppSecretKey"
+        "developmentContainerAppEnvironmentOverrides=$developmentContainerAppEnvironmentOverrides"
+        "developmentContainerAppMinimumReplicas=$developmentContainerAppMinimumReplicas"
+        "developmentContainerAppMaximumReplicas=$developmentContainerAppMaximumReplicas"
+    )
+}
+
+az deployment group create `
+  --subscription $subscriptionId `
+  --resource-group $resourceGroupName `
+  --name $deploymentName `
+  --template-file infra/azure/main.bicep `
+  --parameters $deploymentParameters | Out-Null
+
+$postgresqlServerName = Get-DeploymentOutputValue -OutputName "postgresqlServerName"
+$postgresqlServerFqdn = Get-DeploymentOutputValue -OutputName "postgresqlFullyQualifiedDomainName"
+$productionContainerAppName = Get-DeploymentOutputValue -OutputName "productionContainerAppName"
+$productionContainerAppObjectId = Get-DeploymentOutputValue -OutputName "productionContainerAppPrincipalId"
+$productionContainerAppFqdn = Get-DeploymentOutputValue -OutputName "productionContainerAppFqdn"
+$productionDatabaseName = Get-DeploymentOutputValue -OutputName "postgresqlProductionDatabaseName"
+$developmentContainerAppName = Get-DeploymentOutputValue -OutputName "developmentContainerAppName"
+$developmentContainerAppObjectId = Get-DeploymentOutputValue -OutputName "developmentContainerAppPrincipalId"
+$developmentContainerAppFqdn = Get-DeploymentOutputValue -OutputName "developmentContainerAppFqdn"
+$developmentDatabaseName = Get-DeploymentOutputValue -OutputName "postgresqlDevelopmentDatabaseName"
+
+if ([string]::IsNullOrWhiteSpace($postgresqlServerName) -or [string]::IsNullOrWhiteSpace($postgresqlServerFqdn)) {
+    throw "Missing PostgreSQL outputs required for bootstrap."
+}
+
+if ([string]::IsNullOrWhiteSpace($postgresqlBootstrapEntraAdminLogin) -or [string]::IsNullOrWhiteSpace($postgresqlBootstrapEntraAdminObjectId)) {
+    $signedIn = az ad signed-in-user show --query "{login:userPrincipalName,id:id}" -o json | ConvertFrom-Json
+    $postgresqlBootstrapEntraAdminLogin = $signedIn.login
+    $postgresqlBootstrapEntraAdminObjectId = $signedIn.id
+    $postgresqlBootstrapEntraAdminType = "User"
+}
+
+Wait-PostgresqlReady -ServerName $postgresqlServerName
+Set-PostgresqlEntraAdminWithRetry -ServerName $postgresqlServerName -DisplayName $postgresqlBootstrapEntraAdminLogin -ObjectId $postgresqlBootstrapEntraAdminObjectId -PrincipalType $postgresqlBootstrapEntraAdminType
+
+Create-PrincipalRoleIfMissing -ServerFqdn $postgresqlServerFqdn -Login $postgresqlBootstrapEntraAdminLogin -RoleName $productionContainerAppName -ObjectId $productionContainerAppObjectId -PrincipalType "service"
+Apply-AppRoleGrants -ServerFqdn $postgresqlServerFqdn -Login $postgresqlBootstrapEntraAdminLogin -DatabaseName $productionDatabaseName -RoleName $productionContainerAppName
+
+if ($deployDevelopmentEnvironment) {
+    Create-PrincipalRoleIfMissing -ServerFqdn $postgresqlServerFqdn -Login $postgresqlBootstrapEntraAdminLogin -RoleName $developmentContainerAppName -ObjectId $developmentContainerAppObjectId -PrincipalType "service"
+    Apply-AppRoleGrants -ServerFqdn $postgresqlServerFqdn -Login $postgresqlBootstrapEntraAdminLogin -DatabaseName $developmentDatabaseName -RoleName $developmentContainerAppName
+}
+
+$databaseReadWriteRoleName = "$accessControlGroupNamePrefix-db-readwrite"
+$databaseReadOnlyRoleName = "$accessControlGroupNamePrefix-db-readonly"
+
+Create-PrincipalRoleIfMissing -ServerFqdn $postgresqlServerFqdn -Login $postgresqlBootstrapEntraAdminLogin -RoleName $databaseReadWriteRoleName -ObjectId $groupIds["databaseReadWriteEntraGroupObjectId"] -PrincipalType "group"
+Create-PrincipalRoleIfMissing -ServerFqdn $postgresqlServerFqdn -Login $postgresqlBootstrapEntraAdminLogin -RoleName $databaseReadOnlyRoleName -ObjectId $groupIds["databaseReadOnlyEntraGroupObjectId"] -PrincipalType "group"
+
+Apply-DatabaseGroupGrants -ServerFqdn $postgresqlServerFqdn -Login $postgresqlBootstrapEntraAdminLogin -DatabaseName $productionDatabaseName -ReadWriteRole $databaseReadWriteRoleName -ReadOnlyRole $databaseReadOnlyRoleName
+if ($deployDevelopmentEnvironment) {
+    Apply-DatabaseGroupGrants -ServerFqdn $postgresqlServerFqdn -Login $postgresqlBootstrapEntraAdminLogin -DatabaseName $developmentDatabaseName -ReadWriteRole $databaseReadWriteRoleName -ReadOnlyRole $databaseReadOnlyRoleName
+}
+
+Set-PostgresqlEntraAdminWithRetry -ServerName $postgresqlServerName -DisplayName "$accessControlGroupNamePrefix-db-admins" -ObjectId $groupIds["databaseAdminsEntraGroupObjectId"] -PrincipalType "Group"
+
+Write-Host "Deployment complete: $deploymentName"
+Write-Host "PostgreSQL: $postgresqlServerName"
+Write-Host "Production app: $productionContainerAppName ($productionContainerAppFqdn)"
+if ($deployDevelopmentEnvironment) {
+    Write-Host "Development app: $developmentContainerAppName ($developmentContainerAppFqdn)"
+}
