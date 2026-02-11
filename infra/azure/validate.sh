@@ -16,15 +16,21 @@ for template in "$main_template" "${module_templates[@]}"; do
   az bicep lint --file "$template"
 done
 
-echo "[shell] infra/azure/deploy.sh.example"
-bash -n infra/azure/deploy.sh.example
+echo "[shell] infra/azure/deploy-prod.sh.example"
+bash -n infra/azure/deploy-prod.sh.example
+
+echo "[shell] infra/azure/deploy-prod-dev.sh.example"
+bash -n infra/azure/deploy-prod-dev.sh.example
 
 echo "[shell] infra/azure/scripts/postgresql-entra-bootstrap.sh"
 bash -n infra/azure/scripts/postgresql-entra-bootstrap.sh
 
 if command -v pwsh >/dev/null 2>&1; then
-  echo "[powershell] infra/azure/deploy.ps1.example"
-  pwsh -NoLogo -NoProfile -Command "$errors = @(); [void][System.Management.Automation.Language.Parser]::ParseFile('infra/azure/deploy.ps1.example', [ref]$null, [ref]$errors); if ($errors.Count -gt 0) { $errors | ForEach-Object { Write-Error $_.Message }; exit 1 }"
+  echo "[powershell] infra/azure/deploy-prod.ps1.example"
+  pwsh -NoLogo -NoProfile -Command "$errors = @(); [void][System.Management.Automation.Language.Parser]::ParseFile('infra/azure/deploy-prod.ps1.example', [ref]$null, [ref]$errors); if ($errors.Count -gt 0) { $errors | ForEach-Object { Write-Error $_.Message }; exit 1 }"
+
+  echo "[powershell] infra/azure/deploy-prod-dev.ps1.example"
+  pwsh -NoLogo -NoProfile -Command "$errors = @(); [void][System.Management.Automation.Language.Parser]::ParseFile('infra/azure/deploy-prod-dev.ps1.example', [ref]$null, [ref]$errors); if ($errors.Count -gt 0) { $errors | ForEach-Object { Write-Error $_.Message }; exit 1 }"
 fi
 
 echo "Infra Azure validation passed."

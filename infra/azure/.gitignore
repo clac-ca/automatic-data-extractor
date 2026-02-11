@@ -1,2 +1,6 @@
 deploy.sh
 deploy.ps1
+deploy-prod.sh
+deploy-prod-dev.sh
+deploy-prod.ps1
+deploy-prod-dev.ps1
