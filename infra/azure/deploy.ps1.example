@@ -83,19 +83,6 @@ $ssoProductionApplicationDisplayName = ""
 $ssoDevelopmentApplicationDisplayName = ""
 
 # -----------------------------
-# Inputs: SSO bootstrap
-# Uses separate Entra app registrations for production and development.
-# Provider label remains "Microsoft Entra ID" in both environments.
-# -----------------------------
-$enableSsoBootstrap = $true
-$ssoClientSecretYears = "99"
-$ssoAuthMode = "password_and_idp"
-$ssoIdpJitProvisioningEnabled = "true"
-$ssoEncryptionKey = ""
-$ssoProductionApplicationDisplayName = ""
-$ssoDevelopmentApplicationDisplayName = ""
-
-# -----------------------------
 # Inputs: PostgreSQL bootstrap admin (optional)
 # Leave blank to auto-resolve from current signed-in az user.
 # -----------------------------
