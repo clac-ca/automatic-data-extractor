@@ -1,0 +1,323 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# -----------------------------
+# Inputs: Azure context
+# -----------------------------
+subscription_id="<SUBSCRIPTION_ID>"
+resource_group_name="<RESOURCE_GROUP_NAME>"
+container_app_name="<CONTAINER_APP_NAME>"
+container_apps_environment_name="<CONTAINER_APPS_ENVIRONMENT_NAME>"
+
+# -----------------------------
+# Inputs: Domain + certificate
+# -----------------------------
+domain_name="app.example.com"
+certificate_name="cf-origin-app-example-com"
+certificate_file="./infra/cloudflare/certs/app.example.com.pfx"
+certificate_password="<PFX_PASSWORD>"
+
+# -----------------------------
+# Inputs: DNS wait/poll controls
+# -----------------------------
+wait_for_dns="true"
+dns_poll_seconds="20"
+dns_timeout_seconds="900"
+
+log() {
+  printf '[%s] %s\n' "$(date +%H:%M:%S)" "$*"
+}
+
+fail() {
+  echo "ERROR: $*" >&2
+  exit 1
+}
+
+require_command() {
+  local command_name="$1"
+  if ! command -v "$command_name" >/dev/null 2>&1; then
+    fail "Required command not found: $command_name"
+  fi
+}
+
+require_az_login() {
+  if ! az account show >/dev/null 2>&1; then
+    log "No active Azure session found. Starting login..."
+    az login --use-device-code >/dev/null
+  fi
+}
+
+is_placeholder() {
+  local value="$1"
+  [[ "$value" == \<* && "$value" == *\> ]]
+}
+
+normalize_fqdn() {
+  local value="$1"
+  value="${value%.}"
+  echo "${value,,}"
+}
+
+hostname_exists() {
+  local hostname="$1"
+  local hostname_entries_json
+
+  hostname_entries_json="$(az containerapp hostname list \
+    -g "$resource_group_name" \
+    -n "$container_app_name" \
+    -o json 2>/dev/null || echo '[]')"
+
+  if printf '%s' "$hostname_entries_json" | grep -Fq "\"$hostname\""; then
+    return 0
+  fi
+
+  return 1
+}
+
+resolve_cname() {
+  local hostname="$1"
+  if command -v dig >/dev/null 2>&1; then
+    dig +short CNAME "$hostname" | head -n1 | tr -d '"' | tr -d '[:space:]'
+    return
+  fi
+
+  nslookup -type=CNAME "$hostname" 2>/dev/null \
+    | sed -n 's/.*canonical name = //p' \
+    | head -n1 \
+    | tr -d '"' \
+    | tr -d '[:space:]'
+}
+
+resolve_txt() {
+  local hostname="$1"
+  if command -v dig >/dev/null 2>&1; then
+    dig +short TXT "$hostname" | tr -d '"' | tr '\n' ' '
+    return
+  fi
+
+  nslookup -type=TXT "$hostname" 2>/dev/null \
+    | sed -n 's/.*text = "\(.*\)"/\1/p' \
+    | tr '\n' ' '
+}
+
+wait_for_dns_records() {
+  local cname_hostname="$1"
+  local cname_target_expected="$2"
+  local txt_hostname="$3"
+  local txt_value_expected="$4"
+  local deadline=$((SECONDS + dns_timeout_seconds))
+
+  log "Waiting for DNS propagation..."
+  log "Expected CNAME: $cname_hostname -> $cname_target_expected"
+  log "Expected TXT:   $txt_hostname -> $txt_value_expected"
+
+  while [ "$SECONDS" -lt "$deadline" ]; do
+    local resolved_cname resolved_txt normalized_expected normalized_actual
+    local cname_ok="false"
+    local txt_ok="false"
+
+    resolved_cname="$(resolve_cname "$cname_hostname" || true)"
+    resolved_txt="$(resolve_txt "$txt_hostname" || true)"
+
+    normalized_expected="$(normalize_fqdn "$cname_target_expected")"
+    normalized_actual="$(normalize_fqdn "${resolved_cname:-}")"
+
+    if [ -n "$normalized_actual" ] && [ "$normalized_actual" = "$normalized_expected" ]; then
+      cname_ok="true"
+    fi
+
+    if [ -n "$resolved_txt" ] && [[ "$resolved_txt" == *"$txt_value_expected"* ]]; then
+      txt_ok="true"
+    fi
+
+    if [ "$cname_ok" = "true" ] && [ "$txt_ok" = "true" ]; then
+      log "DNS records are visible."
+      return 0
+    fi
+
+    log "DNS not ready yet (cname_ok=$cname_ok txt_ok=$txt_ok). Sleeping ${dns_poll_seconds}s..."
+    sleep "$dns_poll_seconds"
+  done
+
+  fail "Timed out waiting for DNS records. Ensure CNAME is DNS-only and values match expected records."
+}
+
+if [ "${BASH_VERSINFO[0]}" -lt 4 ]; then
+  fail "Bash 4+ is required."
+fi
+
+require_command az
+
+if [ "$wait_for_dns" = "true" ]; then
+  if ! command -v dig >/dev/null 2>&1 && ! command -v nslookup >/dev/null 2>&1; then
+    fail "DNS polling requires either 'dig' or 'nslookup'. Install one or set wait_for_dns='false'."
+  fi
+fi
+
+[ -n "$subscription_id" ] || fail "subscription_id is required."
+[ -n "$resource_group_name" ] || fail "resource_group_name is required."
+[ -n "$container_app_name" ] || fail "container_app_name is required."
+[ -n "$container_apps_environment_name" ] || fail "container_apps_environment_name is required."
+[ -n "$domain_name" ] || fail "domain_name is required."
+[ -n "$certificate_name" ] || fail "certificate_name is required."
+[ -n "$certificate_file" ] || fail "certificate_file is required."
+
+is_placeholder "$subscription_id" && fail "subscription_id still has a placeholder value."
+is_placeholder "$resource_group_name" && fail "resource_group_name still has a placeholder value."
+is_placeholder "$container_app_name" && fail "container_app_name still has a placeholder value."
+is_placeholder "$container_apps_environment_name" && fail "container_apps_environment_name still has a placeholder value."
+is_placeholder "$certificate_name" && fail "certificate_name still has a placeholder value."
+is_placeholder "$certificate_file" && fail "certificate_file still has a placeholder value."
+
+if [[ "$domain_name" != *.*.* ]]; then
+  fail "domain_name must be a subdomain FQDN (example: app.example.com)."
+fi
+
+if [[ "$wait_for_dns" != "true" && "$wait_for_dns" != "false" ]]; then
+  fail "wait_for_dns must be either 'true' or 'false'."
+fi
+
+if [[ "$certificate_name" != "${certificate_name,,}" ]]; then
+  fail "certificate_name must be lowercase."
+fi
+
+if ! [[ "$dns_poll_seconds" =~ ^[0-9]+$ ]] || [ "$dns_poll_seconds" -lt 1 ]; then
+  fail "dns_poll_seconds must be a positive integer."
+fi
+
+if ! [[ "$dns_timeout_seconds" =~ ^[0-9]+$ ]] || [ "$dns_timeout_seconds" -lt 1 ]; then
+  fail "dns_timeout_seconds must be a positive integer."
+fi
+
+if [ ! -f "$certificate_file" ]; then
+  fail "certificate_file does not exist: $certificate_file"
+fi
+
+case "$certificate_file" in
+  *.pfx|*.pem)
+    ;;
+  *)
+    fail "certificate_file must end with .pfx or .pem"
+    ;;
+esac
+
+if [[ "$certificate_file" == *.pfx ]] && { [ -z "$certificate_password" ] || is_placeholder "$certificate_password"; }; then
+  fail "certificate_password is required for .pfx certificate_file."
+fi
+
+require_az_login
+az config set extension.use_dynamic_install=yes_without_prompt >/dev/null
+az account set --subscription "$subscription_id"
+
+log "Resolving Azure resources..."
+container_app_id="$(az containerapp show -g "$resource_group_name" -n "$container_app_name" --query id -o tsv 2>/dev/null || true)"
+[ -n "$container_app_id" ] || fail "Container App not found: $container_app_name in $resource_group_name"
+
+environment_id="$(az containerapp env show -g "$resource_group_name" -n "$container_apps_environment_name" --query id -o tsv 2>/dev/null || true)"
+[ -n "$environment_id" ] || fail "Container Apps environment not found: $container_apps_environment_name in $resource_group_name"
+
+container_app_environment_id="$(az containerapp show -g "$resource_group_name" -n "$container_app_name" --query properties.managedEnvironmentId -o tsv)"
+if [ "${container_app_environment_id,,}" != "${environment_id,,}" ]; then
+  fail "Container App is not attached to environment '$container_apps_environment_name'."
+fi
+
+ingress_external="$(az containerapp show -g "$resource_group_name" -n "$container_app_name" --query properties.configuration.ingress.external -o tsv)"
+if [ "$ingress_external" != "true" ]; then
+  fail "Container App ingress must be external/public for this workflow."
+fi
+
+container_app_fqdn="$(az containerapp show -g "$resource_group_name" -n "$container_app_name" --query properties.configuration.ingress.fqdn -o tsv)"
+if [ -z "$container_app_fqdn" ] || [ "$container_app_fqdn" = "null" ]; then
+  fail "Unable to resolve container app ingress FQDN."
+fi
+container_app_fqdn="${container_app_fqdn%.}"
+
+custom_domain_verification_id="$(az containerapp show -g "$resource_group_name" -n "$container_app_name" --query properties.customDomainVerificationId -o tsv)"
+if [ -z "$custom_domain_verification_id" ] || [ "$custom_domain_verification_id" = "null" ]; then
+  fail "Unable to resolve customDomainVerificationId from container app."
+fi
+
+txt_record_name="asuid.${domain_name}"
+
+echo
+echo "Required Cloudflare DNS records (create/update before bind):"
+echo "  1) CNAME"
+echo "     Name:  ${domain_name}"
+echo "     Value: ${container_app_fqdn}"
+echo "     Proxy: DNS-only (gray cloud) until Azure bind succeeds"
+echo
+echo "  2) TXT"
+echo "     Name:  ${txt_record_name}"
+echo "     Value: ${custom_domain_verification_id}"
+echo
+echo "Manual DNS verification commands:"
+echo "  dig +short CNAME ${domain_name}"
+echo "  dig +short TXT ${txt_record_name}"
+echo
+
+if [ "$wait_for_dns" = "true" ]; then
+  wait_for_dns_records "$domain_name" "$container_app_fqdn" "$txt_record_name" "$custom_domain_verification_id"
+else
+  log "Skipping DNS wait (wait_for_dns=false). Continue only after DNS is propagated."
+fi
+
+if ! hostname_exists "$domain_name"; then
+  log "Adding hostname to container app..."
+  if ! az containerapp hostname add \
+    --hostname "$domain_name" \
+    -g "$resource_group_name" \
+    -n "$container_app_name" >/dev/null; then
+    if hostname_exists "$domain_name"; then
+      log "Hostname add reported an error, but hostname is already present. Continuing."
+    else
+      fail "Failed to add hostname '$domain_name' to container app."
+    fi
+  fi
+else
+  log "Hostname already exists on container app. Continuing."
+fi
+
+log "Uploading certificate to Container Apps environment (idempotent update by certificate_name)..."
+upload_args=(
+  containerapp env certificate upload
+  -g "$resource_group_name"
+  --name "$container_apps_environment_name"
+  --certificate-file "$certificate_file"
+  --certificate-name "$certificate_name"
+)
+
+if [ -n "$certificate_password" ] && ! is_placeholder "$certificate_password"; then
+  upload_args+=(--password "$certificate_password")
+fi
+
+az "${upload_args[@]}" >/dev/null
+
+log "Binding hostname to certificate..."
+if ! az containerapp hostname bind \
+  --hostname "$domain_name" \
+  -g "$resource_group_name" \
+  -n "$container_app_name" \
+  --environment "$container_apps_environment_name" \
+  --certificate "$certificate_name" \
+  --validation-method CNAME >/dev/null; then
+  fail "Hostname bind failed. Verify CNAME/TXT records and keep CNAME DNS-only during bind."
+fi
+
+echo
+log "Azure bind completed."
+az containerapp hostname list \
+  -g "$resource_group_name" \
+  -n "$container_app_name" \
+  -o table || true
+
+echo
+echo "Post-bind Cloudflare cutover:"
+echo "  1) Switch CNAME '${domain_name}' from DNS-only to Proxied (orange cloud)."
+echo "  2) Set Cloudflare SSL/TLS mode to 'Full (strict)'."
+echo "  3) Verify traffic through Cloudflare:"
+echo "     curl -I https://${domain_name}"
+echo
+echo "Reference docs:"
+echo "  - https://learn.microsoft.com/en-us/azure/container-apps/custom-domains-certificates"
+echo "  - https://developers.cloudflare.com/dns/proxy-status/"
+echo "  - https://developers.cloudflare.com/ssl/origin-configuration/ssl-modes/full-strict/"
