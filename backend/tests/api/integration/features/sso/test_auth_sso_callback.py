@@ -7,10 +7,11 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ade_api.features.admin_settings.service import DEFAULT_SAFE_MODE_DETAIL
 from ade_api.features.sso.oidc import OidcMetadata
 from ade_api.features.sso.service import SsoService
 from ade_api.settings import Settings
-from ade_db.models import SsoIdentity, SsoProviderStatus, User
+from ade_db.models import ApplicationSetting, SsoIdentity, SsoProviderStatus, User
 
 pytestmark = pytest.mark.asyncio
 
@@ -45,6 +46,51 @@ def _create_auth_state(session: Session, settings: Settings, provider_id: str) -
     return state
 
 
+def _set_runtime_auth_mode_password_and_idp(session: Session) -> None:
+    payload = {
+        "safe_mode": {
+            "enabled": False,
+            "detail": DEFAULT_SAFE_MODE_DETAIL,
+        },
+        "auth": {
+            "mode": "password_and_idp",
+            "password": {
+                "reset_enabled": True,
+                "mfa_required": False,
+                "complexity": {
+                    "min_length": 12,
+                    "require_uppercase": False,
+                    "require_lowercase": False,
+                    "require_number": False,
+                    "require_symbol": False,
+                },
+                "lockout": {
+                    "max_attempts": 5,
+                    "duration_seconds": 300,
+                },
+            },
+            "identity_provider": {
+                "jit_provisioning_enabled": True,
+            },
+        },
+    }
+    record = session.get(ApplicationSetting, 1)
+    if record is None:
+        session.add(
+            ApplicationSetting(
+                id=1,
+                schema_version=2,
+                data=payload,
+                revision=1,
+            )
+        )
+    else:
+        record.schema_version = 2
+        record.data = payload
+        record.revision = int(record.revision) + 1
+    session.commit()
+
+
 def _mock_oidc_callback(monkeypatch: pytest.MonkeyPatch, *, claims: dict[str, object]) -> None:
     def _discover(_issuer: str, _client) -> OidcMetadata:
         return OidcMetadata(
@@ -69,10 +115,9 @@ async def test_callback_sso_allows_entra_login_without_email_verified_claim(
     async_client: AsyncClient,
     session: Session,
     settings: Settings,
-    override_app_settings,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    override_app_settings(auth_mode="password_and_idp")
+    _set_runtime_auth_mode_password_and_idp(session)
     provider_id = _configure_provider(session, settings)
     state = _create_auth_state(session, settings, provider_id)
 
@@ -114,10 +159,9 @@ async def test_callback_sso_uses_preferred_username_when_email_claim_is_missing(
     async_client: AsyncClient,
     session: Session,
     settings: Settings,
-    override_app_settings,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    override_app_settings(auth_mode="password_and_idp")
+    _set_runtime_auth_mode_password_and_idp(session)
     provider_id = _configure_provider(session, settings)
     state = _create_auth_state(session, settings, provider_id)
 
@@ -154,10 +198,9 @@ async def test_callback_sso_returns_email_missing_when_no_email_claim_candidates
     async_client: AsyncClient,
     session: Session,
     settings: Settings,
-    override_app_settings,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    override_app_settings(auth_mode="password_and_idp")
+    _set_runtime_auth_mode_password_and_idp(session)
     provider_id = _configure_provider(session, settings)
     state = _create_auth_state(session, settings, provider_id)
 
@@ -185,10 +228,9 @@ async def test_callback_sso_blocks_unverified_email_link_to_existing_user(
     async_client: AsyncClient,
     session: Session,
     settings: Settings,
-    override_app_settings,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    override_app_settings(auth_mode="password_and_idp")
+    _set_runtime_auth_mode_password_and_idp(session)
     provider_id = _configure_provider(session, settings)
     state = _create_auth_state(session, settings, provider_id)
 
