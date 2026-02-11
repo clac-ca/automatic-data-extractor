@@ -1,0 +1,336 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# -----------------------------
+# Inputs: Azure context
+# -----------------------------
+subscription_id="<SUBSCRIPTION_ID>"
+resource_group_name="rg-ade-shared-canadacentral-001"
+location="canadacentral"
+deployment_name="ade-azure-$(date +%Y%m%d-%H%M%S)"
+
+# -----------------------------
+# Inputs: Naming
+# -----------------------------
+workload="ade"
+instance="001"
+
+# -----------------------------
+# Inputs: Deployment mode
+# Set to "true" to deploy an extra development app/database alongside production.
+# -----------------------------
+deploy_development_environment="true"
+
+# -----------------------------
+# Inputs: PostgreSQL
+# -----------------------------
+virtual_network_address_prefix="10.80.0.0/16"
+container_apps_subnet_address_prefix="10.80.0.0/23"
+postgresql_version="18"
+postgresql_sku_tier="Burstable"
+postgresql_sku_name="Standard_B1ms"
+postgresql_storage_size_gb="32"
+postgresql_production_database_name="ade"
+postgresql_development_database_name="ade_dev"
+postgresql_allow_public_access_from_azure_services="true"
+public_ipv4_allowlist='["<ADMIN_PUBLIC_IPV4>"]'
+
+# -----------------------------
+# Inputs: Storage
+# -----------------------------
+storage_account_sku_name="Standard_LRS"
+
+# -----------------------------
+# Inputs: Access control groups
+# Script auto-creates/resolves canonical groups with this prefix.
+# -----------------------------
+access_control_group_name_prefix="ade"
+
+# -----------------------------
+# Inputs: Container apps
+# Use runtime image tags (not devcontainer tags).
+# -----------------------------
+production_container_app_image="ghcr.io/clac-ca/automatic-data-extractor:<PRODUCTION_RUNTIME_TAG>"
+production_container_app_public_web_url=""
+production_container_app_secret_key="<ADE_SECRET_KEY>"
+production_container_app_environment_overrides='{"ADE_LOG_LEVEL":"INFO","ADE_LOG_FORMAT":"json","ADE_AUTH_DISABLED":"false"}'
+production_container_app_minimum_replicas="1"
+production_container_app_maximum_replicas="1"
+
+development_container_app_image="ghcr.io/clac-ca/automatic-data-extractor:<DEVELOPMENT_RUNTIME_TAG>"
+development_container_app_public_web_url=""
+development_container_app_secret_key=""
+development_container_app_environment_overrides='{"ADE_LOG_LEVEL":"DEBUG","ADE_LOG_FORMAT":"json","ADE_AUTH_DISABLED":"false"}'
+development_container_app_minimum_replicas="0"
+development_container_app_maximum_replicas="1"
+
+# -----------------------------
+# Inputs: PostgreSQL bootstrap admin (optional)
+# Leave blank to auto-resolve from current signed-in az user.
+# -----------------------------
+postgresql_bootstrap_entra_admin_login=""
+postgresql_bootstrap_entra_admin_object_id=""
+postgresql_bootstrap_entra_admin_type="User"
+
+require_command() {
+  local command_name="$1"
+  if ! command -v "$command_name" >/dev/null 2>&1; then
+    echo "Required command not found: $command_name" >&2
+    exit 1
+  fi
+}
+
+mail_nickname_for_group() {
+  local group_name="$1"
+  local normalized
+  local hash_suffix
+
+  normalized="$(echo "$group_name" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9' | cut -c1-48)"
+  if [ -z "$normalized" ]; then
+    normalized="adegroup"
+  fi
+
+  hash_suffix="$(printf '%s' "$group_name" | cksum | awk '{print $1}')"
+  printf '%s' "${normalized}${hash_suffix}" | cut -c1-64
+}
+
+get_or_create_group_object_id() {
+  local group_name="$1"
+  local object_id
+
+  object_id="$(az ad group list --filter "displayName eq '$group_name'" --query '[0].id' -o tsv 2>/dev/null || true)"
+  if [ -n "$object_id" ]; then
+    echo "$object_id"
+    return
+  fi
+
+  az ad group create \
+    --display-name "$group_name" \
+    --mail-nickname "$(mail_nickname_for_group "$group_name")" \
+    --query id \
+    -o tsv >/dev/null
+
+  object_id="$(az ad group list --filter "displayName eq '$group_name'" --query '[0].id' -o tsv 2>/dev/null || true)"
+  if [ -z "$object_id" ]; then
+    echo "Failed to resolve object ID for group '$group_name'." >&2
+    exit 1
+  fi
+
+  echo "$object_id"
+}
+
+deployment_output() {
+  local output_name="$1"
+  local value
+
+  value="$(az deployment group show \
+    --subscription "$subscription_id" \
+    --resource-group "$resource_group_name" \
+    --name "$deployment_name" \
+    --query "properties.outputs.${output_name}.value" \
+    -o tsv 2>/dev/null || true)"
+
+  if [ "$value" = "null" ]; then
+    echo ""
+  else
+    echo "$value"
+  fi
+}
+
+wait_for_postgresql_ready() {
+  local server_name="$1"
+  local max_attempts=30
+  local wait_seconds=20
+
+  for attempt in $(seq 1 "$max_attempts"); do
+    local state
+    state="$(az postgres flexible-server show \
+      --subscription "$subscription_id" \
+      --resource-group "$resource_group_name" \
+      --name "$server_name" \
+      --query state -o tsv 2>/dev/null || true)"
+
+    if [ "$state" = "Ready" ]; then
+      return
+    fi
+
+    if [ "$attempt" -eq "$max_attempts" ]; then
+      echo "PostgreSQL server '$server_name' did not reach Ready state (last state: ${state:-unknown})." >&2
+      exit 1
+    fi
+
+    sleep "$wait_seconds"
+  done
+}
+
+set_postgresql_entra_admin_with_retry() {
+  local server_name="$1"
+  local display_name="$2"
+  local object_id="$3"
+  local principal_type="$4"
+  local max_attempts=20
+  local wait_seconds=15
+
+  for attempt in $(seq 1 "$max_attempts"); do
+    if az postgres flexible-server microsoft-entra-admin create \
+      --subscription "$subscription_id" \
+      --resource-group "$resource_group_name" \
+      --server-name "$server_name" \
+      --display-name "$display_name" \
+      --object-id "$object_id" \
+      --type "$principal_type" \
+      --only-show-errors >/dev/null 2>&1; then
+      return
+    fi
+
+    if [ "$attempt" -eq "$max_attempts" ]; then
+      echo "Failed to set PostgreSQL Entra admin '$display_name'." >&2
+      exit 1
+    fi
+
+    sleep "$wait_seconds"
+  done
+}
+
+require_command az
+require_command psql
+
+if ! az account show >/dev/null 2>&1; then
+  az login --use-device-code
+fi
+
+az account set --subscription "$subscription_id"
+az group create --subscription "$subscription_id" --name "$resource_group_name" --location "$location" >/dev/null
+
+# Resolve all canonical Entra groups.
+# format: bicepParamName:groupSuffix
+mappings=(
+  "resourceGroupOwnersEntraGroupObjectId:rg-owners"
+  "resourceGroupContributorsEntraGroupObjectId:rg-contributors"
+  "resourceGroupReadersEntraGroupObjectId:rg-readers"
+  "containerAppsAdminsEntraGroupObjectId:ca-admins"
+  "containerAppsOperatorsEntraGroupObjectId:ca-operators"
+  "containerAppsReadersEntraGroupObjectId:ca-readers"
+  "databaseAdminsEntraGroupObjectId:db-admins"
+  "databaseReadWriteEntraGroupObjectId:db-readwrite"
+  "databaseReadOnlyEntraGroupObjectId:db-readonly"
+  "storageAdminsEntraGroupObjectId:st-admins"
+  "storageReadWriteEntraGroupObjectId:st-readwrite"
+  "storageReadOnlyEntraGroupObjectId:st-readonly"
+)
+
+declare -A group_ids
+for mapping in "${mappings[@]}"; do
+  param_name="${mapping%%:*}"
+  group_suffix="${mapping#*:}"
+  group_name="${access_control_group_name_prefix}-${group_suffix}"
+  group_ids["$param_name"]="$(get_or_create_group_object_id "$group_name")"
+done
+
+effective_development_container_app_image="${development_container_app_image:-$production_container_app_image}"
+effective_development_container_app_secret_key="${development_container_app_secret_key:-$production_container_app_secret_key}"
+
+params=(
+  "location=$location"
+  "workload=$workload"
+  "instance=$instance"
+  "deployDevelopmentEnvironment=$deploy_development_environment"
+  "virtualNetworkAddressPrefix=$virtual_network_address_prefix"
+  "containerAppsSubnetAddressPrefix=$container_apps_subnet_address_prefix"
+  "postgresqlVersion=$postgresql_version"
+  "postgresqlSkuTier=$postgresql_sku_tier"
+  "postgresqlSkuName=$postgresql_sku_name"
+  "postgresqlStorageSizeGb=$postgresql_storage_size_gb"
+  "postgresqlProductionDatabaseName=$postgresql_production_database_name"
+  "postgresqlDevelopmentDatabaseName=$postgresql_development_database_name"
+  "postgresqlAllowPublicAccessFromAzureServices=$postgresql_allow_public_access_from_azure_services"
+  "publicIpv4Allowlist=$public_ipv4_allowlist"
+  "storageAccountSkuName=$storage_account_sku_name"
+  "productionContainerAppImage=$production_container_app_image"
+  "productionContainerAppPublicWebUrl=$production_container_app_public_web_url"
+  "productionContainerAppSecretKey=$production_container_app_secret_key"
+  "productionContainerAppEnvironmentOverrides=$production_container_app_environment_overrides"
+  "productionContainerAppMinimumReplicas=$production_container_app_minimum_replicas"
+  "productionContainerAppMaximumReplicas=$production_container_app_maximum_replicas"
+)
+
+for mapping in "${mappings[@]}"; do
+  param_name="${mapping%%:*}"
+  params+=("$param_name=${group_ids[$param_name]}")
+done
+
+if [ "$deploy_development_environment" = "true" ]; then
+  params+=(
+    "developmentContainerAppImage=$effective_development_container_app_image"
+    "developmentContainerAppPublicWebUrl=$development_container_app_public_web_url"
+    "developmentContainerAppSecretKey=$effective_development_container_app_secret_key"
+    "developmentContainerAppEnvironmentOverrides=$development_container_app_environment_overrides"
+    "developmentContainerAppMinimumReplicas=$development_container_app_minimum_replicas"
+    "developmentContainerAppMaximumReplicas=$development_container_app_maximum_replicas"
+  )
+fi
+
+az deployment group create \
+  --subscription "$subscription_id" \
+  --resource-group "$resource_group_name" \
+  --name "$deployment_name" \
+  --template-file infra/azure/main.bicep \
+  --parameters "${params[@]}" >/dev/null
+
+postgresql_server_name="$(deployment_output postgresqlServerName)"
+postgresql_server_fqdn="$(deployment_output postgresqlFullyQualifiedDomainName)"
+production_container_app_name="$(deployment_output productionContainerAppName)"
+production_container_app_object_id="$(deployment_output productionContainerAppPrincipalId)"
+production_container_app_fqdn="$(deployment_output productionContainerAppFqdn)"
+production_database_name="$(deployment_output postgresqlProductionDatabaseName)"
+development_container_app_name="$(deployment_output developmentContainerAppName)"
+development_container_app_object_id="$(deployment_output developmentContainerAppPrincipalId)"
+development_container_app_fqdn="$(deployment_output developmentContainerAppFqdn)"
+development_database_name="$(deployment_output postgresqlDevelopmentDatabaseName)"
+
+if [ -z "$postgresql_server_name" ] || [ -z "$postgresql_server_fqdn" ]; then
+  echo "Missing PostgreSQL outputs required for bootstrap." >&2
+  exit 1
+fi
+
+if [ -z "$postgresql_bootstrap_entra_admin_login" ] || [ -z "$postgresql_bootstrap_entra_admin_object_id" ]; then
+  postgresql_bootstrap_entra_admin_login="$(az ad signed-in-user show --query userPrincipalName -o tsv)"
+  postgresql_bootstrap_entra_admin_object_id="$(az ad signed-in-user show --query id -o tsv)"
+  postgresql_bootstrap_entra_admin_type="User"
+fi
+
+wait_for_postgresql_ready "$postgresql_server_name"
+
+set_postgresql_entra_admin_with_retry \
+  "$postgresql_server_name" \
+  "$postgresql_bootstrap_entra_admin_login" \
+  "$postgresql_bootstrap_entra_admin_object_id" \
+  "$postgresql_bootstrap_entra_admin_type"
+
+POSTGRESQL_SERVER_FQDN="$postgresql_server_fqdn" \
+POSTGRESQL_ENTRA_BOOTSTRAP_LOGIN="$postgresql_bootstrap_entra_admin_login" \
+PRODUCTION_CONTAINER_APP_ROLE_NAME="$production_container_app_name" \
+PRODUCTION_CONTAINER_APP_OBJECT_ID="$production_container_app_object_id" \
+PRODUCTION_DATABASE_NAME="$production_database_name" \
+DEPLOY_DEVELOPMENT_ENVIRONMENT="$deploy_development_environment" \
+DEVELOPMENT_CONTAINER_APP_ROLE_NAME="$development_container_app_name" \
+DEVELOPMENT_CONTAINER_APP_OBJECT_ID="$development_container_app_object_id" \
+DEVELOPMENT_DATABASE_NAME="$development_database_name" \
+DATABASE_READWRITE_ROLE_NAME="${access_control_group_name_prefix}-db-readwrite" \
+DATABASE_READWRITE_OBJECT_ID="${group_ids[databaseReadWriteEntraGroupObjectId]}" \
+DATABASE_READONLY_ROLE_NAME="${access_control_group_name_prefix}-db-readonly" \
+DATABASE_READONLY_OBJECT_ID="${group_ids[databaseReadOnlyEntraGroupObjectId]}" \
+bash infra/azure/scripts/postgresql-entra-bootstrap.sh
+
+set_postgresql_entra_admin_with_retry \
+  "$postgresql_server_name" \
+  "${access_control_group_name_prefix}-db-admins" \
+  "${group_ids[databaseAdminsEntraGroupObjectId]}" \
+  Group
+
+echo "Deployment complete: $deployment_name"
+echo "PostgreSQL: $postgresql_server_name"
+echo "Production app: $production_container_app_name ($production_container_app_fqdn)"
+if [ "$deploy_development_environment" = "true" ]; then
+  echo "Development app: $development_container_app_name ($development_container_app_fqdn)"
+fi
