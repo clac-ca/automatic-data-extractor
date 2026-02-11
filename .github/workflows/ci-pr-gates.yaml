@@ -123,13 +123,49 @@ jobs:
             --publish 10000:10000 \
             mcr.microsoft.com/azure-storage/azurite:3.35.0 \
             azurite-blob --silent --location /data --blobHost 0.0.0.0 --blobPort 10000 --disableTelemetry --skipApiVersionCheck
-          for attempt in {1..30}; do
-            if docker logs azurite 2>&1 | grep -q "successfully listening"; then
-              break
-            fi
-            sleep 1
-          done
-          docker logs azurite 2>&1 | grep -q "successfully listening"
+          if ! python - <<'PY'
+          import socket
+          import subprocess
+          import sys
+          import time
+
+          deadline = time.time() + 30
+          last_error = "unknown"
+
+          while time.time() < deadline:
+            inspect = subprocess.run(
+                ["docker", "inspect", "-f", "{{.State.Running}}", "azurite"],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            if inspect.returncode != 0:
+              last_error = inspect.stderr.strip() or "docker inspect failed"
+              time.sleep(1)
+              continue
+            if inspect.stdout.strip() != "true":
+              last_error = "container stopped"
+              time.sleep(1)
+              continue
+
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+              sock.settimeout(1)
+              try:
+                sock.connect(("127.0.0.1", 10000))
+              except OSError as exc:
+                last_error = str(exc)
+                time.sleep(1)
+                continue
+              sys.exit(0)
+
+          print(f"Azurite readiness probe failed: {last_error}", file=sys.stderr)
+          sys.exit(1)
+          PY
+          then
+            docker logs azurite --tail 200 || true
+            docker ps -a || true
+            exit 1
+          fi
 
       - name: Run API integration tests
         working-directory: backend
@@ -182,13 +218,49 @@ jobs:
             --publish 10000:10000 \
             mcr.microsoft.com/azure-storage/azurite:3.35.0 \
             azurite-blob --silent --location /data --blobHost 0.0.0.0 --blobPort 10000 --disableTelemetry --skipApiVersionCheck
-          for attempt in {1..30}; do
-            if docker logs azurite 2>&1 | grep -q "successfully listening"; then
-              break
-            fi
-            sleep 1
-          done
-          docker logs azurite 2>&1 | grep -q "successfully listening"
+          if ! python - <<'PY'
+          import socket
+          import subprocess
+          import sys
+          import time
+
+          deadline = time.time() + 30
+          last_error = "unknown"
+
+          while time.time() < deadline:
+            inspect = subprocess.run(
+                ["docker", "inspect", "-f", "{{.State.Running}}", "azurite"],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            if inspect.returncode != 0:
+              last_error = inspect.stderr.strip() or "docker inspect failed"
+              time.sleep(1)
+              continue
+            if inspect.stdout.strip() != "true":
+              last_error = "container stopped"
+              time.sleep(1)
+              continue
+
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+              sock.settimeout(1)
+              try:
+                sock.connect(("127.0.0.1", 10000))
+              except OSError as exc:
+                last_error = str(exc)
+                time.sleep(1)
+                continue
+              sys.exit(0)
+
+          print(f"Azurite readiness probe failed: {last_error}", file=sys.stderr)
+          sys.exit(1)
+          PY
+          then
+            docker logs azurite --tail 200 || true
+            docker ps -a || true
+            exit 1
+          fi
 
       - name: Run worker integration tests
         working-directory: backend
