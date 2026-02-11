@@ -44,6 +44,7 @@ If you already ran setup and only want to manage infrastructure:
 ```bash
 cd backend && uv run ade infra up -d --wait
 ```
+
 `ade infra up` accepts the same runtime flags as `docker compose up`, including `-d` and `--wait`.
 
 Stop infrastructure when done:
@@ -158,6 +159,8 @@ curl -sS http://localhost:8001/api/v1/health
 
 - Re-run `./setup.sh`.
 - If `ade dev` reports missing local runtime settings or unreachable local infra, run `cd backend && uv run ade infra up`.
-- In devcontainers, ADE now uses `/app/.venv` for Python tooling and `/app/data` for runtime state; rebuild/reopen the container after path-related config changes.
+- In devcontainers, ADE now uses `/app/.venv` for Python tooling and
+  `/app/data` for runtime state. Rebuild/reopen the container after path-related
+  config changes.
 - If startup errors mention migrations, use [Run Migrations and Resets](run-migrations-and-resets.md).
 - For runtime issues, use [Triage Playbook](../troubleshooting/triage-playbook.md).

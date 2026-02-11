@@ -1,134 +1,96 @@
 # Automatic Data Extractor (ADE)
 
-ADE is a self-hosted document normalization platform with:
+ADE is a self-hosted platform for normalizing messy Excel/CSV inputs into
+consistent, auditable outputs.
 
-- FastAPI control plane (`ade-api`)
-- Background run processor (`ade-worker`)
-- React web UI (`ade-web`)
-- Shared DB/storage packages (`ade-db`, `ade-storage`)
+[![PR Gates](https://github.com/clac-ca/automatic-data-extractor/actions/workflows/ci-pr-gates.yaml/badge.svg?branch=development)](https://github.com/clac-ca/automatic-data-extractor/actions/workflows/ci-pr-gates.yaml)
+[![Latest Release](https://img.shields.io/github/v/release/clac-ca/automatic-data-extractor?display_name=tag)](https://github.com/clac-ca/automatic-data-extractor/releases)
+[![License](https://img.shields.io/github/license/clac-ca/automatic-data-extractor)](LICENSE)
 
-## Quickstart (Local)
+## Product at a Glance
+
+### Workspace directory
+
+![Workspace directory with staged remittance workspaces](docs/assets/readme/workspaces-directory.png)
+
+Contributor-ready workspaces staged for remittance intake, exception handling,
+and reconciliation.
+
+### Upload preflight
+
+![Upload preflight dialog with remittance file staging](docs/assets/readme/upload-preflight-remittance.png)
+
+Intentional upload controls for worksheet scope, queued processing behavior,
+and conflict-safe ingestion.
+
+### Documents ledger
+
+![Documents ledger populated with remittance documents](docs/assets/readme/documents-ledger-remittance.png)
+
+A realistic operational queue with remittance exports and live run-state
+visibility.
+
+### Configuration workbench
+
+![Configuration editor workbench with full_name.py open](docs/assets/readme/configuration-workbench-hero.png)
+
+The editor surface for configuration packages, file-level changes, validation,
+and publish workflows.
+
+## What ADE Includes
+
+- `ade-api`: FastAPI control plane for auth, workspaces, configurations,
+  documents, and runs.
+- `ade-worker`: background run execution, environment lifecycle, retries, and
+  artifacts.
+- `ade-web`: React SPA for operators and configuration authors.
+- Shared packages: `ade-db`, `ade-storage`, and unified backend CLI entrypoints.
+
+## Contributor Quickstart
 
 ```bash
 git clone https://github.com/clac-ca/automatic-data-extractor
 cd automatic-data-extractor
-docker compose up --build -d
-```
-
-Open `http://localhost:8000`.
-
-Stop:
-
-```bash
-docker compose down
-```
-
-Full local reset:
-
-```bash
-docker compose down -v
-```
-
-## Native Dev Loop (Isolated Per Worktree)
-
-```bash
-./setup.sh
-cd backend && uv run ade infra up -d --wait
+./setup.sh --with-infra
 cd backend && uv run ade dev
 ```
 
-This flow uses a generated local profile in `.env` and keeps each worktree isolated.
-If you want setup to immediately launch ADE and open a browser, run `./setup.sh --open`.
+- `setup.sh` creates an isolated local profile per worktree.
+- `ade dev` starts API, worker, and web with reload.
+- To auto-open the browser when web is ready:
+  `cd backend && uv run ade dev --open`.
 
-Useful commands:
+## Daily Development Commands
 
-```bash
-./setup.sh
-./setup.sh --open
-cd backend && uv run ade infra info
-cd backend && uv run ade infra up -d --wait
-cd backend && uv run ade infra down
-cd backend && uv run ade infra down -v --rmi all
-./setup.sh --with-infra --force
-cd backend && uv run ade dev --open
-```
+| Task | Command |
+| --- | --- |
+| Start full local stack (dev mode) | `cd backend && uv run ade dev` |
+| Start full local stack (prod-style) | `cd backend && uv run ade start` |
+| API only | `cd backend && uv run ade api dev` |
+| Worker only | `cd backend && uv run ade worker start` |
+| Web only | `cd backend && uv run ade web dev` |
+| Generate frontend API types | `cd backend && uv run ade api types` |
+| Backend lint | `cd backend && uv run ade api lint` |
+| Full test suite | `cd backend && uv run ade test` |
+| Web build | `cd backend && uv run ade web build` |
 
-## Production Start Points
+## Documentation Map
 
-Primary production path: Azure Container Apps.
-
-- Bootstrap tutorial: [`docs/tutorials/production-bootstrap.md`](docs/tutorials/production-bootstrap.md)
-- Deployment runbook: [`docs/how-to/deploy-production.md`](docs/how-to/deploy-production.md)
-- Scaling guide: [`docs/how-to/scale-and-tune-throughput.md`](docs/how-to/scale-and-tune-throughput.md)
-
-Self-hosted compose production is still supported, but not the default path.
-
-## Default Performance Settings
-
-Benchmark-backed defaults are now set directly in compose:
-
-- Local (`docker-compose.yaml`)
-  - `ADE_API_PROCESSES=2`
-  - `ADE_WORKER_RUN_CONCURRENCY=8`
-- Self-hosted production (`docker-compose.prod.yaml`, `docker-compose.prod.split.yaml`)
-  - `ADE_API_PROCESSES=2`
-  - `ADE_WORKER_RUN_CONCURRENCY=4`
-
-These are safe starting points with better out-of-box throughput than app-level defaults.
-
-API runtime hardening defaults (app-level) are also enabled by default:
-
-- `ADE_API_PROXY_HEADERS_ENABLED=true`
-- `ADE_API_FORWARDED_ALLOW_IPS=127.0.0.1`
-- `ADE_API_THREADPOOL_TOKENS=40`
-- `ADE_DATABASE_CONNECTION_BUDGET` unset (warn-only if configured)
-
-## Documentation
-
-Top-level docs index: [`docs/index.md`](docs/index.md)
-
-Primary operator pages:
-
-- [`docs/tutorials/developer-setup.md`](docs/tutorials/developer-setup.md)
-- [`docs/tutorials/local-quickstart.md`](docs/tutorials/local-quickstart.md)
-- [`docs/tutorials/production-bootstrap.md`](docs/tutorials/production-bootstrap.md)
-- [`docs/how-to/deploy-production.md`](docs/how-to/deploy-production.md)
-- [`docs/troubleshooting/triage-playbook.md`](docs/troubleshooting/triage-playbook.md)
+- Docs hub: [`docs/README.md`](docs/README.md)
+- Contributor setup: [`docs/tutorials/developer-setup.md`](docs/tutorials/developer-setup.md)
+- Local dev loop: [`docs/how-to/run-local-dev-loop.md`](docs/how-to/run-local-dev-loop.md)
+- CLI reference: [`docs/reference/cli-reference.md`](docs/reference/cli-reference.md)
+- System architecture: [`docs/explanation/system-architecture.md`](docs/explanation/system-architecture.md)
 
 ## Contributing
 
-- Use Conventional Commits (`feat:`, `fix:`, `deps:`, `chore:`).
-- Run relevant tests/lint before merging.
-- Update docs in the same PR when behavior changes.
+- Default branch: `development`
+- Conventional Commits: `feat:`, `fix:`, `deps:`, `chore:`
+- Stage only task-related files
+- Run relevant checks before merge
 
-See [`CONTRIBUTING.md`](CONTRIBUTING.md) and [`docs/standards/documentation-maintenance.md`](docs/standards/documentation-maintenance.md).
-
-## Security Notes
-
-- Treat `ADE_SECRET_KEY` like a password.
-- Do not enable `ADE_AUTH_DISABLED=true` in production.
-- Restrict network access to Postgres and blob storage endpoints.
+Details: [`CONTRIBUTING.md`](CONTRIBUTING.md)
 
 ## License
 
-The MIT License (MIT)
-
-Copyright (c) 2015 Chris Kibble
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of
-this software and associated documentation files (the "Software"), to deal in
-the Software without restriction, including without limitation the rights to
-use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
-of the Software, and to permit persons to whom the Software is furnished to do
-so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+MIT. See [`LICENSE`](LICENSE).

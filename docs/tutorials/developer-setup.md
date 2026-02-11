@@ -40,7 +40,7 @@ cd automatic-data-extractor
 - Consistent runtime across contributors.
 - Fewer local machine dependency issues.
 
-### Minimal commands
+### Minimal IDE command
 
 Run on your host machine:
 
@@ -62,7 +62,7 @@ Open:
 
 ## Scenario 2: Manual Local Setup
 
-### Minimal commands
+### Minimal terminal commands
 
 From repo root:
 

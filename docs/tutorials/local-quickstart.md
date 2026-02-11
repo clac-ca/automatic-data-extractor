@@ -23,11 +23,11 @@ cd automatic-data-extractor
 docker compose up --build -d
 ```
 
-2. Open the web app in a browser:
+1. Open the web app in a browser:
 
 - `http://localhost:8000`
 
-3. Optional status check:
+1. Optional status check:
 
 ```bash
 docker compose ps

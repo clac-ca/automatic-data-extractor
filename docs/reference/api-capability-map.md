@@ -12,7 +12,7 @@ This map is intentionally high-level.
 
 For request/response schemas, examples, and endpoint-specific behavior, use:
 
-- [API Reference Hub](api/index.md)
+- [API Reference](api/README.md)
 - [Authentication API](api/authentication.md)
 - [Workspaces API](api/workspaces.md)
 - [Configurations API](api/configurations.md)

@@ -16,7 +16,8 @@ Both guides run ADE in one container app (`api,worker,web`) and keep `/app/data`
 | **A. Public + strict allowlists** | You want secure defaults and still need access from selected public IPs | **Yes**, via explicit IP allowlists |
 | **B. Private-only endpoints** | You want stronger network isolation and private-only data plane | **No**, use VPN/ExpressRoute (or jump VM) |
 
-Important: PostgreSQL networking mode (public vs private) is effectively a build-time choice. Plan for server re-creation if you switch guides later.
+Important: PostgreSQL networking mode (public vs private) is effectively a
+build-time choice. Plan for server re-creation if you switch guides later.
 
 ## Shared Prerequisites
 
