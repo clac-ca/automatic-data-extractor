@@ -203,7 +203,8 @@ These production controls are configured in Azure resources, not with `ADE_*` va
 - Storage firewall default deny plus IP rules
 - Storage VNet rules with service endpoints for ACA subnet access
 
-If you use public endpoints with allowlists, review these rules whenever app outbound IPs or operator network locations change.
+If you use public endpoints with allowlists, review these rules whenever app
+outbound IPs or operator network locations change.
 
 ## Managed Identity Patterns (Azure)
 

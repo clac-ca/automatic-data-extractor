@@ -93,7 +93,10 @@ No implicit hidden-random-password behavior is supported.
 ## Forced Password Change Behavior
 
 - Login success includes `passwordChangeRequired`.
-- Flagged users can access onboarding endpoints (`/api/v1/me/bootstrap`, MFA routes, logout, `/api/v1/auth/password/change`) and are blocked from other protected routes with `403 password_change_required`.
+- Flagged users can access onboarding endpoints
+  (`/api/v1/me/bootstrap`, MFA routes, logout, `/api/v1/auth/password/change`)
+  and are blocked from other protected routes with
+  `403 password_change_required`.
 - `POST /api/v1/auth/password/change` clears the requirement after successful change.
 
 ## SSO Validation Failure Codes

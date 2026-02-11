@@ -29,6 +29,7 @@ For service integrations, use `X-API-Key`.
 | `POST` | `/api/v1/auth/mfa/totp/recovery/regenerate` | protected | `200` | JSON: current code | JSON: new recovery codes | `400`, `401`, `403` |
 | `POST` | `/api/v1/auth/password/forgot` | public | `202` | JSON: email | empty | `400` invalid payload |
 | `POST` | `/api/v1/auth/password/reset` | public | `204` | JSON: reset token + new password | empty | `400` token invalid/expired |
+| `POST` | `/api/v1/auth/password/change` | protected | `204` | JSON: current password + new password | empty | `400`, `401`, `403`, `422` |
 | `GET` | `/api/v1/auth/providers` | public | `200` | none | JSON: provider list | none typical |
 | `GET` | `/api/v1/auth/setup` | public | `200` | none | JSON: setup state | none typical |
 | `POST` | `/api/v1/auth/setup` | public | `204` | JSON: first-admin payload | empty + session cookies | `409` setup already completed |
@@ -64,6 +65,12 @@ For service integrations, use `X-API-Key`.
 
 - Public provider discovery endpoint.
 - Useful for login UX decisions before calling interactive auth routes.
+
+### `POST /api/v1/auth/password/change`
+
+- Protected endpoint for authenticated password rotation.
+- Requires current password and a new password that satisfies active policy.
+- Returns no body on success.
 
 ## Error Handling
 
