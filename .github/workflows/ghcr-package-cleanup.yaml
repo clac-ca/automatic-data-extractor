@@ -14,11 +14,15 @@ on:
       keep_tag_regex:
         description: Regex pattern for additional tags to keep
         required: true
-        default: ^v[0-9]+\\.[0-9]+\\.[0-9]+$
+        default: ^v[0-9]+\\.[0-9]+\\.[0-9]+(-r[0-9]+)?$
+      retention_days:
+        description: Keep untagged unreachable versions newer than this many days
+        required: true
+        default: "30"
       dry_run:
         description: If true, report only
         required: true
-        default: "false"
+        default: "true"
 
 permissions:
   contents: read
@@ -33,12 +37,18 @@ jobs:
       PACKAGE_NAME: ${{ inputs.package_name }}
       KEEP_TAGS: ${{ inputs.keep_tags }}
       KEEP_TAG_REGEX: ${{ inputs.keep_tag_regex }}
+      RETENTION_DAYS: ${{ inputs.retention_days }}
       DRY_RUN: ${{ inputs.dry_run }}
     steps:
       - name: Evaluate and prune package versions
         shell: bash
         run: |
           set -euo pipefail
+
+          if ! [[ "$RETENTION_DAYS" =~ ^[0-9]+$ ]]; then
+            echo "RETENTION_DAYS must be an integer." >&2
+            exit 1
+          fi
 
           declare -A KEEP=()
           IFS=',' read -r -a keep_tags <<< "$KEEP_TAGS"
@@ -47,9 +57,24 @@ jobs:
             [ -n "$tag" ] && KEEP["$tag"]=1
           done
 
+          is_keep_tag() {
+            local tag="$1"
+            if [ -n "${KEEP[$tag]+x}" ]; then
+              return 0
+            fi
+            if [[ "$tag" =~ $KEEP_TAG_REGEX ]]; then
+              return 0
+            fi
+            return 1
+          }
+
+          cutoff_epoch="$(date -u -d "-${RETENTION_DAYS} days" +%s)"
+          now_epoch="$(date -u +%s)"
+
           echo "Package: ${OWNER}/${PACKAGE_NAME}"
           echo "Keep tags: ${KEEP_TAGS}"
           echo "Keep tag regex: ${KEEP_TAG_REGEX}"
+          echo "Retention days: ${RETENTION_DAYS}"
           echo "Dry run: ${DRY_RUN}"
 
           kept=0
@@ -64,50 +89,109 @@ jobs:
 
           echo "Loaded versions: ${#version_rows[@]}"
 
+          if ! echo "${GH_TOKEN}" | docker login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin >/dev/null 2>&1; then
+            echo "WARN: docker login to ghcr.io failed; digest reachability checks may be incomplete." >&2
+          fi
+
+          declare -A PROTECTED_TAGS=()
+          for row in "${version_rows[@]}"; do
+            version_json="$(echo "$row" | base64 --decode)"
+            mapfile -t tags < <(jq -r '.metadata.container.tags[]? // empty' <<<"$version_json")
+            for tag in "${tags[@]}"; do
+              if is_keep_tag "$tag"; then
+                PROTECTED_TAGS["$tag"]=1
+              fi
+            done
+          done
+
+          echo "Protected tags discovered: ${#PROTECTED_TAGS[@]}"
+
+          declare -A KEEP_DIGESTS=()
+          for tag in "${!PROTECTED_TAGS[@]}"; do
+            ref="ghcr.io/${OWNER}/${PACKAGE_NAME}:${tag}"
+            if inspect="$(docker buildx imagetools inspect "${ref}" 2>/dev/null)"; then
+              while IFS= read -r digest; do
+                [ -n "$digest" ] && KEEP_DIGESTS["$digest"]=1
+              done < <(echo "$inspect" | grep -Eo 'sha256:[0-9a-f]{64}' | sort -u)
+              echo "KEEP-TAG tag=${tag}"
+            else
+              echo "WARN: unable to inspect ${ref}; preserving by tag presence only." >&2
+            fi
+          done
+
+          echo "Reachable digests discovered: ${#KEEP_DIGESTS[@]}"
+
+          kept_tagged=0
+          kept_reachable=0
+          kept_recent=0
+          kept_unknown_age=0
+
           for row in "${version_rows[@]}"; do
             version_json="$(echo "$row" | base64 --decode)"
             id="$(jq -r '.id' <<<"$version_json")"
+            name="$(jq -r '.name // ""' <<<"$version_json")"
+            created_at="$(jq -r '.created_at // ""' <<<"$version_json")"
             mapfile -t tags < <(jq -r '.metadata.container.tags[]? // empty' <<<"$version_json")
 
-            keep_version=0
-            has_allowed=0
-            has_disallowed=0
             if [ "${#tags[@]}" -gt 0 ]; then
-              for tag in "${tags[@]}"; do
-                if [ -n "${KEEP[$tag]+x}" ] || [[ "$tag" =~ $KEEP_TAG_REGEX ]]; then
-                  has_allowed=1
-                else
-                  has_disallowed=1
-                fi
-              done
-            fi
-            if [ "$has_allowed" -eq 1 ] && [ "$has_disallowed" -eq 0 ]; then
-              keep_version=1
-            fi
-
-            if [ "$keep_version" -eq 1 ]; then
               kept=$((kept + 1))
-              echo "KEEP id=${id} tags=$(IFS=,; echo "${tags[*]}")"
+              kept_tagged=$((kept_tagged + 1))
+              echo "KEEP id=${id} reason=tagged tags=$(IFS=,; echo "${tags[*]}")"
               continue
             fi
 
+            version_digest=""
+            if [[ "$name" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+              version_digest="$name"
+            fi
+
+            if [ -n "$version_digest" ] && [ -n "${KEEP_DIGESTS[$version_digest]+x}" ]; then
+              kept=$((kept + 1))
+              kept_reachable=$((kept_reachable + 1))
+              echo "KEEP id=${id} reason=reachable digest=${version_digest}"
+              continue
+            fi
+
+            created_epoch=0
+            if [ -n "$created_at" ]; then
+              if ! created_epoch="$(date -u -d "$created_at" +%s 2>/dev/null)"; then
+                created_epoch=0
+              fi
+            fi
+
+            if [ "$created_epoch" -eq 0 ]; then
+              kept=$((kept + 1))
+              kept_unknown_age=$((kept_unknown_age + 1))
+              echo "KEEP id=${id} reason=unknown-age"
+              continue
+            fi
+
+            if [ "$created_epoch" -ge "$cutoff_epoch" ]; then
+              age_days=$(((now_epoch - created_epoch) / 86400))
+              kept=$((kept + 1))
+              kept_recent=$((kept_recent + 1))
+              echo "KEEP id=${id} reason=recent age_days=${age_days}"
+              continue
+            fi
+
+            age_days=$(((now_epoch - created_epoch) / 86400))
             if [ "$DRY_RUN" = "true" ]; then
               deleted=$((deleted + 1))
-              echo "DRY-RUN DELETE id=${id} tags=$(IFS=,; echo "${tags[*]}")"
+              echo "DRY-RUN DELETE id=${id} reason=unreachable-untagged-old age_days=${age_days} digest=${version_digest}"
               continue
             fi
 
             if gh api -X DELETE \
               "/orgs/${OWNER}/packages/container/${PACKAGE_NAME}/versions/${id}" >/dev/null; then
               deleted=$((deleted + 1))
-              echo "DELETED id=${id} tags=$(IFS=,; echo "${tags[*]}")"
+              echo "DELETED id=${id} reason=unreachable-untagged-old age_days=${age_days} digest=${version_digest}"
             else
               failed=$((failed + 1))
-              echo "FAILED id=${id} tags=$(IFS=,; echo "${tags[*]}")" >&2
+              echo "FAILED id=${id} reason=unreachable-untagged-old age_days=${age_days} digest=${version_digest}" >&2
             fi
           done
 
-          echo "Summary: kept=${kept} deleted=${deleted} failed=${failed}"
+          echo "Summary: kept=${kept} deleted=${deleted} failed=${failed} kept_tagged=${kept_tagged} kept_reachable=${kept_reachable} kept_recent=${kept_recent} kept_unknown_age=${kept_unknown_age}"
           if [ "$failed" -gt 0 ]; then
             exit 1
           fi
