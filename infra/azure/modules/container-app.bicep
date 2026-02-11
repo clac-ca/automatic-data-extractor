@@ -30,6 +30,18 @@ param containerAppMinimumReplicas int
 @description('Maximum replica count.')
 param containerAppMaximumReplicas int
 
+@minValue(1)
+@description('Scale polling interval in seconds.')
+param containerAppScalePollingIntervalSeconds int = 30
+
+@minValue(0)
+@description('Scale cooldown period in seconds before scaling to minimum replicas.')
+param containerAppScaleCooldownPeriodSeconds int = 300
+
+@minValue(1)
+@description('HTTP concurrent requests threshold per replica for autoscaling.')
+param containerAppScaleHttpConcurrentRequests int = 10
+
 @description('Container Apps managed environment name.')
 param containerAppsManagedEnvironmentName string
 
@@ -161,7 +173,7 @@ resource managedEnvironmentStorage 'Microsoft.App/managedEnvironments/storages@2
   }
 }
 
-resource containerApp 'Microsoft.App/containerApps@2023-05-01' = if (deploy) {
+resource containerApp 'Microsoft.App/containerApps@2025-01-01' = if (deploy) {
   name: containerAppName
   location: location
   identity: {
@@ -185,6 +197,47 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = if (deploy) {
           name: containerAppName
           image: containerAppImage
           env: containerAppEnvironmentVariables
+          probes: [
+            {
+              type: 'Startup'
+              httpGet: {
+                path: '/api/v1/health'
+                port: 8000
+                scheme: 'HTTP'
+              }
+              initialDelaySeconds: 5
+              periodSeconds: 10
+              timeoutSeconds: 5
+              successThreshold: 1
+              failureThreshold: 18
+            }
+            {
+              type: 'Readiness'
+              httpGet: {
+                path: '/api/v1/health'
+                port: 8000
+                scheme: 'HTTP'
+              }
+              initialDelaySeconds: 5
+              periodSeconds: 10
+              timeoutSeconds: 5
+              successThreshold: 1
+              failureThreshold: 6
+            }
+            {
+              type: 'Liveness'
+              httpGet: {
+                path: '/api/v1/health'
+                port: 8000
+                scheme: 'HTTP'
+              }
+              initialDelaySeconds: 30
+              periodSeconds: 30
+              timeoutSeconds: 5
+              successThreshold: 1
+              failureThreshold: 3
+            }
+          ]
           volumeMounts: [
             {
               volumeName: 'ade-data'
@@ -196,6 +249,18 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = if (deploy) {
       scale: {
         minReplicas: containerAppMinimumReplicas
         maxReplicas: containerAppMaximumReplicas
+        pollingInterval: containerAppScalePollingIntervalSeconds
+        cooldownPeriod: containerAppScaleCooldownPeriodSeconds
+        rules: [
+          {
+            name: 'http-concurrency'
+            http: {
+              metadata: {
+                concurrentRequests: string(containerAppScaleHttpConcurrentRequests)
+              }
+            }
+          }
+        ]
       }
       volumes: [
         {

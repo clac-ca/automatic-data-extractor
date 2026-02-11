@@ -116,6 +116,18 @@ param productionContainerAppMinimumReplicas int = 1
 @description('Production Container App maximum replicas.')
 param productionContainerAppMaximumReplicas int = 2
 
+@minValue(1)
+@description('Production Container App scale polling interval in seconds.')
+param productionContainerAppScalePollingIntervalSeconds int = 30
+
+@minValue(0)
+@description('Production Container App scale cooldown period in seconds before scaling to minimum replicas.')
+param productionContainerAppScaleCooldownPeriodSeconds int = 300
+
+@minValue(1)
+@description('Production Container App HTTP concurrent requests threshold per replica for autoscaling.')
+param productionContainerAppScaleHttpConcurrentRequests int = 10
+
 @description('Development Container App image. Empty reuses production image.')
 param developmentContainerAppImage string = ''
 
@@ -136,6 +148,18 @@ param developmentContainerAppMinimumReplicas int = 0
 @minValue(1)
 @description('Development Container App maximum replicas.')
 param developmentContainerAppMaximumReplicas int = 1
+
+@minValue(1)
+@description('Development Container App scale polling interval in seconds.')
+param developmentContainerAppScalePollingIntervalSeconds int = 30
+
+@minValue(0)
+@description('Development Container App scale cooldown period in seconds before scaling to minimum replicas.')
+param developmentContainerAppScaleCooldownPeriodSeconds int = 1800
+
+@minValue(1)
+@description('Development Container App HTTP concurrent requests threshold per replica for autoscaling.')
+param developmentContainerAppScaleHttpConcurrentRequests int = 10
 
 var locationToken = toLower(replace(location, ' ', ''))
 var locationShortToken = take(locationToken, 3)
@@ -243,6 +267,9 @@ module productionContainerApp 'modules/container-app.bicep' = {
     containerAppEnvironmentOverrides: productionContainerAppEnvironmentOverrides
     containerAppMinimumReplicas: productionContainerAppMinimumReplicas
     containerAppMaximumReplicas: productionContainerAppMaximumReplicas
+    containerAppScalePollingIntervalSeconds: productionContainerAppScalePollingIntervalSeconds
+    containerAppScaleCooldownPeriodSeconds: productionContainerAppScaleCooldownPeriodSeconds
+    containerAppScaleHttpConcurrentRequests: productionContainerAppScaleHttpConcurrentRequests
     containerAppsManagedEnvironmentName: observability.outputs.containerAppsManagedEnvironmentName
     containerAppsManagedEnvironmentResourceId: observability.outputs.containerAppsManagedEnvironmentResourceId
     containerAppsManagedEnvironmentDefaultDomain: observability.outputs.containerAppsManagedEnvironmentDefaultDomain
@@ -267,6 +294,9 @@ module developmentContainerApp 'modules/container-app.bicep' = {
     containerAppEnvironmentOverrides: developmentContainerAppEnvironmentOverrides
     containerAppMinimumReplicas: developmentContainerAppMinimumReplicas
     containerAppMaximumReplicas: developmentContainerAppMaximumReplicas
+    containerAppScalePollingIntervalSeconds: developmentContainerAppScalePollingIntervalSeconds
+    containerAppScaleCooldownPeriodSeconds: developmentContainerAppScaleCooldownPeriodSeconds
+    containerAppScaleHttpConcurrentRequests: developmentContainerAppScaleHttpConcurrentRequests
     containerAppsManagedEnvironmentName: observability.outputs.containerAppsManagedEnvironmentName
     containerAppsManagedEnvironmentResourceId: observability.outputs.containerAppsManagedEnvironmentResourceId
     containerAppsManagedEnvironmentDefaultDomain: observability.outputs.containerAppsManagedEnvironmentDefaultDomain
