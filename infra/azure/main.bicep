@@ -1,5 +1,3 @@
-extension microsoftGraphV1
-
 @minLength(1)
 @description('Azure location for deployed resources.')
 param location string = resourceGroup().location
@@ -21,13 +19,6 @@ param virtualNetworkAddressPrefix string = '10.80.0.0/16'
 @description('Container Apps delegated subnet address prefix in CIDR notation.')
 param containerAppsSubnetAddressPrefix string = '10.80.0.0/23'
 
-@description('PostgreSQL password-auth administrator login name. Used only when postgresqlAuthenticationMode includes password auth.')
-param postgresqlAdministratorLogin string = ''
-
-@secure()
-@description('PostgreSQL password-auth administrator login password. Required only when postgresqlAuthenticationMode includes password auth.')
-param postgresqlAdministratorPassword string = ''
-
 @description('PostgreSQL major version (for example, 16).')
 param postgresqlVersion string = '16'
 
@@ -47,14 +38,6 @@ param postgresqlProductionDatabaseName string = 'ade'
 @description('Development PostgreSQL database name.')
 param postgresqlDevelopmentDatabaseName string = 'ade_dev'
 
-@allowed([
-  'postgresql_only'
-  'microsoft_entra_only'
-  'postgresql_and_microsoft_entra'
-])
-@description('PostgreSQL authentication mode.')
-param postgresqlAuthenticationMode string = 'microsoft_entra_only'
-
 @description('Enable PostgreSQL firewall 0.0.0.0 rule to allow public access from Azure services.')
 param postgresqlAllowPublicAccessFromAzureServices bool = true
 
@@ -64,55 +47,53 @@ param publicIpv4Allowlist array = []
 @description('Storage account SKU name.')
 param storageAccountSkuName string = 'Standard_LRS'
 
-@allowed([
-  'microsoft_entra'
-  'shared_key'
-])
-@description('Blob authentication method. microsoft_entra uses managed identity + RBAC, shared_key uses ADE_BLOB_CONNECTION_STRING.')
-param storageBlobAuthenticationMethod string = 'microsoft_entra'
+@minLength(1)
+@description('Microsoft Entra object ID for <prefix>-rg-owners.')
+param resourceGroupOwnersEntraGroupObjectId string
 
 @minLength(1)
-@description('Access control group name prefix. Group principal names are derived as <prefix>-...')
-param accessControlGroupNamePrefix string = 'ade'
+@description('Microsoft Entra object ID for <prefix>-rg-contributors.')
+param resourceGroupContributorsEntraGroupObjectId string
 
-@description('When true, create all required Microsoft Entra groups from accessControlGroupNamePrefix and use them for RBAC + database grants.')
-param createAccessControlEntraGroups bool = true
+@minLength(1)
+@description('Microsoft Entra object ID for <prefix>-rg-readers.')
+param resourceGroupReadersEntraGroupObjectId string
 
-@description('Microsoft Entra object ID for <prefix>-rg-owners. Required when createAccessControlEntraGroups=false.')
-param resourceGroupOwnersEntraGroupObjectId string = ''
+@minLength(1)
+@description('Microsoft Entra object ID for <prefix>-ca-admins.')
+param containerAppsAdminsEntraGroupObjectId string
 
-@description('Microsoft Entra object ID for <prefix>-rg-contributors. Required when createAccessControlEntraGroups=false.')
-param resourceGroupContributorsEntraGroupObjectId string = ''
+@minLength(1)
+@description('Microsoft Entra object ID for <prefix>-ca-operators.')
+param containerAppsOperatorsEntraGroupObjectId string
 
-@description('Microsoft Entra object ID for <prefix>-rg-readers. Required when createAccessControlEntraGroups=false.')
-param resourceGroupReadersEntraGroupObjectId string = ''
+@minLength(1)
+@description('Microsoft Entra object ID for <prefix>-ca-readers.')
+param containerAppsReadersEntraGroupObjectId string
 
-@description('Microsoft Entra object ID for <prefix>-ca-admins. Required when createAccessControlEntraGroups=false.')
-param containerAppsAdminsEntraGroupObjectId string = ''
+@minLength(1)
+@description('Microsoft Entra object ID for <prefix>-db-admins.')
+param databaseAdminsEntraGroupObjectId string
 
-@description('Microsoft Entra object ID for <prefix>-ca-operators. Required when createAccessControlEntraGroups=false.')
-param containerAppsOperatorsEntraGroupObjectId string = ''
+@minLength(1)
+@description('Microsoft Entra object ID for <prefix>-db-readwrite.')
+param databaseReadWriteEntraGroupObjectId string
 
-@description('Microsoft Entra object ID for <prefix>-ca-readers. Required when createAccessControlEntraGroups=false.')
-param containerAppsReadersEntraGroupObjectId string = ''
+@minLength(1)
+@description('Microsoft Entra object ID for <prefix>-db-readonly.')
+param databaseReadOnlyEntraGroupObjectId string
 
-@description('Microsoft Entra object ID for <prefix>-db-admins. Required when createAccessControlEntraGroups=false.')
-param databaseAdminsEntraGroupObjectId string = ''
+@minLength(1)
+@description('Microsoft Entra object ID for <prefix>-st-admins.')
+param storageAdminsEntraGroupObjectId string
 
-@description('Microsoft Entra object ID for <prefix>-db-readwrite. Required when createAccessControlEntraGroups=false.')
-param databaseReadWriteEntraGroupObjectId string = ''
+@minLength(1)
+@description('Microsoft Entra object ID for <prefix>-st-readwrite.')
+param storageReadWriteEntraGroupObjectId string
 
-@description('Microsoft Entra object ID for <prefix>-db-readonly. Required when createAccessControlEntraGroups=false.')
-param databaseReadOnlyEntraGroupObjectId string = ''
-
-@description('Microsoft Entra object ID for <prefix>-st-admins. Required when createAccessControlEntraGroups=false.')
-param storageAdminsEntraGroupObjectId string = ''
-
-@description('Microsoft Entra object ID for <prefix>-st-readwrite. Required when createAccessControlEntraGroups=false.')
-param storageReadWriteEntraGroupObjectId string = ''
-
-@description('Microsoft Entra object ID for <prefix>-st-readonly. Required when createAccessControlEntraGroups=false.')
-param storageReadOnlyEntraGroupObjectId string = ''
+@minLength(1)
+@description('Microsoft Entra object ID for <prefix>-st-readonly.')
+param storageReadOnlyEntraGroupObjectId string
 
 @description('Production Container App image.')
 param productionContainerAppImage string
@@ -174,8 +155,6 @@ var containerAppsSubnetName = take('snet-${workload}-${sharedEnvironmentToken}-$
 var containerAppsManagedEnvironmentName = take('cae-${workload}-${sharedEnvironmentToken}-${locationToken}-${instance}', 60)
 var logAnalyticsWorkspaceName = take('log-${workload}-${sharedEnvironmentToken}-${locationToken}-${instance}', 63)
 var postgresqlServerName = take('psql-${postgresqlWorkloadToken}-${sharedEnvironmentToken}-${locationToken}-${postgresqlInstanceToken}-${deterministicResourceSuffix}', 63)
-var postgresqlBootstrapManagedIdentityName = take('id-${workload}-${sharedEnvironmentToken}-${locationToken}-${instance}-postgresql-bootstrap', 128)
-var postgresqlBootstrapDeploymentScriptName = take('mod-${workload}-${locationToken}-${instance}-postgresql-bootstrap', 64)
 
 var storageAccountName = toLower(take('st${normalizedWorkloadToken}${sharedEnvironmentShortToken}${locationShortToken}${normalizedInstanceToken}${deterministicResourceSuffix}', 24))
 
@@ -193,144 +172,7 @@ var developmentManagedEnvironmentStorageName = take('share-${workload}-${develop
 var effectiveDevelopmentContainerAppImage = empty(developmentContainerAppImage) ? productionContainerAppImage : developmentContainerAppImage
 var effectiveDevelopmentContainerAppSecretKey = empty(developmentContainerAppSecretKey) ? productionContainerAppSecretKey : developmentContainerAppSecretKey
 
-var postgresqlUsesMicrosoftEntraAuthentication = contains([
-  'microsoft_entra_only'
-  'postgresql_and_microsoft_entra'
-], postgresqlAuthenticationMode)
-
-var effectivePostgresqlAdministratorLogin = empty(postgresqlAdministratorLogin) ? 'adeadmin' : postgresqlAdministratorLogin
-
-var adeDatabaseAuthenticationMode = postgresqlUsesMicrosoftEntraAuthentication ? 'managed_identity' : 'password'
-var storageUsesMicrosoftEntraAuthentication = storageBlobAuthenticationMethod == 'microsoft_entra'
-
-var normalizedAccessControlGroupNamePrefix = toLower(replace(replace(replace(accessControlGroupNamePrefix, ' ', '-'), '_', '-'), '.', '-'))
-
-var resourceGroupOwnersGroupName = '${normalizedAccessControlGroupNamePrefix}-rg-owners'
-var resourceGroupContributorsGroupName = '${normalizedAccessControlGroupNamePrefix}-rg-contributors'
-var resourceGroupReadersGroupName = '${normalizedAccessControlGroupNamePrefix}-rg-readers'
-var containerAppsAdminsGroupName = '${normalizedAccessControlGroupNamePrefix}-ca-admins'
-var containerAppsOperatorsGroupName = '${normalizedAccessControlGroupNamePrefix}-ca-operators'
-var containerAppsReadersGroupName = '${normalizedAccessControlGroupNamePrefix}-ca-readers'
-var databaseAdminsGroupName = '${normalizedAccessControlGroupNamePrefix}-db-admins'
-var databaseReadWriteGroupName = '${normalizedAccessControlGroupNamePrefix}-db-readwrite'
-var databaseReadOnlyGroupName = '${normalizedAccessControlGroupNamePrefix}-db-readonly'
-var storageAdminsGroupName = '${normalizedAccessControlGroupNamePrefix}-st-admins'
-var storageReadWriteGroupName = '${normalizedAccessControlGroupNamePrefix}-st-readwrite'
-var storageReadOnlyGroupName = '${normalizedAccessControlGroupNamePrefix}-st-readonly'
-
-resource resourceGroupOwnersGroup 'Microsoft.Graph/groups@v1.0' = if (createAccessControlEntraGroups) {
-  uniqueName: resourceGroupOwnersGroupName
-  displayName: resourceGroupOwnersGroupName
-  securityEnabled: true
-  mailEnabled: false
-  mailNickname: take(resourceGroupOwnersGroupName, 64)
-}
-
-resource resourceGroupContributorsGroup 'Microsoft.Graph/groups@v1.0' = if (createAccessControlEntraGroups) {
-  uniqueName: resourceGroupContributorsGroupName
-  displayName: resourceGroupContributorsGroupName
-  securityEnabled: true
-  mailEnabled: false
-  mailNickname: take(resourceGroupContributorsGroupName, 64)
-}
-
-resource resourceGroupReadersGroup 'Microsoft.Graph/groups@v1.0' = if (createAccessControlEntraGroups) {
-  uniqueName: resourceGroupReadersGroupName
-  displayName: resourceGroupReadersGroupName
-  securityEnabled: true
-  mailEnabled: false
-  mailNickname: take(resourceGroupReadersGroupName, 64)
-}
-
-resource containerAppsAdminsGroup 'Microsoft.Graph/groups@v1.0' = if (createAccessControlEntraGroups) {
-  uniqueName: containerAppsAdminsGroupName
-  displayName: containerAppsAdminsGroupName
-  securityEnabled: true
-  mailEnabled: false
-  mailNickname: take(containerAppsAdminsGroupName, 64)
-}
-
-resource containerAppsOperatorsGroup 'Microsoft.Graph/groups@v1.0' = if (createAccessControlEntraGroups) {
-  uniqueName: containerAppsOperatorsGroupName
-  displayName: containerAppsOperatorsGroupName
-  securityEnabled: true
-  mailEnabled: false
-  mailNickname: take(containerAppsOperatorsGroupName, 64)
-}
-
-resource containerAppsReadersGroup 'Microsoft.Graph/groups@v1.0' = if (createAccessControlEntraGroups) {
-  uniqueName: containerAppsReadersGroupName
-  displayName: containerAppsReadersGroupName
-  securityEnabled: true
-  mailEnabled: false
-  mailNickname: take(containerAppsReadersGroupName, 64)
-}
-
-resource databaseAdminsGroup 'Microsoft.Graph/groups@v1.0' = if (createAccessControlEntraGroups) {
-  uniqueName: databaseAdminsGroupName
-  displayName: databaseAdminsGroupName
-  securityEnabled: true
-  mailEnabled: false
-  mailNickname: take(databaseAdminsGroupName, 64)
-}
-
-resource databaseReadWriteGroup 'Microsoft.Graph/groups@v1.0' = if (createAccessControlEntraGroups) {
-  uniqueName: databaseReadWriteGroupName
-  displayName: databaseReadWriteGroupName
-  securityEnabled: true
-  mailEnabled: false
-  mailNickname: take(databaseReadWriteGroupName, 64)
-}
-
-resource databaseReadOnlyGroup 'Microsoft.Graph/groups@v1.0' = if (createAccessControlEntraGroups) {
-  uniqueName: databaseReadOnlyGroupName
-  displayName: databaseReadOnlyGroupName
-  securityEnabled: true
-  mailEnabled: false
-  mailNickname: take(databaseReadOnlyGroupName, 64)
-}
-
-resource storageAdminsGroup 'Microsoft.Graph/groups@v1.0' = if (createAccessControlEntraGroups) {
-  uniqueName: storageAdminsGroupName
-  displayName: storageAdminsGroupName
-  securityEnabled: true
-  mailEnabled: false
-  mailNickname: take(storageAdminsGroupName, 64)
-}
-
-resource storageReadWriteGroup 'Microsoft.Graph/groups@v1.0' = if (createAccessControlEntraGroups) {
-  uniqueName: storageReadWriteGroupName
-  displayName: storageReadWriteGroupName
-  securityEnabled: true
-  mailEnabled: false
-  mailNickname: take(storageReadWriteGroupName, 64)
-}
-
-resource storageReadOnlyGroup 'Microsoft.Graph/groups@v1.0' = if (createAccessControlEntraGroups) {
-  uniqueName: storageReadOnlyGroupName
-  displayName: storageReadOnlyGroupName
-  securityEnabled: true
-  mailEnabled: false
-  mailNickname: take(storageReadOnlyGroupName, 64)
-}
-
-var effectiveResourceGroupOwnersEntraGroupObjectId = createAccessControlEntraGroups ? resourceGroupOwnersGroup!.id : resourceGroupOwnersEntraGroupObjectId
-var effectiveResourceGroupContributorsEntraGroupObjectId = createAccessControlEntraGroups ? resourceGroupContributorsGroup!.id : resourceGroupContributorsEntraGroupObjectId
-var effectiveResourceGroupReadersEntraGroupObjectId = createAccessControlEntraGroups ? resourceGroupReadersGroup!.id : resourceGroupReadersEntraGroupObjectId
-var effectiveContainerAppsAdminsEntraGroupObjectId = createAccessControlEntraGroups ? containerAppsAdminsGroup!.id : containerAppsAdminsEntraGroupObjectId
-var effectiveContainerAppsOperatorsEntraGroupObjectId = createAccessControlEntraGroups ? containerAppsOperatorsGroup!.id : containerAppsOperatorsEntraGroupObjectId
-var effectiveContainerAppsReadersEntraGroupObjectId = createAccessControlEntraGroups ? containerAppsReadersGroup!.id : containerAppsReadersEntraGroupObjectId
-var effectiveDatabaseAdminsEntraGroupObjectId = createAccessControlEntraGroups ? databaseAdminsGroup!.id : databaseAdminsEntraGroupObjectId
-var effectiveDatabaseReadWriteEntraGroupObjectId = createAccessControlEntraGroups ? databaseReadWriteGroup!.id : databaseReadWriteEntraGroupObjectId
-var effectiveDatabaseReadOnlyEntraGroupObjectId = createAccessControlEntraGroups ? databaseReadOnlyGroup!.id : databaseReadOnlyEntraGroupObjectId
-var effectiveStorageAdminsEntraGroupObjectId = createAccessControlEntraGroups ? storageAdminsGroup!.id : storageAdminsEntraGroupObjectId
-var effectiveStorageReadWriteEntraGroupObjectId = createAccessControlEntraGroups ? storageReadWriteGroup!.id : storageReadWriteEntraGroupObjectId
-var effectiveStorageReadOnlyEntraGroupObjectId = createAccessControlEntraGroups ? storageReadOnlyGroup!.id : storageReadOnlyEntraGroupObjectId
-
-var hasCompleteProvidedAccessControlGroupObjectIds = !empty(resourceGroupOwnersEntraGroupObjectId) && !empty(resourceGroupContributorsEntraGroupObjectId) && !empty(resourceGroupReadersEntraGroupObjectId) && !empty(containerAppsAdminsEntraGroupObjectId) && !empty(containerAppsOperatorsEntraGroupObjectId) && !empty(containerAppsReadersEntraGroupObjectId) && !empty(databaseAdminsEntraGroupObjectId) && !empty(databaseReadWriteEntraGroupObjectId) && !empty(databaseReadOnlyEntraGroupObjectId) && !empty(storageAdminsEntraGroupObjectId) && !empty(storageReadWriteEntraGroupObjectId) && !empty(storageReadOnlyEntraGroupObjectId)
-var hasProvidedDatabaseGroupObjectIds = !empty(databaseReadWriteEntraGroupObjectId) && !empty(databaseReadOnlyEntraGroupObjectId)
-var shouldApplyAccessControlRbac = createAccessControlEntraGroups || hasCompleteProvidedAccessControlGroupObjectIds
-var shouldApplyDatabaseGroupGrants = createAccessControlEntraGroups || hasProvidedDatabaseGroupObjectIds
+var adeDatabaseAuthenticationMode = 'managed_identity'
 
 module networking 'modules/networking.bicep' = {
   name: take('mod-${workload}-${locationToken}-${instance}-networking', 64)
@@ -358,8 +200,6 @@ module postgresql 'modules/postgresql.bicep' = {
   params: {
     location: location
     postgresqlServerName: postgresqlServerName
-    postgresqlAdministratorLogin: effectivePostgresqlAdministratorLogin
-    postgresqlAdministratorPassword: postgresqlAdministratorPassword
     postgresqlVersion: postgresqlVersion
     postgresqlSkuTier: postgresqlSkuTier
     postgresqlSkuName: postgresqlSkuName
@@ -367,11 +207,8 @@ module postgresql 'modules/postgresql.bicep' = {
     deployDevelopmentEnvironment: deployDevelopmentEnvironment
     postgresqlProductionDatabaseName: postgresqlProductionDatabaseName
     postgresqlDevelopmentDatabaseName: postgresqlDevelopmentDatabaseName
-    postgresqlAuthenticationMode: postgresqlAuthenticationMode
     postgresqlAllowPublicAccessFromAzureServices: postgresqlAllowPublicAccessFromAzureServices
     publicIpv4Allowlist: publicIpv4Allowlist
-    accessControlGroupNamePrefix: accessControlGroupNamePrefix
-    databaseAdminsEntraGroupObjectId: effectiveDatabaseAdminsEntraGroupObjectId
   }
 }
 
@@ -391,13 +228,8 @@ module storage 'modules/storage.bicep' = {
   }
 }
 
-var productionDatabaseUrl = postgresqlUsesMicrosoftEntraAuthentication
-  ? 'postgresql+psycopg://${productionContainerAppName}@${postgresql.outputs.postgresqlFullyQualifiedDomainName}:5432/${postgresqlProductionDatabaseName}?sslmode=require'
-  : 'postgresql+psycopg://${uriComponent(effectivePostgresqlAdministratorLogin)}:${uriComponent(postgresqlAdministratorPassword)}@${postgresql.outputs.postgresqlFullyQualifiedDomainName}:5432/${postgresqlProductionDatabaseName}?sslmode=require'
-
-var developmentDatabaseUrl = postgresqlUsesMicrosoftEntraAuthentication
-  ? 'postgresql+psycopg://${developmentContainerAppName}@${postgresql.outputs.postgresqlFullyQualifiedDomainName}:5432/${postgresqlDevelopmentDatabaseName}?sslmode=require'
-  : 'postgresql+psycopg://${uriComponent(effectivePostgresqlAdministratorLogin)}:${uriComponent(postgresqlAdministratorPassword)}@${postgresql.outputs.postgresqlFullyQualifiedDomainName}:5432/${postgresqlDevelopmentDatabaseName}?sslmode=require'
+var productionDatabaseUrl = 'postgresql+psycopg://${productionContainerAppName}@${postgresql.outputs.postgresqlFullyQualifiedDomainName}:5432/${postgresqlProductionDatabaseName}?sslmode=require'
+var developmentDatabaseUrl = 'postgresql+psycopg://${developmentContainerAppName}@${postgresql.outputs.postgresqlFullyQualifiedDomainName}:5432/${postgresqlDevelopmentDatabaseName}?sslmode=require'
 
 module productionContainerApp 'modules/container-app.bicep' = {
   name: take('mod-${workload}-${locationToken}-${instance}-container-app-production', 64)
@@ -417,7 +249,6 @@ module productionContainerApp 'modules/container-app.bicep' = {
     storageAccountName: storage.outputs.storageAccountName
     storageFileShareName: storage.outputs.productionFileShareName
     managedEnvironmentStorageName: productionManagedEnvironmentStorageName
-    storageBlobAuthenticationMethod: storageBlobAuthenticationMethod
     adeBlobContainerName: storage.outputs.productionBlobContainerName
     adeDatabaseUrl: productionDatabaseUrl
     adeDatabaseAuthenticationMode: adeDatabaseAuthenticationMode
@@ -442,14 +273,13 @@ module developmentContainerApp 'modules/container-app.bicep' = {
     storageAccountName: storage.outputs.storageAccountName
     storageFileShareName: storage.outputs.developmentFileShareName
     managedEnvironmentStorageName: developmentManagedEnvironmentStorageName
-    storageBlobAuthenticationMethod: storageBlobAuthenticationMethod
     adeBlobContainerName: storage.outputs.developmentBlobContainerName
     adeDatabaseUrl: developmentDatabaseUrl
     adeDatabaseAuthenticationMode: adeDatabaseAuthenticationMode
   }
 }
 
-module accessControlRbac 'modules/access-control-rbac.bicep' = if (shouldApplyAccessControlRbac) {
+module accessControlRbac 'modules/access-control-rbac.bicep' = {
   name: take('mod-${workload}-${locationToken}-${instance}-access-control-rbac', 64)
   params: {
     deployDevelopmentEnvironment: deployDevelopmentEnvironment
@@ -459,39 +289,18 @@ module accessControlRbac 'modules/access-control-rbac.bicep' = if (shouldApplyAc
     postgresqlServerName: postgresql.outputs.postgresqlServerName
     productionContainerAppName: productionContainerApp.outputs.containerAppName
     developmentContainerAppName: developmentContainerApp.outputs.containerAppName
-    resourceGroupOwnersEntraGroupObjectId: effectiveResourceGroupOwnersEntraGroupObjectId
-    resourceGroupContributorsEntraGroupObjectId: effectiveResourceGroupContributorsEntraGroupObjectId
-    resourceGroupReadersEntraGroupObjectId: effectiveResourceGroupReadersEntraGroupObjectId
-    containerAppsAdminsEntraGroupObjectId: effectiveContainerAppsAdminsEntraGroupObjectId
-    containerAppsOperatorsEntraGroupObjectId: effectiveContainerAppsOperatorsEntraGroupObjectId
-    containerAppsReadersEntraGroupObjectId: effectiveContainerAppsReadersEntraGroupObjectId
-    databaseAdminsEntraGroupObjectId: effectiveDatabaseAdminsEntraGroupObjectId
-    databaseReadWriteEntraGroupObjectId: effectiveDatabaseReadWriteEntraGroupObjectId
-    databaseReadOnlyEntraGroupObjectId: effectiveDatabaseReadOnlyEntraGroupObjectId
-    storageAdminsEntraGroupObjectId: effectiveStorageAdminsEntraGroupObjectId
-    storageReadWriteEntraGroupObjectId: effectiveStorageReadWriteEntraGroupObjectId
-    storageReadOnlyEntraGroupObjectId: effectiveStorageReadOnlyEntraGroupObjectId
-  }
-}
-
-module postgresqlBootstrap 'modules/postgresql-bootstrap.bicep' = if (postgresqlUsesMicrosoftEntraAuthentication) {
-  name: take('mod-${workload}-${locationToken}-${instance}-postgresql-bootstrap', 64)
-  params: {
-    location: location
-    postgresqlServerName: postgresql.outputs.postgresqlServerName
-    postgresqlBootstrapManagedIdentityName: postgresqlBootstrapManagedIdentityName
-    postgresqlBootstrapDeploymentScriptName: postgresqlBootstrapDeploymentScriptName
-    deployDevelopmentEnvironment: deployDevelopmentEnvironment
-    postgresqlProductionDatabaseName: postgresqlProductionDatabaseName
-    postgresqlDevelopmentDatabaseName: postgresqlDevelopmentDatabaseName
-    productionContainerAppRoleName: productionContainerApp.outputs.containerAppName
-    productionContainerAppObjectId: productionContainerApp.outputs.containerAppPrincipalId
-    developmentContainerAppRoleName: developmentContainerApp.outputs.containerAppName
-    developmentContainerAppObjectId: developmentContainerApp.outputs.containerAppPrincipalId
-    databaseReadWriteEntraGroupObjectId: effectiveDatabaseReadWriteEntraGroupObjectId
-    databaseReadOnlyEntraGroupObjectId: effectiveDatabaseReadOnlyEntraGroupObjectId
-    applyDatabaseGroupGrants: shouldApplyDatabaseGroupGrants
-    accessControlGroupNamePrefix: accessControlGroupNamePrefix
+    resourceGroupOwnersEntraGroupObjectId: resourceGroupOwnersEntraGroupObjectId
+    resourceGroupContributorsEntraGroupObjectId: resourceGroupContributorsEntraGroupObjectId
+    resourceGroupReadersEntraGroupObjectId: resourceGroupReadersEntraGroupObjectId
+    containerAppsAdminsEntraGroupObjectId: containerAppsAdminsEntraGroupObjectId
+    containerAppsOperatorsEntraGroupObjectId: containerAppsOperatorsEntraGroupObjectId
+    containerAppsReadersEntraGroupObjectId: containerAppsReadersEntraGroupObjectId
+    databaseAdminsEntraGroupObjectId: databaseAdminsEntraGroupObjectId
+    databaseReadWriteEntraGroupObjectId: databaseReadWriteEntraGroupObjectId
+    databaseReadOnlyEntraGroupObjectId: databaseReadOnlyEntraGroupObjectId
+    storageAdminsEntraGroupObjectId: storageAdminsEntraGroupObjectId
+    storageReadWriteEntraGroupObjectId: storageReadWriteEntraGroupObjectId
+    storageReadOnlyEntraGroupObjectId: storageReadOnlyEntraGroupObjectId
   }
 }
 
@@ -516,7 +325,7 @@ resource developmentBlobContainer 'Microsoft.Storage/storageAccounts/blobService
   name: developmentBlobContainerName
 }
 
-resource productionContainerAppBlobRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (storageUsesMicrosoftEntraAuthentication) {
+resource productionContainerAppBlobRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   name: guid(productionBlobContainer.id, productionContainerAppName, storageBlobDataContributorRoleDefinitionResourceId)
   scope: productionBlobContainer
   properties: {
@@ -526,7 +335,7 @@ resource productionContainerAppBlobRoleAssignment 'Microsoft.Authorization/roleA
   }
 }
 
-resource developmentContainerAppBlobRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (deployDevelopmentEnvironment && storageUsesMicrosoftEntraAuthentication) {
+resource developmentContainerAppBlobRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (deployDevelopmentEnvironment) {
   name: guid(developmentBlobContainer!.id, developmentContainerAppName, storageBlobDataContributorRoleDefinitionResourceId)
   scope: developmentBlobContainer!
   properties: {
@@ -537,22 +346,20 @@ resource developmentContainerAppBlobRoleAssignment 'Microsoft.Authorization/role
 }
 
 output deployDevelopmentEnvironment bool = deployDevelopmentEnvironment
-output createAccessControlEntraGroups bool = createAccessControlEntraGroups
-output accessControlRoleAssignmentsApplied bool = shouldApplyAccessControlRbac
-output postgresqlDatabaseGroupGrantsApplied bool = shouldApplyDatabaseGroupGrants
+output accessControlRoleAssignmentsApplied bool = true
 output accessControlGroupObjectIds object = {
-  resourceGroupOwners: effectiveResourceGroupOwnersEntraGroupObjectId
-  resourceGroupContributors: effectiveResourceGroupContributorsEntraGroupObjectId
-  resourceGroupReaders: effectiveResourceGroupReadersEntraGroupObjectId
-  containerAppsAdmins: effectiveContainerAppsAdminsEntraGroupObjectId
-  containerAppsOperators: effectiveContainerAppsOperatorsEntraGroupObjectId
-  containerAppsReaders: effectiveContainerAppsReadersEntraGroupObjectId
-  databaseAdmins: effectiveDatabaseAdminsEntraGroupObjectId
-  databaseReadWrite: effectiveDatabaseReadWriteEntraGroupObjectId
-  databaseReadOnly: effectiveDatabaseReadOnlyEntraGroupObjectId
-  storageAdmins: effectiveStorageAdminsEntraGroupObjectId
-  storageReadWrite: effectiveStorageReadWriteEntraGroupObjectId
-  storageReadOnly: effectiveStorageReadOnlyEntraGroupObjectId
+  resourceGroupOwners: resourceGroupOwnersEntraGroupObjectId
+  resourceGroupContributors: resourceGroupContributorsEntraGroupObjectId
+  resourceGroupReaders: resourceGroupReadersEntraGroupObjectId
+  containerAppsAdmins: containerAppsAdminsEntraGroupObjectId
+  containerAppsOperators: containerAppsOperatorsEntraGroupObjectId
+  containerAppsReaders: containerAppsReadersEntraGroupObjectId
+  databaseAdmins: databaseAdminsEntraGroupObjectId
+  databaseReadWrite: databaseReadWriteEntraGroupObjectId
+  databaseReadOnly: databaseReadOnlyEntraGroupObjectId
+  storageAdmins: storageAdminsEntraGroupObjectId
+  storageReadWrite: storageReadWriteEntraGroupObjectId
+  storageReadOnly: storageReadOnlyEntraGroupObjectId
 }
 output virtualNetworkName string = networking.outputs.virtualNetworkName
 output virtualNetworkResourceId string = networking.outputs.virtualNetworkResourceId
@@ -564,9 +371,7 @@ output containerAppsManagedEnvironmentResourceId string = observability.outputs.
 output postgresqlServerName string = postgresql.outputs.postgresqlServerName
 output postgresqlServerResourceId string = postgresql.outputs.postgresqlServerResourceId
 output postgresqlFullyQualifiedDomainName string = postgresql.outputs.postgresqlFullyQualifiedDomainName
-output postgresqlAuthenticationMode string = postgresqlAuthenticationMode
 output adeDatabaseAuthenticationMode string = adeDatabaseAuthenticationMode
-output storageBlobAuthenticationMethod string = storageBlobAuthenticationMethod
 output postgresqlProductionDatabaseName string = postgresqlProductionDatabaseName
 output postgresqlDevelopmentDatabaseName string = deployDevelopmentEnvironment ? postgresqlDevelopmentDatabaseName : ''
 output storageAccountName string = storage.outputs.storageAccountName

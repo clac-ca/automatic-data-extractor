@@ -48,13 +48,6 @@ param storageFileShareName string
 @description('Managed environment storage mount name.')
 param managedEnvironmentStorageName string
 
-@allowed([
-  'microsoft_entra'
-  'shared_key'
-])
-@description('Blob authentication method.')
-param storageBlobAuthenticationMethod string
-
 @description('Blob container name for ADE_BLOB_CONTAINER.')
 param adeBlobContainerName string
 
@@ -73,11 +66,9 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' existing 
 }
 
 var storageAccountKey = storageAccount.listKeys().keys[0].value
-var useSharedKeyBlobAuthentication = storageBlobAuthenticationMethod == 'shared_key'
 var defaultContainerAppPublicWebUrl = 'https://${containerAppName}.${containerAppsManagedEnvironmentDefaultDomain}'
 var effectiveContainerAppPublicWebUrl = empty(containerAppPublicWebUrl) ? defaultContainerAppPublicWebUrl : containerAppPublicWebUrl
 var adeBlobAccountUrl = 'https://${storageAccountName}.blob.${environment().suffixes.storage}'
-var adeBlobConnectionString = 'DefaultEndpointsProtocol=https;AccountName=${storageAccountName};AccountKey=${storageAccountKey};EndpointSuffix=${environment().suffixes.storage}'
 
 var managedAdeEnvironmentVariableNames = [
   'ADE_SERVICES'
@@ -123,15 +114,10 @@ var containerAppBaseEnvironmentVariables = [
     name: 'ADE_SECRET_KEY'
     secretRef: 'ade-secret-key'
   }
-  useSharedKeyBlobAuthentication
-    ? {
-        name: 'ADE_BLOB_CONNECTION_STRING'
-        secretRef: 'ade-blob-connection-string'
-      }
-    : {
-        name: 'ADE_BLOB_ACCOUNT_URL'
-        value: adeBlobAccountUrl
-      }
+  {
+    name: 'ADE_BLOB_ACCOUNT_URL'
+    value: adeBlobAccountUrl
+  }
   {
     name: 'ADE_BLOB_CONTAINER'
     value: adeBlobContainerName
@@ -159,15 +145,7 @@ var containerAppSecrets = concat(
       name: 'ade-secret-key'
       value: containerAppSecretKey
     }
-  ],
-  useSharedKeyBlobAuthentication
-    ? [
-        {
-          name: 'ade-blob-connection-string'
-          value: adeBlobConnectionString
-        }
-      ]
-    : []
+  ]
 )
 
 resource managedEnvironmentStorage 'Microsoft.App/managedEnvironments/storages@2023-05-01' = if (deploy) {
