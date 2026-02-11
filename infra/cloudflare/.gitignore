@@ -1,0 +1,8 @@
+deploy.sh
+deploy.ps1
+deploy.prod.sh
+deploy.dev.sh
+
+# Local certificate/key material
+certs/*
+!certs/.gitkeep
