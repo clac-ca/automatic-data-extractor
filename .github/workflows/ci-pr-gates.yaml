@@ -10,6 +10,28 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Detect backend-impacting changes
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Filter changed paths
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            backend:
+              - "backend/**"
+              - "Dockerfile"
+              - "docker-compose.yaml"
+              - "docker-compose.prod.yaml"
+              - "docker-compose.prod.split.yaml"
+
   backend-lint-types:
     name: Backend Lint + API Types
     runs-on: ubuntu-latest
@@ -52,6 +74,8 @@ jobs:
 
   backend-unit:
     name: Backend Unit Tests
+    needs: changes
+    if: ${{ needs.changes.outputs.backend == 'true' }}
     runs-on: ubuntu-latest
 
     steps:
@@ -78,6 +102,8 @@ jobs:
 
   backend-api-integration:
     name: Backend API Integration
+    needs: changes
+    if: ${{ needs.changes.outputs.backend == 'true' }}
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -173,6 +199,8 @@ jobs:
 
   backend-worker-integration:
     name: Backend Worker Integration
+    needs: changes
+    if: ${{ needs.changes.outputs.backend == 'true' }}
     runs-on: ubuntu-latest
     services:
       postgres:
