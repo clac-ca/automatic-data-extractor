@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.1](https://github.com/clac-ca/automatic-data-extractor/compare/v1.7.0...v1.7.1) (2026-02-11)
+
+
+### Bug Fixes
+
+* **ci:** publish production stage image in docker-image workflow ([#264](https://github.com/clac-ca/automatic-data-extractor/issues/264)) ([1ac73f5](https://github.com/clac-ca/automatic-data-extractor/commit/1ac73f505ded48ad13b1d44eaa00bb2095c5f906))
+
 ## [1.7.0](https://github.com/clac-ca/automatic-data-extractor/compare/v1.6.5...v1.7.0) (2026-02-03)
 
 
