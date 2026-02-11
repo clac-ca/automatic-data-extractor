@@ -231,6 +231,34 @@ describe("LoginScreen", () => {
     ).toBeInTheDocument();
   });
 
+  it("maps EMAIL_LINK_UNVERIFIED to an actionable SSO message", () => {
+    mockUseAuthProvidersQuery.mockReturnValue({
+      data: {
+        mode: "password_and_idp",
+        passwordResetEnabled: true,
+        providers: [
+          {
+            id: "entra",
+            label: "Microsoft Entra ID",
+            type: "oidc",
+            startUrl: "/api/v1/auth/sso/authorize",
+          },
+        ],
+      },
+      isError: false,
+      isFetching: false,
+      isLoading: false,
+    });
+
+    renderWithPath("/login?ssoError=EMAIL_LINK_UNVERIFIED&providerId=entra");
+
+    expect(
+      screen.getByText(
+        "Microsoft Entra ID sign-in failed. We couldn't safely link this sign-in to an existing account. Contact your administrator.",
+      ),
+    ).toBeInTheDocument();
+  });
+
   it("hides forgot-password entry when password reset is disabled", () => {
     mockUseAuthProvidersQuery.mockReturnValue({
       data: { providers: [], mode: "password_only", passwordResetEnabled: false },

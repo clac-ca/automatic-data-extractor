@@ -191,8 +191,8 @@ export default function LoginScreen() {
         return `${prefix} We couldn't validate your sign-in. Contact your administrator.`;
       case "EMAIL_MISSING":
         return `${prefix} Your identity provider did not return an email address.`;
-      case "EMAIL_NOT_VERIFIED":
-        return `${prefix} Your email address must be verified before signing in.`;
+      case "EMAIL_LINK_UNVERIFIED":
+        return `${prefix} We couldn't safely link this sign-in to an existing account. Contact your administrator.`;
       case "AUTO_PROVISION_DISABLED":
         return `${prefix} Your account must be provisioned before signing in.`;
       case "DOMAIN_NOT_ALLOWED":

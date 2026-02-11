@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 import sqlalchemy as sa
+from fastapi import FastAPI
 from sqlalchemy.orm import Session
 
 from ade_api.settings import Settings
@@ -33,7 +34,10 @@ def _reset_sso_runtime_state(session: Session) -> None:
 
 
 @pytest.fixture()
-def settings(base_settings: Settings) -> Settings:
+def settings(app: FastAPI, base_settings: Settings) -> Settings:
     payload = base_settings.model_dump()
     payload["sso_encryption_key"] = "test-sso-encryption-key"
-    return Settings.model_validate(payload)
+    current = Settings.model_validate(payload)
+    app.state.settings_ref["value"] = current
+    app.state.settings = current
+    return current

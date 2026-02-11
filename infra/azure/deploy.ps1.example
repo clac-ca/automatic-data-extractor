@@ -64,6 +64,19 @@ $developmentContainerAppMinimumReplicas = "0"
 $developmentContainerAppMaximumReplicas = "1"
 
 # -----------------------------
+# Inputs: SSO bootstrap
+# Uses separate Entra app registrations for production and development.
+# Provider label remains "Microsoft Entra ID" in both environments.
+# -----------------------------
+$enableSsoBootstrap = $true
+$ssoClientSecretYears = "99"
+$ssoAuthMode = "password_and_idp"
+$ssoIdpJitProvisioningEnabled = "true"
+$ssoEncryptionKey = ""
+$ssoProductionApplicationDisplayName = ""
+$ssoDevelopmentApplicationDisplayName = ""
+
+# -----------------------------
 # Inputs: PostgreSQL bootstrap admin (optional)
 # Leave blank to auto-resolve from current signed-in az user.
 # -----------------------------
@@ -189,6 +202,173 @@ function Set-PostgresqlEntraAdminWithRetry {
         }
 
         Start-Sleep -Seconds $waitSeconds
+    }
+}
+
+function Resolve-PublicWebUrl {
+    param(
+        [Parameter(Mandatory = $false)][string]$ExplicitUrl,
+        [Parameter(Mandatory = $false)][string]$FallbackFqdn,
+        [Parameter(Mandatory = $true)][string]$EnvironmentName
+    )
+
+    if (-not [string]::IsNullOrWhiteSpace($ExplicitUrl)) {
+        return $ExplicitUrl
+    }
+    if (-not [string]::IsNullOrWhiteSpace($FallbackFqdn)) {
+        return "https://$FallbackFqdn"
+    }
+    throw "Unable to resolve public web URL for $EnvironmentName environment."
+}
+
+function Get-OrCreateEntraAppRegistration {
+    param(
+        [Parameter(Mandatory = $true)][string]$DisplayName,
+        [Parameter(Mandatory = $true)][string]$RedirectUri
+    )
+
+    $existingRaw = az ad app list --display-name $DisplayName --query "[].appId" -o tsv 2>$null
+    $existingAppIds = @(
+        $existingRaw -split "`n" |
+        ForEach-Object { $_.Trim() } |
+        Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+    )
+
+    if ($existingAppIds.Count -gt 1) {
+        throw "Found multiple Entra app registrations named '$DisplayName'. Use unique names."
+    }
+
+    if ($existingAppIds.Count -eq 0) {
+        $appId = az ad app create `
+          --display-name $DisplayName `
+          --sign-in-audience AzureADMyOrg `
+          --web-redirect-uris $RedirectUri `
+          --query appId `
+          -o tsv
+        if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($appId)) {
+            throw "Failed to create Entra app registration '$DisplayName'."
+        }
+        return $appId.Trim()
+    }
+
+    $appId = $existingAppIds[0]
+    az ad app update `
+      --id $appId `
+      --sign-in-audience AzureADMyOrg `
+      --web-redirect-uris $RedirectUri | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to update Entra app registration '$DisplayName'."
+    }
+
+    return $appId.Trim()
+}
+
+function Set-EntraOptionalClaims {
+    param(
+        [Parameter(Mandatory = $true)][string]$AppId
+    )
+
+    $optionalClaimsPayload = @{
+        idToken = @(
+            @{ name = "email" }
+            @{ name = "upn" }
+            @{ name = "verified_primary_email" }
+            @{ name = "xms_edov" }
+        )
+    } | ConvertTo-Json -Compress -Depth 5
+
+    az ad app update `
+      --id $AppId `
+      --optional-claims $optionalClaimsPayload | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to configure Entra optional claims for app '$AppId'. Ensure your deployment identity can update app registrations."
+    }
+}
+
+function New-EntraAppClientSecret {
+    param(
+        [Parameter(Mandatory = $true)][string]$AppId,
+        [Parameter(Mandatory = $true)][string]$CredentialDisplayName
+    )
+
+    $secret = az ad app credential reset `
+      --id $AppId `
+      --append `
+      --display-name $CredentialDisplayName `
+      --years $ssoClientSecretYears `
+      --query password `
+      -o tsv 2>$null
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($secret)) {
+        throw "Failed to create SSO client secret for app '$AppId'. Tenant policy may block $ssoClientSecretYears-year secrets."
+    }
+
+    return $secret.Trim()
+}
+
+function Build-SsoProviderPayload {
+    param(
+        [Parameter(Mandatory = $true)][string]$Issuer,
+        [Parameter(Mandatory = $true)][string]$ClientId,
+        [Parameter(Mandatory = $true)][string]$ClientSecret
+    )
+
+    return @(
+        @{
+            id = "entra"
+            label = "Microsoft Entra ID"
+            issuer = $Issuer
+            clientId = $ClientId
+            clientSecret = $ClientSecret
+            status = "active"
+            domains = @()
+        }
+    ) | ConvertTo-Json -Compress -Depth 5
+}
+
+function Set-ContainerAppSsoConfiguration {
+    param(
+        [Parameter(Mandatory = $true)][string]$ContainerAppName,
+        [Parameter(Mandatory = $true)][string]$ProviderPayload
+    )
+
+    $secretArgs = @("sso-providers-json=$ProviderPayload")
+    if (-not [string]::IsNullOrWhiteSpace($ssoEncryptionKey)) {
+        $secretArgs += "sso-encryption-key=$ssoEncryptionKey"
+    }
+
+    az containerapp secret set `
+      --subscription $subscriptionId `
+      --resource-group $resourceGroupName `
+      --name $ContainerAppName `
+      --secrets $secretArgs | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to set SSO secrets on container app '$ContainerAppName'."
+    }
+
+    $environmentArgs = @(
+        "ADE_AUTH_MODE=$ssoAuthMode"
+        "ADE_AUTH_IDP_JIT_PROVISIONING_ENABLED=$ssoIdpJitProvisioningEnabled"
+        "ADE_AUTH_SSO_PROVIDERS_JSON=secretref:sso-providers-json"
+    )
+    if (-not [string]::IsNullOrWhiteSpace($ssoEncryptionKey)) {
+        $environmentArgs += "ADE_SSO_ENCRYPTION_KEY=secretref:sso-encryption-key"
+    }
+
+    az containerapp update `
+      --subscription $subscriptionId `
+      --resource-group $resourceGroupName `
+      --name $ContainerAppName `
+      --set-env-vars $environmentArgs | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to update SSO environment variables on container app '$ContainerAppName'."
+    }
+
+    if ([string]::IsNullOrWhiteSpace($ssoEncryptionKey)) {
+        az containerapp update `
+          --subscription $subscriptionId `
+          --resource-group $resourceGroupName `
+          --name $ContainerAppName `
+          --remove-env-vars ADE_SSO_ENCRYPTION_KEY | Out-Null
     }
 }
 
@@ -395,9 +575,58 @@ if ($deployDevelopmentEnvironment) {
 
 Set-PostgresqlEntraAdminWithRetry -ServerName $postgresqlServerName -DisplayName "$accessControlGroupNamePrefix-db-admins" -ObjectId $groupIds["databaseAdminsEntraGroupObjectId"] -PrincipalType "Group"
 
+if ($enableSsoBootstrap) {
+    $tenantId = az account show --subscription $subscriptionId --query tenantId -o tsv
+    if ([string]::IsNullOrWhiteSpace($tenantId)) {
+        throw "Unable to resolve tenant ID for SSO issuer."
+    }
+    $ssoIssuer = "https://login.microsoftonline.com/$tenantId/v2.0"
+
+    $productionPublicWebUrl = Resolve-PublicWebUrl -ExplicitUrl $productionContainerAppPublicWebUrl -FallbackFqdn $productionContainerAppFqdn -EnvironmentName "production"
+    $productionCallbackUrl = "$($productionPublicWebUrl.TrimEnd('/'))/api/v1/auth/sso/callback"
+    $effectiveSsoProductionApplicationDisplayName = if ([string]::IsNullOrWhiteSpace($ssoProductionApplicationDisplayName)) {
+        "appreg-$workload-prod-$location-$instance-sso-web"
+    } else {
+        $ssoProductionApplicationDisplayName
+    }
+    $productionSsoApplicationId = Get-OrCreateEntraAppRegistration -DisplayName $effectiveSsoProductionApplicationDisplayName -RedirectUri $productionCallbackUrl
+    Set-EntraOptionalClaims -AppId $productionSsoApplicationId
+    $productionSsoClientSecret = New-EntraAppClientSecret -AppId $productionSsoApplicationId -CredentialDisplayName "$effectiveSsoProductionApplicationDisplayName-client-secret"
+    $productionSsoProviderPayload = Build-SsoProviderPayload -Issuer $ssoIssuer -ClientId $productionSsoApplicationId -ClientSecret $productionSsoClientSecret
+    Set-ContainerAppSsoConfiguration -ContainerAppName $productionContainerAppName -ProviderPayload $productionSsoProviderPayload
+
+    Write-Host "SSO app (production): $effectiveSsoProductionApplicationDisplayName ($productionSsoApplicationId)"
+    Write-Host "SSO callback (production): $productionCallbackUrl"
+
+    if ($deployDevelopmentEnvironment) {
+        $developmentPublicWebUrl = Resolve-PublicWebUrl -ExplicitUrl $developmentContainerAppPublicWebUrl -FallbackFqdn $developmentContainerAppFqdn -EnvironmentName "development"
+        $developmentCallbackUrl = "$($developmentPublicWebUrl.TrimEnd('/'))/api/v1/auth/sso/callback"
+        $effectiveSsoDevelopmentApplicationDisplayName = if ([string]::IsNullOrWhiteSpace($ssoDevelopmentApplicationDisplayName)) {
+            "appreg-$workload-dev-$location-$instance-sso-web"
+        } else {
+            $ssoDevelopmentApplicationDisplayName
+        }
+        $developmentSsoApplicationId = Get-OrCreateEntraAppRegistration -DisplayName $effectiveSsoDevelopmentApplicationDisplayName -RedirectUri $developmentCallbackUrl
+        Set-EntraOptionalClaims -AppId $developmentSsoApplicationId
+        $developmentSsoClientSecret = New-EntraAppClientSecret -AppId $developmentSsoApplicationId -CredentialDisplayName "$effectiveSsoDevelopmentApplicationDisplayName-client-secret"
+        $developmentSsoProviderPayload = Build-SsoProviderPayload -Issuer $ssoIssuer -ClientId $developmentSsoApplicationId -ClientSecret $developmentSsoClientSecret
+        Set-ContainerAppSsoConfiguration -ContainerAppName $developmentContainerAppName -ProviderPayload $developmentSsoProviderPayload
+
+        Write-Host "SSO app (development): $effectiveSsoDevelopmentApplicationDisplayName ($developmentSsoApplicationId)"
+        Write-Host "SSO callback (development): $developmentCallbackUrl"
+    }
+}
+
 Write-Host "Deployment complete: $deploymentName"
 Write-Host "PostgreSQL: $postgresqlServerName"
 Write-Host "Production app: $productionContainerAppName ($productionContainerAppFqdn)"
 if ($deployDevelopmentEnvironment) {
     Write-Host "Development app: $developmentContainerAppName ($developmentContainerAppFqdn)"
 }
+Write-Host "SSO provider label: Microsoft Entra ID"
+$productionValidationUrl = if (-not [string]::IsNullOrWhiteSpace($productionContainerAppFqdn)) {
+    "https://$productionContainerAppFqdn/api/v1/auth/sso/providers"
+} else {
+    "<unknown>"
+}
+Write-Host "Validate provider endpoint: $productionValidationUrl"
