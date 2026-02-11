@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.2](https://github.com/clac-ca/automatic-data-extractor/compare/v1.7.1...v1.7.2) (2026-02-11)
+
+
+### Bug Fixes
+
+* **ci:** restore release semver and latest tag publishing ([#266](https://github.com/clac-ca/automatic-data-extractor/issues/266)) ([28a3ddb](https://github.com/clac-ca/automatic-data-extractor/commit/28a3ddb7211b4cb8f78bf6537de43b1027c29860))
+
 ## [1.7.1](https://github.com/clac-ca/automatic-data-extractor/compare/v1.7.0...v1.7.1) (2026-02-11)
 
 
