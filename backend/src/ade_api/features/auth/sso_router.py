@@ -5,7 +5,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import logging
-from typing import Annotated, Any
+from typing import Annotated
 from urllib.parse import urlencode
 
 import httpx
@@ -23,6 +23,11 @@ from ade_api.core.http.csrf import set_csrf_cookie
 from ade_api.core.http.session_cookie import set_session_cookie
 from ade_api.core.security import hash_password, mint_opaque_token
 from ade_api.db import get_db_read, get_db_write
+from ade_api.features.auth.sso_claims import (
+    resolve_email,
+    resolve_email_verified_signal,
+    resolve_subject_key,
+)
 from ade_api.features.authn.service import AuthnService
 from ade_api.features.sso.oidc import (
     OidcDiscoveryError,
@@ -123,30 +128,6 @@ def _code_challenge(verifier: str) -> str:
     return base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
 
 
-def _coerce_bool(value: Any) -> bool:
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, str):
-        return value.strip().lower() == "true"
-    return False
-
-
-def _resolve_email_verified(claims: dict[str, Any], email: str) -> bool:
-    if _coerce_bool(claims.get("email_verified")):
-        return True
-
-    verified_primary = claims.get("verified_primary_email")
-    if isinstance(verified_primary, str):
-        return verified_primary.strip().lower() == email.strip().lower()
-    if isinstance(verified_primary, list):
-        normalized = email.strip().lower()
-        return any(
-            isinstance(item, str) and item.strip().lower() == normalized
-            for item in verified_primary
-        )
-    return _coerce_bool(verified_primary)
-
-
 def _extract_domain(email: str) -> str | None:
     if "@" not in email:
         return None
@@ -213,9 +194,6 @@ def _resolve_user(
         user.last_login_at = utc_now()
         return user
 
-    if not email_verified:
-        raise ProvisioningError("EMAIL_NOT_VERIFIED")
-
     canonical_email = email.strip().lower()
     user = session.execute(
         select(User).where(User.email_normalized == canonical_email).limit(1)
@@ -232,6 +210,8 @@ def _resolve_user(
         ).scalar_one_or_none()
         if existing_for_user is not None:
             raise ProvisioningError("IDENTITY_CONFLICT")
+        if not email_verified:
+            raise ProvisioningError("EMAIL_LINK_UNVERIFIED")
         session.add(
             SsoIdentity(
                 provider_id=provider_id,
@@ -469,8 +449,9 @@ def callback_sso(
                 return_to=sanitized_return_to,
             )
 
-        subject = str(claims.get("sub") or "").strip()
-        if not subject:
+        try:
+            subject = resolve_subject_key(metadata.issuer, claims)
+        except ValueError:
             return _error_response(
                 request,
                 settings,
@@ -478,7 +459,7 @@ def callback_sso(
                 return_to=sanitized_return_to,
             )
 
-        email = str(claims.get("email") or "").strip()
+        email = resolve_email(claims)
         if not email:
             return _error_response(
                 request,
@@ -486,7 +467,7 @@ def callback_sso(
                 code="EMAIL_MISSING",
                 return_to=sanitized_return_to,
             )
-        email_verified = _resolve_email_verified(claims, email)
+        email_verified = resolve_email_verified_signal(claims)
 
         try:
             user = _resolve_user(
