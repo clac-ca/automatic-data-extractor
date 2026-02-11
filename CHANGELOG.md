@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.0](https://github.com/clac-ca/automatic-data-extractor/compare/v1.7.2...v1.8.0) (2026-02-11)
+
+
+### Bug Fixes
+
+* **release:** document release trigger for squash merges ([#281](https://github.com/clac-ca/automatic-data-extractor/issues/281)) ([3e84fa8](https://github.com/clac-ca/automatic-data-extractor/commit/3e84fa8c5bd316dd895ec5ed339b363993c0eac4))
+
 ## [1.7.2](https://github.com/clac-ca/automatic-data-extractor/compare/v1.7.1...v1.7.2) (2026-02-11)
 
 
