@@ -9,6 +9,40 @@ from fastapi.openapi.utils import get_openapi
 
 from ade_api.settings import Settings
 
+OPENAPI_INFO_DESCRIPTION = (
+    "ADE API reference. Use ReDoc at `/api` for endpoint documentation and Swagger UI at "
+    "`/api/swagger` for interactive requests.\n\n"
+    "Authentication supports browser session cookies and `X-API-Key` header credentials. "
+    "Every response includes `X-Request-Id` for tracing and support diagnostics."
+)
+
+OPENAPI_TAG_METADATA: list[dict[str, str]] = [
+    {"name": "admin-settings", "description": "Tenant-wide runtime settings and policy controls."},
+    {
+        "name": "api-keys",
+        "description": "API key lifecycle endpoints for users and administrators.",
+    },
+    {"name": "auth", "description": "Interactive sign-in, password, MFA, and setup workflows."},
+    {
+        "name": "configurations",
+        "description": "Workspace configuration package lifecycle and files.",
+    },
+    {
+        "name": "documents",
+        "description": "Document upload, metadata, listing, and streaming updates.",
+    },
+    {"name": "health", "description": "Service health and liveness checks."},
+    {"name": "info", "description": "Runtime metadata and service identity."},
+    {"name": "me", "description": "Authenticated user profile and effective permissions."},
+    {"name": "meta", "description": "Installed ADE component version metadata."},
+    {"name": "presence", "description": "Realtime workspace presence events and channels."},
+    {"name": "rbac", "description": "Role and permission management endpoints."},
+    {"name": "runs", "description": "Run creation, orchestration, output, and events."},
+    {"name": "sso", "description": "Administrative SSO provider management endpoints."},
+    {"name": "users", "description": "User administration endpoints."},
+    {"name": "workspaces", "description": "Workspace lifecycle and membership management."},
+]
+
 
 def configure_openapi(app: FastAPI, settings: Settings) -> None:
     """Configure OpenAPI schema with ADE security schemes."""
@@ -43,7 +77,15 @@ def configure_openapi(app: FastAPI, settings: Settings) -> None:
             description=app.description,
             routes=app.routes,
         )
-        schema["servers"] = [{"url": settings.public_web_url}]
+        info = schema.setdefault("info", {})
+        info["description"] = OPENAPI_INFO_DESCRIPTION
+
+        public_web_url = settings.public_web_url.rstrip("/")
+        servers: list[dict[str, str]] = [{"url": "/"}]
+        if public_web_url and public_web_url != "/":
+            servers.append({"url": public_web_url})
+        schema["servers"] = servers
+        schema["tags"] = [dict(tag) for tag in OPENAPI_TAG_METADATA]
 
         components = schema.setdefault("components", {})
         security_schemes = components.setdefault("securitySchemes", {})
@@ -165,6 +207,45 @@ def configure_openapi(app: FastAPI, settings: Settings) -> None:
         }
         top_workflow_tags = {"auth", "me", "workspaces", "configurations", "documents", "runs"}
         operation_examples: dict[tuple[str, str], dict[str, Any]] = {
+            (
+                "/api/v1/auth/login",
+                "POST",
+            ): {
+                "request": {
+                    "application/json": {
+                        "passwordLogin": {
+                            "summary": "Password sign-in request",
+                            "value": {
+                                "email": "operator@example.com",
+                                "password": "CorrectHorseBatteryStaple!",
+                            },
+                        }
+                    }
+                },
+                "response": {
+                    "200": {
+                        "application/json": {
+                            "loginSuccess": {
+                                "summary": "Password sign-in success",
+                                "value": {
+                                    "mfaSetupRecommended": True,
+                                    "mfaSetupRequired": False,
+                                    "passwordChangeRequired": False,
+                                },
+                            },
+                            "mfaChallenge": {
+                                "summary": "MFA challenge required",
+                                "value": {
+                                    "challengeToken": (
+                                        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"
+                                        ".eyJjaGFsIjoiY2hhbGxlbmdlIn0.signature"
+                                    ),
+                                },
+                            },
+                        }
+                    }
+                },
+            },
             (
                 "/api/v1/me",
                 "GET",
@@ -354,7 +435,10 @@ def configure_openapi(app: FastAPI, settings: Settings) -> None:
                     if "security" not in operation or operation["security"] is None:
                         operation["security"] = list(auth_security)
 
-                tags = {str(tag) for tag in operation.get("tags", []) if isinstance(tag, str)}
+                raw_tags = [str(tag) for tag in operation.get("tags", []) if isinstance(tag, str)]
+                if raw_tags:
+                    operation["tags"] = sorted(dict.fromkeys(raw_tags))
+                tags = {tag for tag in operation.get("tags", []) if isinstance(tag, str)}
                 if tags.intersection(top_workflow_tags) and not operation.get("description"):
                     summary = str(operation.get("summary", "")).strip()
                     if summary:

@@ -9,6 +9,7 @@ import { createSession, sessionKeys, type AuthProvider, verifyMfaChallenge } fro
 import { useAuthProvidersQuery } from "@/hooks/auth/useAuthProvidersQuery";
 import { useSessionQuery } from "@/hooks/auth/useSessionQuery";
 import { useSetupStatusQuery } from "@/hooks/auth/useSetupStatusQuery";
+import { navigateToPostAuthPath } from "@/lib/navigation/postAuthRedirect";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/form-field";
@@ -148,7 +149,7 @@ export default function LoginScreen() {
     if (!session) {
       return;
     }
-    navigate(pickReturnTo(session.return_to, returnTo), { replace: true });
+    navigateToPostAuthPath(navigate, pickReturnTo(session.return_to, returnTo), { replace: true });
   }, [navigate, returnTo, session]);
 
   useEffect(() => {
@@ -326,7 +327,7 @@ export default function LoginScreen() {
         navigate(buildRedirectPath("/mfa/setup", nextPath), { replace: true });
         return;
       }
-      navigate(nextPath, { replace: true });
+      navigateToPostAuthPath(navigate, nextPath, { replace: true });
     } catch (error: unknown) {
       if (error instanceof ApiError) {
         const detail = error.problem?.detail;
@@ -377,7 +378,7 @@ export default function LoginScreen() {
         navigate(buildRedirectPath("/mfa/setup", nextPath), { replace: true });
         return;
       }
-      navigate(nextPath, { replace: true });
+      navigateToPostAuthPath(navigate, nextPath, { replace: true });
     } catch (error: unknown) {
       if (error instanceof ApiError) {
         setFormError(mapMfaApiError(error));
