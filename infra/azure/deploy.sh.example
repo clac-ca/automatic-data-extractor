@@ -65,6 +65,19 @@ development_container_app_minimum_replicas="0"
 development_container_app_maximum_replicas="1"
 
 # -----------------------------
+# Inputs: SSO bootstrap
+# Uses separate Entra app registrations for production and development.
+# Provider label remains "Microsoft Entra ID" in both environments.
+# -----------------------------
+enable_sso_bootstrap="true"
+sso_client_secret_years="99"
+sso_auth_mode="password_and_idp"
+sso_idp_jit_provisioning_enabled="true"
+sso_encryption_key=""
+sso_production_application_display_name=""
+sso_development_application_display_name=""
+
+# -----------------------------
 # Inputs: PostgreSQL bootstrap admin (optional)
 # Leave blank to auto-resolve from current signed-in az user.
 # -----------------------------
@@ -190,6 +203,159 @@ set_postgresql_entra_admin_with_retry() {
 
     sleep "$wait_seconds"
   done
+}
+
+json_escape() {
+  local value="$1"
+  value="${value//\\/\\\\}"
+  value="${value//\"/\\\"}"
+  value="${value//$'\n'/\\n}"
+  value="${value//$'\r'/\\r}"
+  value="${value//$'\t'/\\t}"
+  printf '%s' "$value"
+}
+
+resolve_public_web_url() {
+  local explicit_url="$1"
+  local fallback_fqdn="$2"
+  local environment_name="$3"
+
+  if [ -n "$explicit_url" ]; then
+    echo "$explicit_url"
+    return
+  fi
+
+  if [ -n "$fallback_fqdn" ]; then
+    echo "https://$fallback_fqdn"
+    return
+  fi
+
+  echo "Unable to resolve public web URL for ${environment_name} environment." >&2
+  exit 1
+}
+
+get_or_create_entra_app_registration() {
+  local display_name="$1"
+  local redirect_uri="$2"
+  local app_id
+  local -a app_ids
+
+  mapfile -t app_ids < <(
+    az ad app list --display-name "$display_name" --query '[].appId' -o tsv 2>/dev/null \
+      | sed '/^$/d'
+  )
+
+  if [ "${#app_ids[@]}" -gt 1 ]; then
+    echo "Found multiple Entra app registrations named '$display_name'. Use unique names." >&2
+    exit 1
+  fi
+
+  if [ "${#app_ids[@]}" -eq 0 ]; then
+    app_id="$(az ad app create \
+      --display-name "$display_name" \
+      --sign-in-audience AzureADMyOrg \
+      --web-redirect-uris "$redirect_uri" \
+      --query appId \
+      -o tsv)"
+  else
+    app_id="${app_ids[0]}"
+    az ad app update \
+      --id "$app_id" \
+      --sign-in-audience AzureADMyOrg \
+      --web-redirect-uris "$redirect_uri" >/dev/null
+  fi
+
+  echo "$app_id"
+}
+
+apply_entra_optional_claims() {
+  local app_id="$1"
+  local optional_claims_payload
+  optional_claims_payload='{"idToken":[{"name":"email"},{"name":"upn"},{"name":"verified_primary_email"},{"name":"xms_edov"}]}'
+
+  if ! az ad app update \
+    --id "$app_id" \
+    --optional-claims "$optional_claims_payload" >/dev/null 2>&1; then
+    echo "Failed to configure Entra optional claims for app '$app_id'." >&2
+    echo "Ensure your deployment identity can update app registrations." >&2
+    exit 1
+  fi
+}
+
+create_entra_app_client_secret() {
+  local app_id="$1"
+  local credential_display_name="$2"
+  local client_secret
+
+  if ! client_secret="$(az ad app credential reset \
+    --id "$app_id" \
+    --append \
+    --display-name "$credential_display_name" \
+    --years "$sso_client_secret_years" \
+    --query password \
+    -o tsv 2>/dev/null)"; then
+    echo "Failed to create SSO client secret for app '$app_id'. Tenant policy may block ${sso_client_secret_years}-year secrets." >&2
+    exit 1
+  fi
+
+  if [ -z "$client_secret" ]; then
+    echo "Azure CLI returned an empty SSO client secret for app '$app_id'." >&2
+    exit 1
+  fi
+
+  echo "$client_secret"
+}
+
+build_sso_provider_payload() {
+  local issuer="$1"
+  local client_id="$2"
+  local client_secret="$3"
+
+  printf '[{"id":"entra","label":"Microsoft Entra ID","issuer":"%s","clientId":"%s","clientSecret":"%s","status":"active","domains":[]}]' \
+    "$(json_escape "$issuer")" \
+    "$(json_escape "$client_id")" \
+    "$(json_escape "$client_secret")"
+}
+
+configure_container_app_sso() {
+  local container_app_name="$1"
+  local provider_payload="$2"
+  local -a secret_arguments
+  local -a environment_arguments
+
+  secret_arguments=("sso-providers-json=$provider_payload")
+  if [ -n "$sso_encryption_key" ]; then
+    secret_arguments+=("sso-encryption-key=$sso_encryption_key")
+  fi
+
+  az containerapp secret set \
+    --subscription "$subscription_id" \
+    --resource-group "$resource_group_name" \
+    --name "$container_app_name" \
+    --secrets "${secret_arguments[@]}" >/dev/null
+
+  environment_arguments=(
+    "ADE_AUTH_MODE=$sso_auth_mode"
+    "ADE_AUTH_IDP_JIT_PROVISIONING_ENABLED=$sso_idp_jit_provisioning_enabled"
+    "ADE_AUTH_SSO_PROVIDERS_JSON=secretref:sso-providers-json"
+  )
+  if [ -n "$sso_encryption_key" ]; then
+    environment_arguments+=("ADE_SSO_ENCRYPTION_KEY=secretref:sso-encryption-key")
+  fi
+
+  az containerapp update \
+    --subscription "$subscription_id" \
+    --resource-group "$resource_group_name" \
+    --name "$container_app_name" \
+    --set-env-vars "${environment_arguments[@]}" >/dev/null
+
+  if [ -z "$sso_encryption_key" ]; then
+    az containerapp update \
+      --subscription "$subscription_id" \
+      --resource-group "$resource_group_name" \
+      --name "$container_app_name" \
+      --remove-env-vars ADE_SSO_ENCRYPTION_KEY >/dev/null || true
+  fi
 }
 
 require_command az
@@ -328,9 +494,42 @@ set_postgresql_entra_admin_with_retry \
   "${group_ids[databaseAdminsEntraGroupObjectId]}" \
   Group
 
+if [ "$enable_sso_bootstrap" = "true" ]; then
+  tenant_id="$(az account show --subscription "$subscription_id" --query tenantId -o tsv)"
+  sso_issuer="https://login.microsoftonline.com/${tenant_id}/v2.0"
+
+  production_public_web_url="$(resolve_public_web_url "$production_container_app_public_web_url" "$production_container_app_fqdn" production)"
+  production_callback_url="${production_public_web_url%/}/api/v1/auth/sso/callback"
+  effective_sso_production_application_display_name="${sso_production_application_display_name:-appreg-${workload}-prod-${location}-${instance}-sso-web}"
+  production_sso_application_id="$(get_or_create_entra_app_registration "$effective_sso_production_application_display_name" "$production_callback_url")"
+  apply_entra_optional_claims "$production_sso_application_id"
+  production_sso_client_secret="$(create_entra_app_client_secret "$production_sso_application_id" "${effective_sso_production_application_display_name}-client-secret")"
+  production_sso_provider_payload="$(build_sso_provider_payload "$sso_issuer" "$production_sso_application_id" "$production_sso_client_secret")"
+  configure_container_app_sso "$production_container_app_name" "$production_sso_provider_payload"
+
+  echo "SSO app (production): ${effective_sso_production_application_display_name} (${production_sso_application_id})"
+  echo "SSO callback (production): $production_callback_url"
+
+  if [ "$deploy_development_environment" = "true" ]; then
+    development_public_web_url="$(resolve_public_web_url "$development_container_app_public_web_url" "$development_container_app_fqdn" development)"
+    development_callback_url="${development_public_web_url%/}/api/v1/auth/sso/callback"
+    effective_sso_development_application_display_name="${sso_development_application_display_name:-appreg-${workload}-dev-${location}-${instance}-sso-web}"
+    development_sso_application_id="$(get_or_create_entra_app_registration "$effective_sso_development_application_display_name" "$development_callback_url")"
+    apply_entra_optional_claims "$development_sso_application_id"
+    development_sso_client_secret="$(create_entra_app_client_secret "$development_sso_application_id" "${effective_sso_development_application_display_name}-client-secret")"
+    development_sso_provider_payload="$(build_sso_provider_payload "$sso_issuer" "$development_sso_application_id" "$development_sso_client_secret")"
+    configure_container_app_sso "$development_container_app_name" "$development_sso_provider_payload"
+
+    echo "SSO app (development): ${effective_sso_development_application_display_name} (${development_sso_application_id})"
+    echo "SSO callback (development): $development_callback_url"
+  fi
+fi
+
 echo "Deployment complete: $deployment_name"
 echo "PostgreSQL: $postgresql_server_name"
 echo "Production app: $production_container_app_name ($production_container_app_fqdn)"
 if [ "$deploy_development_environment" = "true" ]; then
   echo "Development app: $development_container_app_name ($development_container_app_fqdn)"
 fi
+echo "SSO provider label: Microsoft Entra ID"
+echo "Validate provider endpoint: ${production_public_web_url:-https://$production_container_app_fqdn}/api/v1/auth/sso/providers"
