@@ -13,8 +13,8 @@ on:
       - ".github/workflows/docker-image.yaml"
   push:
     branches: [main, development]
-    tags:
-      - "v*"
+  release:
+    types: [published]
   workflow_dispatch:
 
 concurrency:
@@ -34,15 +34,63 @@ jobs:
       packages: write
 
     steps:
+      - name: Resolve checkout ref
+        id: checkout-ref
+        run: |
+          if [ "${GITHUB_EVENT_NAME}" = "release" ]; then
+            ref="refs/tags/${{ github.event.release.tag_name }}"
+          else
+            ref="${GITHUB_REF}"
+          fi
+          echo "value=$ref" >> "$GITHUB_OUTPUT"
+
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.checkout-ref.outputs.value }}
+
+      - name: Resolve release metadata
+        id: release-meta
+        run: |
+          set -euo pipefail
+          release_tag=""
+          app_version=""
+          is_stable=false
+          is_rebuild=false
+          semver_patch=""
+          semver_minor=""
+          semver_major=""
+
+          if [ "${GITHUB_EVENT_NAME}" = "release" ]; then
+            release_tag="${{ github.event.release.tag_name }}"
+            app_version="${release_tag#v}"
+            if [[ "$release_tag" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+              is_stable=true
+              semver_major="${BASH_REMATCH[1]}"
+              semver_minor="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"
+              semver_patch="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"
+            elif [[ "$release_tag" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)-r([0-9]+)$ ]]; then
+              is_rebuild=true
+            else
+              echo "Unsupported release tag format: ${release_tag}" >&2
+              exit 1
+            fi
+          fi
+
+          echo "release_tag=$release_tag" >> "$GITHUB_OUTPUT"
+          echo "app_version=$app_version" >> "$GITHUB_OUTPUT"
+          echo "is_stable=$is_stable" >> "$GITHUB_OUTPUT"
+          echo "is_rebuild=$is_rebuild" >> "$GITHUB_OUTPUT"
+          echo "semver_patch=$semver_patch" >> "$GITHUB_OUTPUT"
+          echo "semver_minor=$semver_minor" >> "$GITHUB_OUTPUT"
+          echo "semver_major=$semver_major" >> "$GITHUB_OUTPUT"
 
       - name: Resolve app metadata
         id: app-meta
         run: |
           short_sha="${GITHUB_SHA::7}"
-          if [ "${GITHUB_REF_TYPE}" = "tag" ] && [[ "${GITHUB_REF_NAME}" == v* ]]; then
-            app_version="${GITHUB_REF_NAME#v}"
+          if [ "${GITHUB_EVENT_NAME}" = "release" ]; then
+            app_version="${{ steps.release-meta.outputs.app_version }}"
           elif [ "${GITHUB_REF}" = "refs/heads/main" ]; then
             app_version="main"
           elif [ "${GITHUB_REF}" = "refs/heads/development" ]; then
@@ -88,6 +136,28 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Enforce immutable tag policy
+        if: github.event_name == 'release'
+        run: |
+          set -euo pipefail
+          image="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
+          release_tag="${{ steps.release-meta.outputs.release_tag }}"
+
+          # Release and rebuild tags are immutable once published.
+          if docker buildx imagetools inspect "${image}:${release_tag}" >/dev/null 2>&1; then
+            echo "Immutable tag already exists: ${release_tag}" >&2
+            exit 1
+          fi
+
+          # Exact semver aliases must not move silently.
+          if [ "${{ steps.release-meta.outputs.is_stable }}" = "true" ]; then
+            patch_alias="${{ steps.release-meta.outputs.semver_patch }}"
+            if docker buildx imagetools inspect "${image}:${patch_alias}" >/dev/null 2>&1; then
+              echo "Exact semver alias already exists: ${patch_alias}" >&2
+              exit 1
+            fi
+          fi
+
       - name: Docker metadata
         id: meta
         uses: docker/metadata-action@v5
@@ -96,11 +166,17 @@ jobs:
           flavor: |
             latest=false
           tags: |
-            # Branch tags (main/development only)
+            # Branch channel tags
             type=raw,value=main,enable=${{ github.ref == 'refs/heads/main' }}
             type=raw,value=development,enable=${{ github.ref == 'refs/heads/development' }}
-            # Immutable release tags for pinning (vX.Y.Z only)
-            type=raw,value=${{ github.ref_name }},enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            # Stable releases: immutable tag + convenience aliases
+            type=raw,value=${{ steps.release-meta.outputs.release_tag }},enable=${{ steps.release-meta.outputs.is_stable == 'true' }}
+            type=raw,value=${{ steps.release-meta.outputs.semver_patch }},enable=${{ steps.release-meta.outputs.is_stable == 'true' }}
+            type=raw,value=${{ steps.release-meta.outputs.semver_minor }},enable=${{ steps.release-meta.outputs.is_stable == 'true' }}
+            type=raw,value=${{ steps.release-meta.outputs.semver_major }},enable=${{ steps.release-meta.outputs.is_stable == 'true' }}
+            type=raw,value=latest,enable=${{ steps.release-meta.outputs.is_stable == 'true' }}
+            # Rebuild releases: immutable rebuild tag only
+            type=raw,value=${{ steps.release-meta.outputs.release_tag }},enable=${{ steps.release-meta.outputs.is_rebuild == 'true' }}
 
       - name: Build (and push if not PR)
         uses: docker/build-push-action@v6
