@@ -16,6 +16,7 @@ def test_settings_reads_from_dotenv(tmp_path: Path, monkeypatch: pytest.MonkeyPa
         """
 ADE_APP_NAME=ADE Test
 ADE_API_DOCS_ENABLED=true
+ADE_API_DOCS_ACCESS_MODE=public
 ADE_PUBLIC_WEB_URL=https://api.dev.local
 ADE_SERVER_CORS_ORIGINS=http://localhost:3000,http://example.dev:4000
 ADE_SERVER_CORS_ORIGIN_REGEX=^https://.*\\.dev\\.local$
@@ -31,6 +32,7 @@ ADE_BLOB_CONNECTION_STRING=UseDevelopmentStorage=true
 
     assert settings.app_name == "ADE Test"
     assert settings.api_docs_enabled is True
+    assert settings.api_docs_access_mode == "public"
     assert settings.public_web_url == "https://api.dev.local"
     assert settings.server_cors_origins == [
         "http://localhost:3000",
@@ -45,6 +47,7 @@ def test_settings_env_var_override(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setenv("ADE_APP_NAME", "Env Override")
     monkeypatch.setenv("ADE_API_DOCS_ENABLED", "true")
+    monkeypatch.setenv("ADE_API_DOCS_ACCESS_MODE", "public")
     monkeypatch.setenv("ADE_PUBLIC_WEB_URL", "https://api.local")
     monkeypatch.setenv("ADE_SERVER_CORS_ORIGINS", "http://example.com")
     monkeypatch.setenv("ADE_SERVER_CORS_ORIGIN_REGEX", "^https://.*\\.example\\.com$")
@@ -56,6 +59,7 @@ def test_settings_env_var_override(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert settings.app_name == "Env Override"
     assert settings.api_docs_enabled is True
+    assert settings.api_docs_access_mode == "public"
     assert settings.public_web_url == "https://api.local"
     assert settings.server_cors_origins == ["http://example.com"]
     assert settings.server_cors_origin_regex == r"^https://.*\.example\.com$"

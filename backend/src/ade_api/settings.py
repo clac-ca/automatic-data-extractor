@@ -7,6 +7,7 @@ import os
 import re
 from datetime import timedelta
 from pathlib import Path
+from typing import Literal
 
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings
@@ -60,9 +61,10 @@ class Settings(
     app_version: str = "unknown"
     app_commit_sha: str = "unknown"
     api_docs_enabled: bool = False
-    docs_url: str = "/docs"
-    redoc_url: str = "/redoc"
-    openapi_url: str = "/openapi.json"
+    api_docs_access_mode: Literal["authenticated", "public"] = "authenticated"
+    docs_url: str = "/api/swagger"
+    redoc_url: str = "/api"
+    openapi_url: str = "/api/openapi.json"
     log_format: str = "console"
     log_level: str = "INFO"
     api_log_level: str | None = None
@@ -162,6 +164,16 @@ class Settings(
         raw = str(value).strip()
         if not raw:
             raise ValueError("ADE_API_FORWARDED_ALLOW_IPS must not be empty.")
+        return raw
+
+    @field_validator("api_docs_access_mode", mode="before")
+    @classmethod
+    def _normalize_api_docs_access_mode(cls, value: object) -> object:
+        if value is None:
+            return "authenticated"
+        raw = str(value).strip().lower()
+        if not raw:
+            raise ValueError("ADE_API_DOCS_ACCESS_MODE must not be empty.")
         return raw
 
     @model_validator(mode="after")
