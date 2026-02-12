@@ -4,17 +4,6 @@ import { describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@/test/test-utils";
 
 import { UploadPreflightDialog } from "./UploadPreflightDialog";
-import { readWorkbookSheetNames } from "./sheetSelection";
-
-vi.mock("./sheetSelection", async () => {
-  const actual = await vi.importActual<typeof import("./sheetSelection")>("./sheetSelection");
-  return {
-    ...actual,
-    readWorkbookSheetNames: vi.fn(),
-  };
-});
-
-const mockedReadWorkbookSheetNames = vi.mocked(readWorkbookSheetNames);
 
 describe("UploadPreflightDialog", () => {
   it("defaults to active-sheet processing", async () => {
@@ -81,11 +70,7 @@ describe("UploadPreflightDialog", () => {
     });
   });
 
-  it("supports selecting specific sheets for a single workbook upload", async () => {
-    mockedReadWorkbookSheetNames.mockResolvedValueOnce(["Sheet A", "Sheet B"]);
-    const user = userEvent.setup();
-    const onConfirm = vi.fn();
-
+  it("warns when workbook uploads cannot use specific-sheet selection", async () => {
     render(
       <UploadPreflightDialog
         open
@@ -96,28 +81,14 @@ describe("UploadPreflightDialog", () => {
             { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" },
           ),
         ]}
-        onConfirm={onConfirm}
+        onConfirm={vi.fn()}
         onCancel={vi.fn()}
         processingPaused={false}
         configMissing={false}
       />,
     );
 
-    await screen.findByText("Worksheets (2)");
-    await user.click(screen.getByLabelText("Specific sheets"));
-    await user.click(screen.getByRole("checkbox", { name: "Sheet A" }));
-    await user.click(screen.getByRole("button", { name: "Upload" }));
-
-    await waitFor(() => {
-      expect(onConfirm).toHaveBeenCalledWith([
-        {
-          file: expect.any(File),
-          runOptions: {
-            active_sheet_only: false,
-            input_sheet_names: ["Sheet A"],
-          },
-        },
-      ]);
-    });
+    expect(screen.getByText(/Worksheet-level selection is unavailable for direct uploads/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText("Specific sheets")).not.toBeInTheDocument();
   });
 });
