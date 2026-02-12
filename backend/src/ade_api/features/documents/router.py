@@ -648,6 +648,17 @@ async def stream_document_changes(
                     continue
 
                 payload = dict(payload)
+                if payload.get("resync"):
+                    change_id = payload.get("id")
+                    yield sse_json(
+                        "documents.resync",
+                        {
+                            "reason": payload.get("reason") or "unknown",
+                            "id": change_id,
+                        },
+                        event_id=change_id,
+                    )
+                    continue
                 op = payload.get("op")
                 document_id = payload.get("documentId")
                 change_id = payload.get("id")
