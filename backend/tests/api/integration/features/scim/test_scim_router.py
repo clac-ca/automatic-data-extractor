@@ -478,6 +478,7 @@ async def test_scim_patch_remove_phone_paths_clear_stored_values(
     assert remove_all_phones.status_code == 200, remove_all_phones.text
     assert remove_all_phones.json().get("phoneNumbers") == []
 
+    db_session.expire_all()
     db_user = db_session.get(User, user_id)
     assert db_user is not None
     assert db_user.mobile_phone is None
