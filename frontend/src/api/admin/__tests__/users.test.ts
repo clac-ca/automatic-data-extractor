@@ -1,6 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { createAdminUser, listAdminUsers, updateAdminUser } from "../users";
+import {
+  addAdminUserMemberOf,
+  createAdminUser,
+  listAdminUserMemberOf,
+  listAdminUsers,
+  removeAdminUserMemberOf,
+  updateAdminUser,
+} from "../users";
 import { client } from "@/api/client";
 
 vi.mock("@/api/client", () => ({
@@ -8,6 +15,7 @@ vi.mock("@/api/client", () => ({
     GET: vi.fn(),
     POST: vi.fn(),
     PATCH: vi.fn(),
+    DELETE: vi.fn(),
   },
 }));
 
@@ -66,6 +74,33 @@ describe("admin users api", () => {
     expect(client.PATCH).toHaveBeenCalledWith("/api/v1/users/{userId}", {
       params: { path: { userId: "u1" } },
       body: { display_name: "Updated" },
+    });
+  });
+
+  it("handles memberOf routes", async () => {
+    (client.GET as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: { items: [] },
+    });
+    (client.POST as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: { items: [{ group_id: "g1", is_member: true, is_owner: false }] },
+    });
+    (client.DELETE as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({});
+
+    await listAdminUserMemberOf("u1");
+    expect(client.GET).toHaveBeenCalledWith("/api/v1/users/{userId}/memberOf", {
+      params: { path: { userId: "u1" } },
+      signal: undefined,
+    });
+
+    await addAdminUserMemberOf("u1", "g1");
+    expect(client.POST).toHaveBeenCalledWith("/api/v1/users/{userId}/memberOf/$ref", {
+      params: { path: { userId: "u1" } },
+      body: { groupId: "g1" },
+    });
+
+    await removeAdminUserMemberOf("u1", "g1");
+    expect(client.DELETE).toHaveBeenCalledWith("/api/v1/users/{userId}/memberOf/{groupId}/$ref", {
+      params: { path: { userId: "u1", groupId: "g1" } },
     });
   });
 });

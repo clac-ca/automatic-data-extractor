@@ -40,7 +40,7 @@ describe("admin settings api", () => {
               },
             },
             identityProvider: {
-              jitProvisioningEnabled: true,
+              provisioningMode: "jit",
             },
           },
         },
@@ -67,7 +67,7 @@ describe("admin settings api", () => {
               },
             },
             identityProvider: {
-              jitProvisioningEnabled: { source: "default", lockedByEnv: false, envVar: "ADE_AUTH_IDP_JIT_PROVISIONING_ENABLED", restartRequired: false },
+              provisioningMode: { source: "default", lockedByEnv: false, envVar: "ADE_AUTH_IDP_PROVISIONING_MODE", restartRequired: false },
             },
           },
         },
@@ -105,7 +105,7 @@ describe("admin settings api", () => {
               },
             },
             identityProvider: {
-              jitProvisioningEnabled: true,
+              provisioningMode: "jit",
             },
           },
         },
@@ -132,7 +132,7 @@ describe("admin settings api", () => {
               },
             },
             identityProvider: {
-              jitProvisioningEnabled: { source: "default", lockedByEnv: false, envVar: "ADE_AUTH_IDP_JIT_PROVISIONING_ENABLED", restartRequired: false },
+              provisioningMode: { source: "default", lockedByEnv: false, envVar: "ADE_AUTH_IDP_PROVISIONING_MODE", restartRequired: false },
             },
           },
         },

@@ -14,6 +14,15 @@ import {
   type SsoProviderValidationResponse,
 } from "@/api/admin/sso";
 import {
+  createScimToken,
+  listScimTokens,
+  revokeScimToken,
+  type ScimTokenCreateRequest,
+  type ScimTokenCreateResponse,
+  type ScimTokenListResponse,
+  type ScimTokenOut,
+} from "@/api/admin/scim";
+import {
   patchAdminSettings,
   readAdminSettings,
   type AdminSettingsPatchRequest,
@@ -35,6 +44,16 @@ export function useAdminSettingsQuery(options: { enabled?: boolean } = {}) {
   return useQuery<AdminSettingsReadResponse>({
     queryKey: adminKeys.settings(),
     queryFn: ({ signal }) => readAdminSettings({ signal }),
+    enabled: options.enabled ?? true,
+    staleTime: 10_000,
+    placeholderData: (previous) => previous,
+  });
+}
+
+export function useScimTokensQuery(options: { enabled?: boolean } = {}) {
+  return useQuery<ScimTokenListResponse>({
+    queryKey: adminKeys.scimTokens(),
+    queryFn: ({ signal }) => listScimTokens({ signal }),
     enabled: options.enabled ?? true,
     staleTime: 10_000,
     placeholderData: (previous) => previous,
@@ -84,6 +103,26 @@ export function usePatchAdminSettingsMutation() {
     onSuccess: (data) => {
       queryClient.setQueryData(adminKeys.settings(), data);
       queryClient.invalidateQueries({ queryKey: adminKeys.settings() });
+    },
+  });
+}
+
+export function useCreateScimTokenMutation() {
+  const queryClient = useQueryClient();
+  return useMutation<ScimTokenCreateResponse, Error, ScimTokenCreateRequest>({
+    mutationFn: (payload) => createScimToken(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: adminKeys.scimTokens() });
+    },
+  });
+}
+
+export function useRevokeScimTokenMutation() {
+  const queryClient = useQueryClient();
+  return useMutation<ScimTokenOut, Error, string>({
+    mutationFn: (tokenId) => revokeScimToken(tokenId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: adminKeys.scimTokens() });
     },
   });
 }

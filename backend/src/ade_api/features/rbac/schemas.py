@@ -6,6 +6,7 @@ from uuid import UUID
 from ade_api.common.cursor_listing import CursorPage
 from ade_api.common.schema import BaseSchema
 from ade_api.core.rbac.types import ScopeType
+from ade_db.models import AssignmentScopeType, PrincipalType
 
 
 class PermissionOut(BaseSchema):
@@ -52,13 +53,17 @@ class RoleOut(BaseSchema):
 
 
 class RoleAssignmentOut(BaseSchema):
-    """API representation of a role assignment to a user in a scope."""
+    """API representation of a principal role assignment in a scope."""
 
     id: UUID
-    user_id: UUID
+    principal_type: PrincipalType
+    principal_id: UUID
+    principal_display_name: str | None = None
+    principal_email: str | None = None
+    principal_slug: str | None = None
     role_id: UUID
     role_slug: str
-    scope_type: ScopeType
+    scope_type: AssignmentScopeType
     scope_id: UUID | None
     created_at: datetime
 
@@ -97,3 +102,11 @@ class WorkspaceMemberOut(BaseSchema):
     role_ids: list[UUID]
     role_slugs: list[str]
     created_at: datetime
+
+
+class RoleAssignmentCreate(BaseSchema):
+    """Payload for creating a principal role assignment."""
+
+    principal_type: PrincipalType
+    principal_id: UUID
+    role_id: UUID

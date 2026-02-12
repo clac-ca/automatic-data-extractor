@@ -26,6 +26,9 @@ from .common.openapi import configure_openapi
 from .common.problem_details import ApiError
 from .core.http.errors import register_auth_exception_handlers
 from .features.health.ops import router as ops_router
+from .features.scim.errors import ScimApiError
+from .features.scim.handlers import scim_api_error_handler
+from .features.scim.router import router as scim_router
 from .settings import Settings, get_settings
 
 API_PREFIX = "/api"
@@ -64,6 +67,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         StarletteHTTPException, _as_http_exception_handler(http_exception_handler)
     )
     app.add_exception_handler(ApiError, _as_http_exception_handler(api_error_handler))
+    app.add_exception_handler(ScimApiError, _as_http_exception_handler(scim_api_error_handler))
     app.add_exception_handler(Exception, _as_http_exception_handler(unhandled_exception_handler))
     register_auth_exception_handlers(app)
 
@@ -71,6 +75,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     register_middleware(app, settings=settings)
     app.include_router(ops_router, include_in_schema=False)
     app.include_router(create_api_router(), prefix=API_PREFIX)
+    app.include_router(scim_router)
     configure_openapi(app, settings)
     if settings.api_docs_enabled:
         register_api_docs_routes(app, settings=settings)

@@ -43,10 +43,12 @@ export type WorkspaceOut = GeneratedComponents["schemas"]["WorkspaceOut"];
 export type WorkspacePage = GeneratedComponents["schemas"]["WorkspacePage"];
 export type WorkspaceCreate = GeneratedComponents["schemas"]["WorkspaceCreate"];
 export type WorkspaceUpdate = GeneratedComponents["schemas"]["WorkspaceUpdate"];
-export type WorkspaceMemberOut = GeneratedComponents["schemas"]["WorkspaceMemberOut"];
-export type WorkspaceMemberPage = GeneratedComponents["schemas"]["WorkspaceMemberPage"];
-export type WorkspaceMemberCreate = GeneratedComponents["schemas"]["WorkspaceMemberCreate"];
-export type WorkspaceMemberUpdate = GeneratedComponents["schemas"]["WorkspaceMemberUpdate"];
+export type RoleAssignmentOut = GeneratedComponents["schemas"]["RoleAssignmentOut"];
+export type RoleAssignmentPage = GeneratedComponents["schemas"]["RoleAssignmentPage"];
+export type InvitationOut = GeneratedComponents["schemas"]["InvitationOut"];
+export type InvitationListResponse = GeneratedComponents["schemas"]["InvitationListResponse"];
+export type GroupOut = GeneratedComponents["schemas"]["GroupOut"];
+export type GroupListResponse = GeneratedComponents["schemas"]["GroupListResponse"];
 
 // API key types
 export type ApiKeySummary = GeneratedComponents["schemas"]["ApiKeySummary"];

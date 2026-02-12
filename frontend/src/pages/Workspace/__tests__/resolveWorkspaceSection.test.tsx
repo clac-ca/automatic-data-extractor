@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from "vitest";
-import type { ReactElement } from "react";
 
 import { resolveWorkspaceSection } from "../sectionResolver";
 
@@ -10,7 +9,6 @@ vi.mock("@/pages/Workspace/sections/Documents", () => ({
 vi.mock("@/pages/Workspace/sections/Runs", () => ({ default: () => <div>runs</div> }));
 vi.mock("@/pages/Workspace/sections/ConfigurationEditor", () => ({ default: () => <div>configs</div> }));
 vi.mock("@/pages/Workspace/sections/ConfigurationEditor/workbench", () => ({ default: () => <div>editor</div> }));
-vi.mock("@/pages/Workspace/sections/Settings", () => ({ default: () => <div>settings</div> }));
 vi.mock("@/components/layout", () => ({
   PageState: ({ title }: { title: string }) => <div>{title}</div>,
 }));
@@ -67,21 +65,8 @@ describe("resolveWorkspaceSection", () => {
     expect(result).toMatchObject({ kind: "content", key: "runs", fullWidth: true });
   });
 
-  it("returns the settings section with trailing segments in the key", () => {
+  it("treats legacy settings paths as unknown workspace sections", () => {
     const result = resolveWorkspaceSection(workspaceId, ["settings", "access", "roles"], "", "");
-    expect(result).toMatchObject({ kind: "content", key: "settings:access:roles" });
-    if (result?.kind === "content") {
-      const element = result.element as ReactElement<{ sectionSegments: string[] }>;
-      expect(element.props.sectionSegments).toEqual(["access", "roles"]);
-    }
-  });
-
-  it("defaults to general settings when no trailing segment is provided", () => {
-    const result = resolveWorkspaceSection(workspaceId, ["settings"], "", "");
-    expect(result).toMatchObject({ kind: "content", key: "settings:general" });
-    if (result?.kind === "content") {
-      const element = result.element as ReactElement<{ sectionSegments: string[] }>;
-      expect(element.props.sectionSegments).toEqual([]);
-    }
+    expect(result).toMatchObject({ kind: "content", key: "not-found:settings/access/roles" });
   });
 });

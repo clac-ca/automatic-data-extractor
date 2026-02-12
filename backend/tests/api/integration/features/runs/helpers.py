@@ -182,7 +182,7 @@ def build_runs_service(
                     },
                 },
                 "identity_provider": {
-                    "jit_provisioning_enabled": True,
+                    "provisioning_mode": "jit",
                 },
             },
         }

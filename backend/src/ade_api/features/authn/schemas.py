@@ -97,7 +97,10 @@ class AuthPolicyResponse(BaseSchema):
     password_lockout_duration_seconds: int = Field(
         default=300, alias="passwordLockoutDurationSeconds"
     )
-    idp_jit_provisioning_enabled: bool = Field(default=True, alias="idpJitProvisioningEnabled")
+    idp_provisioning_mode: Literal["disabled", "jit", "scim"] = Field(
+        default="jit",
+        alias="idpProvisioningMode",
+    )
 
 
 class AuthMfaRecoveryRegenerateRequest(BaseSchema):

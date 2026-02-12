@@ -38,7 +38,9 @@ Document queue with assignees, status context, and run lifecycle visibility.
 
 - [Run Local Dev Loop](how-to/run-local-dev-loop.md)
 - [Deploy to Production](how-to/deploy-production.md)
+- [Manage Users and Access](how-to/manage-users-and-access.md)
 - [Manage Runtime Settings](how-to/manage-runtime-settings.md)
+- [Access Reference](reference/access/README.md)
 - [Environment Variables](reference/environment-variables.md)
 - [Runtime Lifecycle](reference/runtime-lifecycle.md)
 - [Triage Playbook](troubleshooting/triage-playbook.md)
@@ -87,6 +89,7 @@ Document queue with assignees, status context, and run lifecycle visibility.
 - [Release Process](reference/release-process.md)
 - [Backend Service Module Contract](reference/backend-service-module-contract.md)
 - [Auth Architecture](reference/auth-architecture.md)
+- [Access Reference](reference/access/README.md)
 - [API Capability Map](reference/api-capability-map.md)
 - [Azure Infra Bicep Reference](reference/azure-bicep-parameters-and-naming.md)
 - [API Reference](reference/api/README.md)
@@ -97,12 +100,14 @@ Document queue with assignees, status context, and run lifecycle visibility.
 - [System Architecture](explanation/system-architecture.md)
 - [Reliability and Failure Model](explanation/reliability-and-failure-model.md)
 - [Security and Authentication](explanation/security-and-authentication.md)
+- [Access Management Model](explanation/access-management-model.md)
 
 ### Troubleshooting
 
 - [Triage Playbook](troubleshooting/triage-playbook.md)
 - [Common Failures](troubleshooting/common-failures.md)
 - [Auth Incident Runbook](troubleshooting/auth-incident-runbook.md)
+- [Access Management Incident Runbook](troubleshooting/access-management-incident-runbook.md)
 
 ### Standards
 

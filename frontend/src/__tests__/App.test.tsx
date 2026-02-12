@@ -11,7 +11,7 @@ vi.mock("@/pages/Account", () => ({ default: () => <div data-testid="account-scr
 vi.mock("@/pages/Login", () => ({ default: () => <div data-testid="login-screen">login</div> }));
 vi.mock("@/pages/MfaSetup", () => ({ default: () => <div data-testid="mfa-setup-screen">mfa-setup</div> }));
 vi.mock("@/pages/Setup", () => ({ default: () => <div data-testid="setup-screen">setup</div> }));
-vi.mock("@/pages/OrganizationSettings", () => ({ default: () => <div data-testid="org-settings-screen">org-settings</div> }));
+vi.mock("@/pages/SettingsConsole", () => ({ default: () => <div data-testid="settings-screen">settings</div> }));
 vi.mock("@/pages/ResetPassword", () => ({ default: () => <div data-testid="reset-password-screen">reset-password</div> }));
 vi.mock("@/pages/Workspaces", () => ({ default: () => <div data-testid="workspaces-screen">workspaces</div> }));
 vi.mock("@/pages/Workspaces/New", () => ({ default: () => <div data-testid="workspace-new-screen">new</div> }));
@@ -47,8 +47,15 @@ describe("App routes", () => {
     { path: "/mfa/setup", testId: "mfa-setup-screen" },
     { path: "/reset-password", testId: "reset-password-screen" },
     { path: "/setup", testId: "setup-screen" },
-    { path: "/organization", testId: "org-settings-screen" },
-    { path: "/organization/users", testId: "org-settings-screen" },
+    { path: "/settings", testId: "settings-screen" },
+    { path: "/settings/organization/users", testId: "settings-screen" },
+    { path: "/settings/organization/users/create", testId: "settings-screen" },
+    { path: "/settings/organization/groups/create", testId: "settings-screen" },
+    { path: "/settings/organization/roles/create", testId: "settings-screen" },
+    { path: "/settings/workspaces/ws-1/general", testId: "settings-screen" },
+    { path: "/settings/workspaces/ws-1/access/principals/create", testId: "settings-screen" },
+    { path: "/settings/workspaces/ws-1/access/roles/create", testId: "settings-screen" },
+    { path: "/settings/workspaces/ws-1/access/invitations/create", testId: "settings-screen" },
     { path: "/workspaces", testId: "workspaces-screen" },
     { path: "/workspaces/new", testId: "workspace-new-screen" },
     { path: "/workspaces/ws-1", testId: "workspace-screen" },

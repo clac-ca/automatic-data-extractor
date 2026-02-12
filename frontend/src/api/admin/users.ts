@@ -7,6 +7,7 @@ export type AdminUserPage = components["schemas"]["UserPage"];
 export type AdminUserCreateRequest = components["schemas"]["UserCreate"];
 export type AdminUserCreateResponse = components["schemas"]["UserCreateResponse"];
 export type AdminUserUpdateRequest = components["schemas"]["UserUpdate"];
+export type AdminUserMemberOf = components["schemas"]["UserMemberOfResponse"];
 
 export interface ListAdminUsersOptions {
   readonly limit?: number;
@@ -88,4 +89,39 @@ export async function deactivateAdminUser(userId: string): Promise<AdminUser> {
   }
 
   return data;
+}
+
+export async function listAdminUserMemberOf(
+  userId: string,
+  options: { signal?: AbortSignal } = {},
+): Promise<AdminUserMemberOf> {
+  const { data } = await client.GET("/api/v1/users/{userId}/memberOf", {
+    params: { path: { userId } },
+    signal: options.signal,
+  });
+
+  if (!data) {
+    throw new Error("Expected user memberOf payload.");
+  }
+
+  return data;
+}
+
+export async function addAdminUserMemberOf(userId: string, groupId: string): Promise<AdminUserMemberOf> {
+  const { data } = await client.POST("/api/v1/users/{userId}/memberOf/$ref", {
+    params: { path: { userId } },
+    body: { groupId },
+  });
+
+  if (!data) {
+    throw new Error("Expected user memberOf payload.");
+  }
+
+  return data;
+}
+
+export async function removeAdminUserMemberOf(userId: string, groupId: string): Promise<void> {
+  await client.DELETE("/api/v1/users/{userId}/memberOf/{groupId}/$ref", {
+    params: { path: { userId, groupId } },
+  });
 }

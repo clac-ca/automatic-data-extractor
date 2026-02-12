@@ -13,6 +13,7 @@ Back to [Docs Home](../../README.md) and [Reference](../README.md).
 ## API Endpoint References
 
 - [Authentication](authentication.md)
+- [Access Management](access-management.md)
 - [Workspaces](workspaces.md)
 - [Configurations](configurations.md)
 - [Documents](documents.md)

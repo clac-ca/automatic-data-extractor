@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Body, Depends, Path, Security, status
+from fastapi import APIRouter, Body, Depends, Path, Response, Security, status
 
 from ade_api.api.deps import get_users_service, get_users_service_read
 from ade_api.common.cursor_listing import (
@@ -17,7 +17,15 @@ from ade_api.common.cursor_listing import (
 from ade_api.core.http import require_authenticated, require_csrf, require_global
 from ade_db.models import User
 
-from .schemas import UserCreate, UserCreateResponse, UserOut, UserPage, UserUpdate
+from .schemas import (
+    UserCreate,
+    UserCreateResponse,
+    UserMemberOfRefCreate,
+    UserMemberOfResponse,
+    UserOut,
+    UserPage,
+    UserUpdate,
+)
 from .service import UsersService
 from .sorting import CURSOR_FIELDS, DEFAULT_SORT, ID_FIELD, SORT_FIELDS
 
@@ -37,6 +45,13 @@ USER_ID_PARAM = Annotated[
     Path(
         description="User identifier.",
         alias="userId",
+    ),
+]
+GROUP_ID_PARAM = Annotated[
+    UUID,
+    Path(
+        description="Group identifier.",
+        alias="groupId",
     ),
 ]
 
@@ -99,6 +114,21 @@ def create_user(
     return service.create_user(
         email=str(payload.email),
         display_name=payload.display_name,
+        given_name=payload.given_name,
+        surname=payload.surname,
+        job_title=payload.job_title,
+        department=payload.department,
+        office_location=payload.office_location,
+        mobile_phone=payload.mobile_phone,
+        business_phones=payload.business_phones,
+        employee_id=payload.employee_id,
+        employee_type=payload.employee_type,
+        preferred_language=payload.preferred_language,
+        city=payload.city,
+        state=payload.state,
+        country=payload.country,
+        source=payload.source,
+        external_id=payload.external_id,
         password_profile=payload.password_profile,
     )
 
@@ -185,6 +215,57 @@ def deactivate_user(
     service: Annotated[UsersService, Depends(get_users_service)],
 ) -> UserOut:
     return service.deactivate_user(user_id=user_id, actor=actor)
+
+
+@router.get(
+    "/users/{userId}/memberOf",
+    response_model=UserMemberOfResponse,
+    status_code=status.HTTP_200_OK,
+    summary="List group memberships for a user",
+    response_model_exclude_none=True,
+)
+def list_user_member_of(
+    _: Annotated[User, Security(require_global("users.read_all"))],
+    __: Annotated[User, Security(require_global("groups.members.read_all"))],
+    user_id: USER_ID_PARAM,
+    service: Annotated[UsersService, Depends(get_users_service_read)],
+) -> UserMemberOfResponse:
+    return service.list_member_of(user_id=user_id)
+
+
+@router.post(
+    "/users/{userId}/memberOf/$ref",
+    dependencies=[Security(require_csrf)],
+    response_model=UserMemberOfResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Add user membership in a group by reference",
+    response_model_exclude_none=True,
+)
+def add_user_member_of_ref(
+    _: Annotated[User, Security(require_global("users.manage_all"))],
+    __: Annotated[User, Security(require_global("groups.members.manage_all"))],
+    user_id: USER_ID_PARAM,
+    payload: UserMemberOfRefCreate,
+    service: Annotated[UsersService, Depends(get_users_service)],
+) -> UserMemberOfResponse:
+    return service.add_member_of_ref(user_id=user_id, payload=payload)
+
+
+@router.delete(
+    "/users/{userId}/memberOf/{groupId}/$ref",
+    dependencies=[Security(require_csrf)],
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Remove user membership in a group by reference",
+)
+def remove_user_member_of_ref(
+    _: Annotated[User, Security(require_global("users.manage_all"))],
+    __: Annotated[User, Security(require_global("groups.members.manage_all"))],
+    user_id: USER_ID_PARAM,
+    group_id: GROUP_ID_PARAM,
+    service: Annotated[UsersService, Depends(get_users_service)],
+) -> Response:
+    service.remove_member_of_ref(user_id=user_id, group_id=group_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 __all__ = ["router"]

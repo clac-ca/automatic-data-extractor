@@ -31,7 +31,12 @@ from ade_api.features.rbac import (
 )
 from ade_api.settings import Settings
 from ade_db.models import (
+    AssignmentScopeType,
+    Group,
+    GroupMembership,
+    PrincipalType,
     Role,
+    RoleAssignment,
     RolePermission,
     User,
     UserRoleAssignment,
@@ -127,7 +132,7 @@ class WorkspacesService:
                 permissions = self._rbac.get_workspace_permissions_for_user(
                     user=user, workspace_id=workspace_id
                 )
-                roles = self._workspace_roles_for_user(
+                role_slugs = self._workspace_role_slugs_for_user(
                     user_id=user_id,
                     workspace_id=workspace_id,
                 )
@@ -139,7 +144,7 @@ class WorkspacesService:
                     id=workspace.id,
                     name=workspace.name,
                     slug=workspace.slug,
-                    roles=sorted(role.slug for role in roles),
+                    roles=sorted(role_slugs),
                     permissions=sorted(permissions),
                     is_default=membership.is_default if membership else False,
                     processing_paused=self._processing_paused(workspace),
@@ -155,35 +160,34 @@ class WorkspacesService:
                 )
                 return profile
 
-            membership = self._repo.get_membership_for_workspace(
-                user_id=user_id,
+            permissions = self._rbac.get_workspace_permissions_for_user(
+                user=user,
                 workspace_id=workspace_id,
             )
-            if membership is None:
+            if not permissions:
                 logger.warning(
-                    "workspace.profile.membership_not_found",
+                    "workspace.profile.access_not_found",
                     extra=log_context(user_id=user_id, workspace_id=workspace_id),
                 )
                 raise HTTPException(
                     status.HTTP_404_NOT_FOUND,
                     detail="Workspace not found",
                 )
-
-            roles = self._workspace_roles_for_user(
+            membership = self._repo.get_membership_for_workspace(
                 user_id=user_id,
                 workspace_id=workspace_id,
             )
-            permissions = self._rbac.get_workspace_permissions_for_user(
-                user=user,
+            role_slugs = self._workspace_role_slugs_for_user(
+                user_id=user_id,
                 workspace_id=workspace_id,
             )
             profile = WorkspaceOut(
                 id=workspace.id,
                 name=workspace.name,
                 slug=workspace.slug,
-                roles=sorted(role.slug for role in roles),
+                roles=sorted(role_slugs),
                 permissions=sorted(permissions),
-                is_default=membership.is_default,
+                is_default=membership.is_default if membership else False,
                 processing_paused=self._processing_paused(workspace),
             )
             logger.info(
@@ -209,44 +213,62 @@ class WorkspacesService:
             )
 
         membership = self._repo.get_default_membership(user_id=user_id)
-        if membership is None:
+        if membership is not None:
+            workspace_identifier = membership.workspace_id
+            permissions = self._rbac.get_workspace_permissions_for_user(
+                user=user,
+                workspace_id=workspace_identifier,
+            )
+            if permissions:
+                role_slugs = self._workspace_role_slugs_for_user(
+                    user_id=user_id,
+                    workspace_id=workspace_identifier,
+                )
+                profile = WorkspaceOut(
+                    id=membership.workspace_id,
+                    name=membership.workspace.name if membership.workspace else "",
+                    slug=membership.workspace.slug if membership.workspace else "",
+                    roles=sorted(role_slugs),
+                    permissions=sorted(permissions),
+                    is_default=membership.is_default,
+                    processing_paused=self._processing_paused(membership.workspace),
+                )
+                logger.info(
+                    "workspace.profile.default_success",
+                    extra=log_context(
+                        user_id=user_id,
+                        workspace_id=workspace_identifier,
+                        roles=profile.roles,
+                        permissions=len(profile.permissions),
+                        is_default=profile.is_default,
+                    ),
+                )
+                return profile
+
+        memberships = self.list_memberships(
+            user=user,
+            global_permissions=global_permissions,
+        )
+        if not memberships:
             logger.warning(
-                "workspace.profile.no_default_membership",
+                "workspace.profile.no_accessible_workspace",
                 extra=log_context(user_id=user_id),
             )
             raise HTTPException(
                 status.HTTP_404_NOT_FOUND,
-                detail="No default workspace configured",
+                detail="No workspace access found",
             )
-        workspace_identifier = membership.workspace_id
-        roles = self._workspace_roles_for_user(
-            user_id=user_id,
-            workspace_id=workspace_identifier,
-        )
-        permissions = self._rbac.get_workspace_permissions_for_user(
-            user=user,
-            workspace_id=workspace_identifier,
-        )
-        profile = WorkspaceOut(
-            id=membership.workspace_id,
-            name=membership.workspace.name if membership.workspace else "",
-            slug=membership.workspace.slug if membership.workspace else "",
-            roles=sorted(role.slug for role in roles),
-            permissions=sorted(permissions),
-            is_default=membership.is_default,
-            processing_paused=self._processing_paused(membership.workspace),
-        )
+        fallback = memberships[0]
         logger.info(
-            "workspace.profile.default_success",
+            "workspace.profile.default_fallback",
             extra=log_context(
                 user_id=user_id,
-                workspace_id=workspace_identifier,
-                roles=profile.roles,
-                permissions=len(profile.permissions),
-                is_default=profile.is_default,
+                workspace_id=fallback.id,
+                roles=fallback.roles,
+                permissions=len(fallback.permissions),
             ),
         )
-        return profile
+        return fallback
 
     def list_memberships(
         self,
@@ -279,7 +301,7 @@ class WorkspacesService:
                 permissions = self._rbac.get_workspace_permissions_for_user(
                     user=user, workspace_id=workspace.id
                 )
-                roles = self._workspace_roles_for_user(
+                role_slugs = self._workspace_role_slugs_for_user(
                     user_id=user_id,
                     workspace_id=workspace.id,
                 )
@@ -292,7 +314,7 @@ class WorkspacesService:
                         id=workspace.id,
                         name=workspace.name,
                         slug=workspace.slug,
-                        roles=sorted(role.slug for role in roles),
+                        roles=sorted(role_slugs),
                         permissions=sorted(permissions),
                         is_default=membership.is_default if membership else False,
                         processing_paused=self._processing_paused(workspace),
@@ -301,24 +323,36 @@ class WorkspacesService:
             profiles.sort(key=lambda profile: profile.slug)
         else:
             memberships = self._repo.list_for_user(user_id=user_id)
-            for membership in memberships:
-                roles = self._workspace_roles_for_user(
-                    user_id=user_id,
-                    workspace_id=membership.workspace_id,
-                )
+            membership_by_workspace = {
+                membership.workspace_id: membership
+                for membership in memberships
+            }
+            workspace_ids = self._workspace_ids_with_access(user=user)
+            workspace_ids.update(membership_by_workspace.keys())
+            for workspace_id in workspace_ids:
+                workspace = self._repo.get_workspace(workspace_id)
+                if workspace is None:
+                    continue
                 permissions = self._rbac.get_workspace_permissions_for_user(
                     user=user,
-                    workspace_id=membership.workspace_id,
+                    workspace_id=workspace_id,
+                )
+                if not permissions:
+                    continue
+                membership = membership_by_workspace.get(workspace_id)
+                role_slugs = self._workspace_role_slugs_for_user(
+                    user_id=user_id,
+                    workspace_id=workspace_id,
                 )
                 profiles.append(
                     WorkspaceOut(
-                        id=membership.workspace_id,
-                        name=membership.workspace.name if membership.workspace else "",
-                        slug=membership.workspace.slug if membership.workspace else "",
-                        roles=sorted(role.slug for role in roles),
+                        id=workspace.id,
+                        name=workspace.name,
+                        slug=workspace.slug,
+                        roles=sorted(role_slugs),
                         permissions=sorted(permissions),
-                        is_default=membership.is_default,
-                        processing_paused=self._processing_paused(membership.workspace),
+                        is_default=membership.is_default if membership else False,
+                        processing_paused=self._processing_paused(workspace),
                     )
                 )
             profiles.sort(key=lambda profile: profile.slug)
@@ -504,7 +538,7 @@ class WorkspacesService:
             user_id=user.id,
             workspace_id=workspace_id,
         )
-        roles = self._workspace_roles_for_user(
+        role_slugs = self._workspace_role_slugs_for_user(
             user_id=user.id,
             workspace_id=workspace_id,
         )
@@ -512,7 +546,7 @@ class WorkspacesService:
             id=workspace.id,
             name=workspace.name,
             slug=workspace.slug,
-            roles=sorted(role.slug for role in roles),
+            roles=sorted(role_slugs),
             permissions=sorted(permissions),
             is_default=membership.is_default if membership else False,
             processing_paused=self._processing_paused(workspace),
@@ -548,9 +582,19 @@ class WorkspacesService:
             workspace_id=workspace_id,
         )
         if membership is None:
-            raise HTTPException(
-                status.HTTP_404_NOT_FOUND,
-                detail="Workspace not found",
+            permissions = self._rbac.get_workspace_permissions_for_user(
+                user=user,
+                workspace_id=workspace_id,
+            )
+            if not permissions:
+                raise HTTPException(
+                    status.HTTP_404_NOT_FOUND,
+                    detail="Workspace not found",
+                )
+            membership = self._repo.create_membership(
+                workspace_id=workspace_id,
+                user_id=user.id,
+                is_default=False,
             )
 
         self._session.execute(
@@ -972,23 +1016,109 @@ class WorkspacesService:
         if membership is not None:
             self._repo.delete_membership(membership)
 
-    def _workspace_roles_for_user(
+    def _workspace_role_slugs_for_user(
         self,
         *,
         user_id: UUID,
         workspace_id: UUID,
-    ) -> list[Role]:
-        stmt = (
-            select(Role)
-            .options(selectinload(Role.permissions).selectinload(RolePermission.permission))
+    ) -> list[str]:
+        role_slugs: set[str] = set()
+
+        legacy_stmt = (
+            select(Role.slug)
             .join(UserRoleAssignment, UserRoleAssignment.role_id == Role.id)
             .where(
                 UserRoleAssignment.user_id == user_id,
                 UserRoleAssignment.workspace_id == workspace_id,
             )
         )
-        result = self._session.execute(stmt)
-        return list(result.scalars().all())
+        role_slugs.update(self._session.execute(legacy_stmt).scalars().all())
+
+        direct_stmt = (
+            select(Role.slug)
+            .join(RoleAssignment, RoleAssignment.role_id == Role.id)
+            .where(
+                RoleAssignment.principal_type == PrincipalType.USER,
+                RoleAssignment.principal_id == user_id,
+                RoleAssignment.scope_type == AssignmentScopeType.WORKSPACE,
+                RoleAssignment.scope_id == workspace_id,
+            )
+        )
+        role_slugs.update(self._session.execute(direct_stmt).scalars().all())
+
+        group_stmt = (
+            select(Role.slug)
+            .join(RoleAssignment, RoleAssignment.role_id == Role.id)
+            .join(
+                GroupMembership,
+                GroupMembership.group_id == RoleAssignment.principal_id,
+            )
+            .join(Group, Group.id == GroupMembership.group_id)
+            .where(
+                RoleAssignment.principal_type == PrincipalType.GROUP,
+                RoleAssignment.scope_type == AssignmentScopeType.WORKSPACE,
+                RoleAssignment.scope_id == workspace_id,
+                GroupMembership.user_id == user_id,
+                Group.is_active == true(),
+            )
+        )
+        role_slugs.update(self._session.execute(group_stmt).scalars().all())
+
+        return sorted(slug for slug in role_slugs if slug)
+
+    def _workspace_ids_with_access(self, *, user: User) -> set[UUID]:
+        workspace_ids: set[UUID] = set()
+
+        legacy_stmt = (
+            select(UserRoleAssignment.workspace_id)
+            .where(
+                UserRoleAssignment.user_id == user.id,
+                UserRoleAssignment.workspace_id.is_not(None),
+            )
+        )
+        workspace_ids.update(
+            workspace_id
+            for workspace_id in self._session.execute(legacy_stmt).scalars().all()
+            if workspace_id is not None
+        )
+
+        direct_stmt = (
+            select(RoleAssignment.scope_id)
+            .where(
+                RoleAssignment.principal_type == PrincipalType.USER,
+                RoleAssignment.principal_id == user.id,
+                RoleAssignment.scope_type == AssignmentScopeType.WORKSPACE,
+                RoleAssignment.scope_id.is_not(None),
+            )
+        )
+        workspace_ids.update(
+            workspace_id
+            for workspace_id in self._session.execute(direct_stmt).scalars().all()
+            if workspace_id is not None
+        )
+
+        group_stmt = (
+            select(RoleAssignment.scope_id)
+            .join(
+                GroupMembership,
+                GroupMembership.group_id == RoleAssignment.principal_id,
+            )
+            .join(Group, Group.id == GroupMembership.group_id)
+            .where(
+                RoleAssignment.principal_type == PrincipalType.GROUP,
+                RoleAssignment.scope_type == AssignmentScopeType.WORKSPACE,
+                RoleAssignment.scope_id.is_not(None),
+                GroupMembership.user_id == user.id,
+                Group.is_active == true(),
+            )
+        )
+        workspace_ids.update(
+            workspace_id
+            for workspace_id in self._session.execute(group_stmt).scalars().all()
+            if workspace_id is not None
+        )
+
+        return workspace_ids
 
     def _default_workspace_role_ids(self) -> list[UUID]:
         role = self._rbac.get_role_by_slug(slug=_WORKSPACE_MEMBER_SLUG)

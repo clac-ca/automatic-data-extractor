@@ -368,3 +368,134 @@ async def test_deactivate_user_blocks_self(
         headers={"X-API-Key": token},
     )
     assert response.status_code == 400
+
+
+async def test_user_member_of_routes_manage_membership(
+    async_client: AsyncClient,
+    seed_identity,
+) -> None:
+    admin = seed_identity.admin
+    target_user = seed_identity.orphan
+    admin_token, _ = await login(async_client, email=admin.email, password=admin.password)
+
+    create_group_response = await async_client.post(
+        "/api/v1/groups",
+        headers={"X-API-Key": admin_token},
+        json={
+            "display_name": "Finance Users",
+            "slug": "finance-users",
+            "membership_mode": "assigned",
+            "source": "internal",
+        },
+    )
+    assert create_group_response.status_code == 201, create_group_response.text
+    group_id = create_group_response.json()["id"]
+
+    add_member_of = await async_client.post(
+        f"/api/v1/users/{target_user.id}/memberOf/$ref",
+        headers={"X-API-Key": admin_token},
+        json={"groupId": group_id},
+    )
+    assert add_member_of.status_code == 200, add_member_of.text
+    added_items = add_member_of.json()["items"]
+    assert any(
+        item["group_id"] == group_id
+        and item["is_member"] is True
+        and item["is_owner"] is False
+        for item in added_items
+    )
+
+    list_member_of = await async_client.get(
+        f"/api/v1/users/{target_user.id}/memberOf",
+        headers={"X-API-Key": admin_token},
+    )
+    assert list_member_of.status_code == 200, list_member_of.text
+    listed_items = list_member_of.json()["items"]
+    assert any(item["group_id"] == group_id for item in listed_items)
+
+    remove_member_of = await async_client.delete(
+        f"/api/v1/users/{target_user.id}/memberOf/{group_id}/$ref",
+        headers={"X-API-Key": admin_token},
+    )
+    assert remove_member_of.status_code == 204, remove_member_of.text
+
+    list_after_remove = await async_client.get(
+        f"/api/v1/users/{target_user.id}/memberOf",
+        headers={"X-API-Key": admin_token},
+    )
+    assert list_after_remove.status_code == 200, list_after_remove.text
+    assert all(item["group_id"] != group_id for item in list_after_remove.json()["items"])
+
+
+async def test_user_member_of_routes_require_permissions(
+    async_client: AsyncClient,
+    seed_identity,
+) -> None:
+    admin = seed_identity.admin
+    member = seed_identity.member
+    target_user = seed_identity.orphan
+    admin_token, _ = await login(async_client, email=admin.email, password=admin.password)
+    member_token, _ = await login(async_client, email=member.email, password=member.password)
+
+    create_group_response = await async_client.post(
+        "/api/v1/groups",
+        headers={"X-API-Key": admin_token},
+        json={
+            "display_name": "Permission Locked Group",
+            "slug": "permission-locked-group",
+            "membership_mode": "assigned",
+            "source": "internal",
+        },
+    )
+    assert create_group_response.status_code == 201, create_group_response.text
+    group_id = create_group_response.json()["id"]
+
+    list_member_of = await async_client.get(
+        f"/api/v1/users/{target_user.id}/memberOf",
+        headers={"X-API-Key": member_token},
+    )
+    assert list_member_of.status_code == 403, list_member_of.text
+
+    add_member_of = await async_client.post(
+        f"/api/v1/users/{target_user.id}/memberOf/$ref",
+        headers={"X-API-Key": member_token},
+        json={"groupId": group_id},
+    )
+    assert add_member_of.status_code == 403, add_member_of.text
+
+    remove_member_of = await async_client.delete(
+        f"/api/v1/users/{target_user.id}/memberOf/{group_id}/$ref",
+        headers={"X-API-Key": member_token},
+    )
+    assert remove_member_of.status_code == 403, remove_member_of.text
+
+
+async def test_user_member_of_mutation_returns_conflict_for_provider_managed_group(
+    async_client: AsyncClient,
+    seed_identity,
+) -> None:
+    admin = seed_identity.admin
+    target_user = seed_identity.orphan
+    admin_token, _ = await login(async_client, email=admin.email, password=admin.password)
+
+    create_group_response = await async_client.post(
+        "/api/v1/groups",
+        headers={"X-API-Key": admin_token},
+        json={
+            "display_name": "Synced Locked Group",
+            "slug": "synced-locked-group",
+            "membership_mode": "assigned",
+            "source": "idp",
+            "external_id": "provider-locked-1",
+        },
+    )
+    assert create_group_response.status_code == 201, create_group_response.text
+    group_id = create_group_response.json()["id"]
+
+    add_member_of = await async_client.post(
+        f"/api/v1/users/{target_user.id}/memberOf/$ref",
+        headers={"X-API-Key": admin_token},
+        json={"groupId": group_id},
+    )
+    assert add_member_of.status_code == 409, add_member_of.text
+    assert add_member_of.json()["detail"] == "Provider-managed group memberships are read-only"

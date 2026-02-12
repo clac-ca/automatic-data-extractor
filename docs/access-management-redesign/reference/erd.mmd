@@ -1,0 +1,106 @@
+erDiagram
+    USERS {
+        uuid id PK
+        string email
+        string email_normalized
+        string display_name
+        boolean is_active
+        string given_name
+        string surname
+        string job_title
+        string department
+        string office_location
+        string mobile_phone
+        json business_phones
+        string employee_id
+        string source
+        string external_id
+        datetime created_at
+        datetime updated_at
+    }
+
+    GROUPS {
+        uuid id PK
+        string display_name
+        string slug
+        string description
+        string membership_mode
+        string source
+        string external_id
+        boolean is_active
+        datetime created_at
+        datetime updated_at
+    }
+
+    GROUP_MEMBERSHIPS {
+        uuid id PK
+        uuid group_id FK
+        uuid user_id FK
+        string membership_source
+        datetime created_at
+        datetime updated_at
+    }
+
+    ROLES {
+        uuid id PK
+        string slug
+        string name
+        string scope_type
+        boolean is_system
+        boolean is_editable
+        datetime created_at
+        datetime updated_at
+    }
+
+    ROLE_ASSIGNMENTS {
+        uuid id PK
+        string principal_type
+        uuid principal_id
+        uuid role_id FK
+        string scope_type
+        uuid scope_id
+        datetime created_at
+    }
+
+    WORKSPACES {
+        uuid id PK
+        string name
+        string slug
+        datetime created_at
+        datetime updated_at
+    }
+
+    INVITATIONS {
+        uuid id PK
+        string email_normalized
+        uuid invited_user_id FK
+        uuid invited_by_user_id FK
+        string status
+        datetime expires_at
+        datetime redeemed_at
+        json metadata
+        datetime created_at
+        datetime updated_at
+    }
+
+    SSO_IDENTITIES {
+        uuid id PK
+        string provider_id
+        string subject
+        uuid user_id FK
+        string email
+        datetime created_at
+    }
+
+    USERS ||--o{ GROUP_MEMBERSHIPS : "is member"
+    GROUPS ||--o{ GROUP_MEMBERSHIPS : "contains"
+
+    ROLES ||--o{ ROLE_ASSIGNMENTS : "assigned as"
+
+    USERS ||--o{ INVITATIONS : "invited_by"
+    USERS ||--o{ INVITATIONS : "invited_user"
+
+    USERS ||--o{ SSO_IDENTITIES : "linked identity"
+
+    WORKSPACES ||--o{ ROLE_ASSIGNMENTS : "workspace scope"
+

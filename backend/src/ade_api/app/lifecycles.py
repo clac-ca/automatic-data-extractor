@@ -293,7 +293,6 @@ def create_application_lifespan(
                 raise RuntimeError(str(exc)) from exc
             await asyncio.to_thread(_sync_sso_env_providers)
             await asyncio.to_thread(_maintain_document_changes)
-
             events_hub = DocumentChangesHub(settings=settings)
             events_hub.start(loop=asyncio.get_running_loop())
             app.state.document_changes_hub = events_hub

@@ -126,9 +126,13 @@ class Settings(
     auth_password_require_symbol: bool = False
     auth_password_lockout_max_attempts: int = Field(5, ge=1, le=20)
     auth_password_lockout_duration_seconds: int = Field(300, ge=30, le=86_400)
-    auth_idp_jit_provisioning_enabled: bool = True
+    auth_idp_provisioning_mode: Literal["disabled", "jit", "scim"] = "jit"
     auth_sso_providers_json: str | None = None
     sso_encryption_key: SecretStr | None = None
+    auth_group_sync_provider: Literal["entra"] = "entra"
+    auth_group_sync_tenant_id: str | None = None
+    auth_group_sync_client_id: str | None = None
+    auth_group_sync_client_secret: SecretStr | None = None
 
     # Runs
     preview_timeout_seconds: float = Field(10, gt=0)
@@ -215,7 +219,7 @@ class Settings(
                 + ", ".join(removed_set)
                 + (
                     ". Use ADE_AUTH_MODE, ADE_AUTH_PASSWORD_*, and "
-                    "ADE_AUTH_IDP_JIT_PROVISIONING_ENABLED."
+                    "ADE_AUTH_IDP_PROVISIONING_MODE."
                 )
             )
 
