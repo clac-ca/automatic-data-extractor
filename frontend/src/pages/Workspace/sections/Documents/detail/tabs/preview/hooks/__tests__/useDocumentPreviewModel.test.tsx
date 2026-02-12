@@ -61,7 +61,7 @@ describe("useDocumentPreviewModel", () => {
   it("passes compact preferences to document preview requests", async () => {
     const fetchDocumentSheetsSpy = vi
       .spyOn(documentsApi, "fetchDocumentSheets")
-      .mockResolvedValue([{ name: "Sheet A", index: 0, is_active: true }]);
+      .mockResolvedValue([{ name: "Sheet A", index: 0, kind: "worksheet", is_active: true }]);
     const fetchDocumentPreviewSpy = vi.spyOn(documentsApi, "fetchDocumentPreview").mockResolvedValue({
       name: "Sheet A",
       index: 0,
@@ -132,7 +132,7 @@ describe("useDocumentPreviewModel", () => {
 
   it("builds explicit visible-vs-total summary labels for reduced previews", async () => {
     vi.spyOn(documentsApi, "fetchDocumentSheets").mockResolvedValue([
-      { name: "Sheet A", index: 0, is_active: true },
+      { name: "Sheet A", index: 0, kind: "worksheet", is_active: true },
     ]);
     vi.spyOn(documentsApi, "fetchDocumentPreview").mockResolvedValue({
       name: "Sheet A",
