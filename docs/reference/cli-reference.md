@@ -54,9 +54,9 @@ Common API options:
 - `ade-api start --processes N`
 - `ade-api dev --processes N` (disables reload when `N > 1`)
 
-API docs (opt-in):
+API docs:
 
-- Set `ADE_API_DOCS_ENABLED=true` to expose:
+- API docs are enabled by default. Set `ADE_API_DOCS_ENABLED=false` to disable:
   - ReDoc at `/api`
   - Swagger UI at `/api/swagger`
   - OpenAPI JSON at `/api/openapi.json`

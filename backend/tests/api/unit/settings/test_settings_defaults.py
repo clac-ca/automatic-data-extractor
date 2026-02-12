@@ -22,7 +22,7 @@ def test_settings_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.app_name == "Automatic Data Extractor API"
     assert settings.app_version == "unknown"
     assert settings.app_commit_sha == "unknown"
-    assert settings.api_docs_enabled is False
+    assert settings.api_docs_enabled is True
     assert settings.api_docs_access_mode == "authenticated"
     assert settings.docs_url == "/api/swagger"
     assert settings.redoc_url == "/api"
