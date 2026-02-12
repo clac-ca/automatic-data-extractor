@@ -55,7 +55,7 @@ dev = [
   "pytest-cov==7.0.0",
   "asgi-lifespan==2.1.0",
   "mypy==1.19.1",
-  "ruff==0.15.0",
+  "ruff==0.14.14",
   "openapi-spec-validator==0.7.2",
 ]
 
