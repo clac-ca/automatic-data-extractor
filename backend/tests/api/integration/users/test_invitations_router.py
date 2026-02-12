@@ -10,6 +10,7 @@ from uuid import UUID
 from ade_db.models import (
     AssignmentScopeType,
     Invitation,
+    InvitationStatus,
     PrincipalType,
     Role,
     RoleAssignment,
@@ -276,3 +277,120 @@ async def test_invitation_metadata_with_invalid_workspace_id_is_forbidden(
         headers={"X-API-Key": owner_token},
     )
     assert cancel_response.status_code == 403, cancel_response.text
+
+
+async def test_pending_invitation_transitions_to_expired_and_filters_correctly(
+    async_client: AsyncClient,
+    seed_identity,
+    db_session: Session,
+) -> None:
+    owner = seed_identity.workspace_owner
+    owner_token, _ = await login(async_client, email=owner.email, password=owner.password)
+    workspace_member_role_id = await anyio.to_thread.run_sync(
+        _workspace_member_role_id,
+        db_session,
+    )
+
+    create_response = await async_client.post(
+        "/api/v1/invitations",
+        json={
+            "invitedUserEmail": "expire-transition@example.com",
+            "workspaceContext": {
+                "workspaceId": str(seed_identity.workspace_id),
+                "roleAssignments": [{"roleId": workspace_member_role_id}],
+            },
+        },
+        headers={"X-API-Key": owner_token},
+    )
+    assert create_response.status_code == 201, create_response.text
+    invitation_id = create_response.json()["id"]
+    invitation_uuid = UUID(invitation_id)
+
+    invitation = db_session.get(Invitation, invitation_uuid)
+    assert invitation is not None
+    invitation.status = InvitationStatus.PENDING
+    invitation.expires_at = invitation.created_at
+    db_session.flush()
+
+    detail_response = await async_client.get(
+        f"/api/v1/invitations/{invitation_id}",
+        headers={"X-API-Key": owner_token},
+    )
+    assert detail_response.status_code == 200, detail_response.text
+    assert detail_response.json()["status"] == "expired"
+
+    expired_list = await async_client.get(
+        "/api/v1/invitations",
+        params={
+            "workspace_id": str(seed_identity.workspace_id),
+            "invitation_status": "expired",
+        },
+        headers={"X-API-Key": owner_token},
+    )
+    assert expired_list.status_code == 200, expired_list.text
+    expired_ids = {item["id"] for item in expired_list.json().get("items", [])}
+    assert invitation_id in expired_ids
+
+    pending_list = await async_client.get(
+        "/api/v1/invitations",
+        params={
+            "workspace_id": str(seed_identity.workspace_id),
+            "invitation_status": "pending",
+        },
+        headers={"X-API-Key": owner_token},
+    )
+    assert pending_list.status_code == 200, pending_list.text
+    pending_ids = {item["id"] for item in pending_list.json().get("items", [])}
+    assert invitation_id not in pending_ids
+
+
+async def test_resend_cancelled_invitation_returns_conflict_without_mutating_expiry(
+    async_client: AsyncClient,
+    seed_identity,
+    db_session: Session,
+) -> None:
+    owner = seed_identity.workspace_owner
+    owner_token, _ = await login(async_client, email=owner.email, password=owner.password)
+    workspace_member_role_id = await anyio.to_thread.run_sync(
+        _workspace_member_role_id,
+        db_session,
+    )
+
+    create_response = await async_client.post(
+        "/api/v1/invitations",
+        json={
+            "invitedUserEmail": "cancelled-resend@example.com",
+            "workspaceContext": {
+                "workspaceId": str(seed_identity.workspace_id),
+                "roleAssignments": [{"roleId": workspace_member_role_id}],
+            },
+        },
+        headers={"X-API-Key": owner_token},
+    )
+    assert create_response.status_code == 201, create_response.text
+    invitation_id = create_response.json()["id"]
+    invitation_uuid = UUID(invitation_id)
+
+    cancel_response = await async_client.post(
+        f"/api/v1/invitations/{invitation_id}/cancel",
+        headers={"X-API-Key": owner_token},
+    )
+    assert cancel_response.status_code == 200, cancel_response.text
+
+    db_session.expire_all()
+    cancelled_invitation = db_session.get(Invitation, invitation_uuid)
+    assert cancelled_invitation is not None
+    assert cancelled_invitation.status == InvitationStatus.CANCELLED
+    cancelled_expiry = cancelled_invitation.expires_at
+
+    resend_response = await async_client.post(
+        f"/api/v1/invitations/{invitation_id}/resend",
+        headers={"X-API-Key": owner_token},
+    )
+    assert resend_response.status_code == 409, resend_response.text
+
+    db_session.expire_all()
+    invitation_after = db_session.get(Invitation, invitation_uuid)
+    assert invitation_after is not None
+    assert invitation_after.status == InvitationStatus.CANCELLED
+    assert invitation_after.expires_at == cancelled_expiry

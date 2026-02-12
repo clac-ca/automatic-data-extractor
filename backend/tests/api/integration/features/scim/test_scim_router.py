@@ -415,3 +415,70 @@ async def test_scim_group_patch_filtered_remove_only_removes_target_member(
     assert invalid_filter.status_code == 400, invalid_filter.text
     invalid_payload = invalid_filter.json()
     assert invalid_payload["scimType"] == "invalidPath"
+
+
+async def test_scim_patch_remove_phone_paths_clear_stored_values(
+    async_client: AsyncClient,
+    seed_identity,
+    db_session: Session,
+) -> None:
+    headers = await _admin_headers(async_client, seed_identity)
+    await _set_provisioning_mode(async_client, admin_headers=headers, mode="scim")
+    token, _ = await _create_scim_token(async_client, admin_headers=headers)
+    scim_headers = {"Authorization": f"Bearer {token}"}
+
+    create_user = await async_client.post(
+        "/scim/v2/Users",
+        headers=scim_headers,
+        json={
+            "schemas": [_USER_SCHEMA, _ENTERPRISE_USER_SCHEMA],
+            "userName": "scim.remove.phone@example.com",
+            "externalId": "remove-phone-user",
+            "phoneNumbers": [
+                {"type": "mobile", "value": "+1 555 100 1000"},
+                {"type": "work", "value": "+1 555 200 2000"},
+            ],
+            "active": True,
+        },
+    )
+    assert create_user.status_code == 201, create_user.text
+    user_id = UUID(create_user.json()["id"])
+
+    remove_mobile = await async_client.patch(
+        f"/scim/v2/Users/{user_id}",
+        headers=scim_headers,
+        json={
+            "schemas": ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+            "Operations": [
+                {
+                    "op": "remove",
+                    "path": 'phoneNumbers[type eq "mobile"].value',
+                }
+            ],
+        },
+    )
+    assert remove_mobile.status_code == 200, remove_mobile.text
+    phone_values = {(item.get("type"), item.get("value")) for item in remove_mobile.json().get("phoneNumbers", [])}
+    assert ("mobile", "+1 555 100 1000") not in phone_values
+    assert ("work", "+1 555 200 2000") in phone_values
+
+    db_user = db_session.get(User, user_id)
+    assert db_user is not None
+    assert db_user.mobile_phone is None
+    assert db_user.business_phones is not None
+
+    remove_all_phones = await async_client.patch(
+        f"/scim/v2/Users/{user_id}",
+        headers=scim_headers,
+        json={
+            "schemas": ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+            "Operations": [{"op": "remove", "path": "phoneNumbers"}],
+        },
+    )
+    assert remove_all_phones.status_code == 200, remove_all_phones.text
+    assert remove_all_phones.json().get("phoneNumbers") == []
+
+    db_user = db_session.get(User, user_id)
+    assert db_user is not None
+    assert db_user.mobile_phone is None
+    assert db_user.business_phones is None
