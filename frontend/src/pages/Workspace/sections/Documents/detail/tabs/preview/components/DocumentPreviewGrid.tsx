@@ -1,13 +1,27 @@
-import { Skeleton } from "@/components/ui/skeleton";
+import { useCallback, useMemo } from "react";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+  DataEditor,
+  GridCellKind,
+  type GridColumn,
+  type Item,
+  type TextCell,
+  type Theme,
+} from "@glideapps/glide-data-grid";
+
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+
+const GRID_ROW_HEIGHT = 24;
+const GRID_HEADER_HEIGHT = 28;
+const GRID_ROW_MARKER_WIDTH = 44;
+
+const COMPACT_GRID_THEME: Partial<Theme> = {
+  baseFontStyle: "12px Inter, sans-serif",
+  headerFontStyle: "600 11px Inter, sans-serif",
+  editorFontSize: "12px",
+  cellHorizontalPadding: 6,
+  cellVerticalPadding: 2,
+};
 
 export function DocumentPreviewGrid({
   hasSheetError,
@@ -17,6 +31,7 @@ export function DocumentPreviewGrid({
   hasData,
   rows,
   columnLabels,
+  className,
 }: {
   hasSheetError: boolean;
   hasPreviewError: boolean;
@@ -25,7 +40,35 @@ export function DocumentPreviewGrid({
   hasData: boolean;
   rows: unknown[][];
   columnLabels: string[];
+  className?: string;
 }) {
+  const gridRows = useMemo(() => {
+    return rows.map((row) => (Array.isArray(row) ? row.map(renderPreviewCell) : []));
+  }, [rows]);
+
+  const columns = useMemo<readonly GridColumn[]>(() => {
+    return columnLabels.map((label, columnIndex) => ({
+      id: `column-${columnIndex}`,
+      title: label,
+      width: estimateColumnWidth(label, columnIndex, gridRows),
+    }));
+  }, [columnLabels, gridRows]);
+
+  const getCellContent = useCallback(
+    ([columnIndex, rowIndex]: Item): TextCell => {
+      const value = gridRows[rowIndex]?.[columnIndex] ?? "";
+
+      return {
+        kind: GridCellKind.Text,
+        data: value,
+        displayData: value,
+        allowOverlay: false,
+        readonly: true,
+      };
+    },
+    [gridRows],
+  );
+
   if (hasSheetError || hasPreviewError) {
     return (
       <div className="rounded-lg border border-border bg-background p-4 text-sm text-muted-foreground">
@@ -54,50 +97,37 @@ export function DocumentPreviewGrid({
     );
   }
 
-  return (
-    <div className="overflow-hidden rounded-lg border border-border bg-background">
-      <Table className="min-w-[720px]">
-        <TableHeader>
-          <TableRow>
-            <TableHead className="sticky left-0 z-20 w-12 bg-muted/50 text-center">#</TableHead>
-            {columnLabels.map((label, index) => (
-              <TableHead key={`${label}-${index}`} className="min-w-24 bg-muted/30 text-center font-mono text-xs">
-                {label}
-              </TableHead>
-            ))}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.length === 0 ? (
-            <TableRow>
-              <TableCell colSpan={Math.max(columnLabels.length + 1, 1)} className="text-sm text-muted-foreground">
-                No rows available in the preview.
-              </TableCell>
-            </TableRow>
-          ) : (
-            rows.map((row, rowIndex) => {
-              const cells = Array.isArray(row) ? row : [];
+  if (gridRows.length === 0) {
+    return (
+      <div className="rounded-lg border border-border bg-background p-4 text-sm text-muted-foreground">
+        No rows available in the preview.
+      </div>
+    );
+  }
 
-              return (
-                <TableRow key={`row-${rowIndex}`}>
-                  <TableCell className="sticky left-0 z-10 w-12 bg-muted/40 text-center font-mono text-xs text-muted-foreground">
-                    {rowIndex + 1}
-                  </TableCell>
-                  {columnLabels.map((_, colIndex) => (
-                    <TableCell
-                      key={`cell-${rowIndex}-${colIndex}`}
-                      className={cn("max-w-64 truncate")}
-                      title={renderPreviewCell(cells[colIndex])}
-                    >
-                      {renderPreviewCell(cells[colIndex])}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              );
-            })
-          )}
-        </TableBody>
-      </Table>
+  return (
+    <div className={cn("h-full overflow-hidden rounded-lg border border-border bg-background", className)}>
+      <DataEditor
+        width="100%"
+        height="100%"
+        columns={columns}
+        rows={gridRows.length}
+        getCellContent={getCellContent}
+        getCellsForSelection={true}
+        rowMarkers={{
+          kind: "number",
+          startIndex: 1,
+          width: GRID_ROW_MARKER_WIDTH,
+        }}
+        rowHeight={GRID_ROW_HEIGHT}
+        headerHeight={GRID_HEADER_HEIGHT}
+        smoothScrollX
+        smoothScrollY
+        fixedShadowX
+        fixedShadowY
+        onPaste={false}
+        theme={COMPACT_GRID_THEME}
+      />
     </div>
   );
 }
@@ -115,6 +145,25 @@ function LoadingState() {
       ))}
     </div>
   );
+}
+
+function estimateColumnWidth(label: string, columnIndex: number, rows: string[][]): number {
+  const sampleSize = Math.min(rows.length, 40);
+  let maxLength = label.length;
+
+  for (let index = 0; index < sampleSize; index += 1) {
+    const length = (rows[index]?.[columnIndex] ?? "").length;
+    if (length > maxLength) {
+      maxLength = length;
+    }
+  }
+
+  const estimated = maxLength * 7 + 24;
+  return clamp(estimated, 72, 220);
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
 }
 
 function renderPreviewCell(value: unknown): string {

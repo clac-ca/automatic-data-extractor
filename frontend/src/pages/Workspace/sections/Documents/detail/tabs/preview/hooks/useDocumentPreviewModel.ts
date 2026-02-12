@@ -14,6 +14,7 @@ import type { DocumentPreviewSource } from "@/pages/Workspace/sections/Documents
 import type { DocumentRow } from "@/pages/Workspace/sections/Documents/shared/types";
 
 import { getNormalizedPreviewState } from "../state";
+import { buildPreviewCountSummary, type PreviewDisplayPreferences } from "../model";
 
 const DEFAULT_MAX_ROWS = 200;
 const DEFAULT_MAX_COLUMNS = 50;
@@ -51,12 +52,14 @@ export function useDocumentPreviewModel({
   source,
   sheet,
   onSheetChange,
+  displayPreferences,
 }: {
   workspaceId: string;
   document: DocumentRow;
   source: DocumentPreviewSource;
   sheet: string | null;
   onSheetChange: (sheet: string | null) => void;
+  displayPreferences: PreviewDisplayPreferences;
 }) {
   const normalizedState = getNormalizedPreviewState(document);
   const normalizedRunId = normalizedState.available ? document.lastRun?.id ?? null : null;
@@ -123,11 +126,15 @@ export function useDocumentPreviewModel({
       selectedSheet?.index ?? null,
       DEFAULT_MAX_ROWS,
       DEFAULT_MAX_COLUMNS,
+      displayPreferences.trimEmptyRows,
+      displayPreferences.trimEmptyColumns,
     ],
     queryFn: ({ signal }) => {
       const options = {
         maxRows: DEFAULT_MAX_ROWS,
         maxColumns: DEFAULT_MAX_COLUMNS,
+        trimEmptyRows: displayPreferences.trimEmptyRows,
+        trimEmptyColumns: displayPreferences.trimEmptyColumns,
         sheetIndex: selectedSheet?.index ?? undefined,
       };
 
@@ -170,12 +177,23 @@ export function useDocumentPreviewModel({
     };
   }, [previewQuery.data]);
 
+  const previewCountSummary = useMemo(
+    () =>
+      buildPreviewCountSummary({
+        previewMeta,
+        visibleRowCount: previewRows.length,
+        visibleColumnCount: columnLabels.length,
+      }),
+    [columnLabels.length, previewMeta, previewRows.length],
+  );
+
   return {
     sheets,
     selectedSheet,
     previewRows,
     columnLabels,
     previewMeta,
+    previewCountSummary,
     normalizedState,
     canLoadSelectedSource,
     isLoading: sheetsQuery.isLoading || previewQuery.isLoading,
