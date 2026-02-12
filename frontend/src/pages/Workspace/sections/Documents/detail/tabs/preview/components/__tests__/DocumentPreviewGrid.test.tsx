@@ -1,9 +1,18 @@
 import type { ComponentProps } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { render, screen } from "@/test/test-utils";
 
 const dataEditorMock = vi.fn();
+const useGlideDataEditorThemeMock = vi.fn(() => ({
+  accentColor: "#123456",
+  bgCell: "#101112",
+  textDark: "#f8f9fa",
+}));
+
+vi.mock("@/providers/theme/glideTheme", () => ({
+  useGlideDataEditorTheme: () => useGlideDataEditorThemeMock(),
+}));
 
 vi.mock("@glideapps/glide-data-grid", () => ({
   GridCellKind: {
@@ -36,6 +45,11 @@ function renderGrid(overrides: Partial<ComponentProps<typeof DocumentPreviewGrid
 }
 
 describe("DocumentPreviewGrid", () => {
+  beforeEach(() => {
+    dataEditorMock.mockClear();
+    useGlideDataEditorThemeMock.mockClear();
+  });
+
   it("renders Glide DataEditor with compact, read-only defaults", () => {
     renderGrid();
 
@@ -55,6 +69,19 @@ describe("DocumentPreviewGrid", () => {
     expect(props.smoothScrollY).toBe(true);
     expect(props.fixedShadowX).toBe(true);
     expect(props.fixedShadowY).toBe(true);
+    expect(useGlideDataEditorThemeMock).toHaveBeenCalledTimes(1);
+    expect(props.theme).toEqual(
+      expect.objectContaining({
+        accentColor: "#123456",
+        bgCell: "#101112",
+        textDark: "#f8f9fa",
+        baseFontStyle: "12px Inter, sans-serif",
+        headerFontStyle: "600 11px Inter, sans-serif",
+        editorFontSize: "12px",
+        cellHorizontalPadding: 6,
+        cellVerticalPadding: 2,
+      }),
+    );
   });
 
   it("maps preview rows to read-only text cells", () => {

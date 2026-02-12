@@ -8,6 +8,7 @@ import {
   type Theme,
 } from "@glideapps/glide-data-grid";
 
+import { useGlideDataEditorTheme } from "@/providers/theme/glideTheme";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
@@ -15,7 +16,7 @@ const GRID_ROW_HEIGHT = 24;
 const GRID_HEADER_HEIGHT = 28;
 const GRID_ROW_MARKER_WIDTH = 44;
 
-const COMPACT_GRID_THEME: Partial<Theme> = {
+const COMPACT_GRID_DENSITY_THEME: Partial<Theme> = {
   baseFontStyle: "12px Inter, sans-serif",
   headerFontStyle: "600 11px Inter, sans-serif",
   editorFontSize: "12px",
@@ -42,6 +43,13 @@ export function DocumentPreviewGrid({
   columnLabels: string[];
   className?: string;
 }) {
+  const paletteTheme = useGlideDataEditorTheme();
+
+  const dataEditorTheme = useMemo(
+    () => ({ ...paletteTheme, ...COMPACT_GRID_DENSITY_THEME }),
+    [paletteTheme],
+  );
+
   const gridRows = useMemo(() => {
     return rows.map((row) => (Array.isArray(row) ? row.map(renderPreviewCell) : []));
   }, [rows]);
@@ -126,7 +134,7 @@ export function DocumentPreviewGrid({
         fixedShadowX
         fixedShadowY
         onPaste={false}
-        theme={COMPACT_GRID_THEME}
+        theme={dataEditorTheme}
       />
     </div>
   );
