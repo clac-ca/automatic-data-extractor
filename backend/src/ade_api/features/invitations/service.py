@@ -57,11 +57,9 @@ class InvitationsService:
         stmt = select(Invitation).order_by(Invitation.created_at.desc(), Invitation.id.desc())
         invitations = list(self._session.execute(stmt).scalars().all())
         now = utc_now()
-        transitioned = False
         filtered: list[Invitation] = []
         for invitation in invitations:
-            expired_now = self._transition_to_expired_if_needed(invitation=invitation, now=now)
-            transitioned = transitioned or expired_now
+            self._transition_to_expired_if_needed(invitation=invitation, now=now)
             metadata = invitation.metadata_payload or {}
             metadata_workspace = metadata.get("workspaceId")
             if workspace_id is not None and str(metadata_workspace or "") != str(workspace_id):
@@ -69,16 +67,13 @@ class InvitationsService:
             if status_value is not None and invitation.status != status_value:
                 continue
             filtered.append(invitation)
-        if transitioned:
-            self._session.flush()
         return InvitationListResponse(items=[self._serialize(item) for item in filtered])
 
     def get_invitation(self, *, invitation_id: UUID) -> Invitation:
         invitation = self._session.get(Invitation, invitation_id)
         if invitation is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Invitation not found")
-        if self._transition_to_expired_if_needed(invitation=invitation):
-            self._session.flush([invitation])
+        self._transition_to_expired_if_needed(invitation=invitation)
         return invitation
 
     def get_invitation_out(self, *, invitation_id: UUID) -> InvitationOut:
