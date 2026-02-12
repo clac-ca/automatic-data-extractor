@@ -150,14 +150,20 @@ export function useDocumentPreviewModel({
 
   const previewRows = useMemo(() => previewQuery.data?.rows ?? [], [previewQuery.data]);
 
+  const visibleColumnCount = useMemo(
+    () => previewRows.reduce((max, row) => Math.max(max, row.length), 0),
+    [previewRows],
+  );
+
   const columnLabels = useMemo(() => {
-    const fallbackColumnCount =
+    const totalColumnCount =
       typeof previewQuery.data?.totalColumns === "number"
         ? previewQuery.data.totalColumns
-        : previewRows.reduce((max, row) => Math.max(max, row.length), 0);
+        : visibleColumnCount;
+    const renderedColumnCount = displayPreferences.trimEmptyColumns ? visibleColumnCount : totalColumnCount;
 
-    return Array.from({ length: fallbackColumnCount }, (_, index) => spreadsheetColumnLabel(index));
-  }, [previewQuery.data?.totalColumns, previewRows]);
+    return Array.from({ length: renderedColumnCount }, (_, index) => spreadsheetColumnLabel(index));
+  }, [displayPreferences.trimEmptyColumns, previewQuery.data?.totalColumns, visibleColumnCount]);
 
   const previewMeta = useMemo(() => {
     if (!previewQuery.data) {

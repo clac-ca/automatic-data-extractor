@@ -161,7 +161,8 @@ describe("useDocumentPreviewModel", () => {
 
     await waitFor(() => {
       expect(result.current.previewCountSummary?.rowsVisibleLabel).toBe("Showing 2 of 10 rows");
-      expect(result.current.previewCountSummary?.columnsVisibleLabel).toBe("Showing first 8 columns");
+      expect(result.current.previewCountSummary?.columnsVisibleLabel).toBe("Showing 2 of 8 columns");
+      expect(result.current.columnLabels).toHaveLength(2);
     });
   });
 });
