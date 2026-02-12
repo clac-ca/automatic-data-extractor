@@ -14,6 +14,7 @@ export function DocumentPreviewHeader({
   previewMeta: {
     totalRows: number;
     totalColumns: number;
+    visibleColumns?: number;
     truncatedRows?: boolean;
     truncatedColumns?: boolean;
   } | null;
@@ -31,7 +32,7 @@ export function DocumentPreviewHeader({
               {previewMeta.totalRows.toLocaleString()} rows
             </Badge>
             <Badge variant="outline" className="bg-background">
-              {previewMeta.totalColumns.toLocaleString()} columns
+              {(previewMeta.visibleColumns ?? previewMeta.totalColumns).toLocaleString()} columns
             </Badge>
             {previewMeta.truncatedRows || previewMeta.truncatedColumns ? (
               <Badge variant="outline" className="bg-background">
