@@ -70,6 +70,13 @@ JWT bearer login is not part of the active auth model.
   - `idp_only`: members use IdP sign-in; global admins retain password + MFA break-glass access
 - IdP JIT provisioning is controlled by `auth.identityProvider.jitProvisioningEnabled`.
 
+## IdP Group Sync Behavior
+
+- Background group sync is entitlement sync, not user provisioning.
+- Group sync creates/updates IdP-managed groups and reconciles memberships for existing ADE users.
+- Unknown directory members are skipped until they have an ADE identity.
+- On successful SSO sign-in, ADE performs best-effort membership hydration for that user and retries asynchronously on transient failures.
+
 ## Authorization (RBAC)
 
 - Authorization is role/permission based.

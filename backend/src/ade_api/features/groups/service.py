@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from ade_db.models import Group, GroupMembership, GroupMembershipMode, User
+from ade_db.models import Group, GroupMembership, GroupMembershipMode, GroupSource, User
 
 from .schemas import (
     GroupCreate,
@@ -146,10 +146,10 @@ class GroupsService:
         payload: GroupMembershipRefCreate,
     ) -> GroupMembersResponse:
         group = self.get_group(group_id=group_id)
-        if group.membership_mode == GroupMembershipMode.DYNAMIC:
+        if group.membership_mode == GroupMembershipMode.DYNAMIC or group.source == GroupSource.IDP:
             raise HTTPException(
                 status.HTTP_409_CONFLICT,
-                detail="Dynamic group memberships are provider-managed and read-only",
+                detail="Provider-managed group memberships are read-only",
             )
         user = self._session.get(User, payload.member_id)
         if user is None:
@@ -172,10 +172,10 @@ class GroupsService:
 
     def remove_member_ref(self, *, group_id: UUID, member_id: UUID) -> None:
         group = self.get_group(group_id=group_id)
-        if group.membership_mode == GroupMembershipMode.DYNAMIC:
+        if group.membership_mode == GroupMembershipMode.DYNAMIC or group.source == GroupSource.IDP:
             raise HTTPException(
                 status.HTTP_409_CONFLICT,
-                detail="Dynamic group memberships are provider-managed and read-only",
+                detail="Provider-managed group memberships are read-only",
             )
         stmt = select(GroupMembership).where(
             GroupMembership.group_id == group_id,

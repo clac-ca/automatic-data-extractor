@@ -90,6 +90,16 @@ These are enforced for:
 
 No implicit hidden-random-password behavior is supported.
 
+## IdP Group Sync Contract
+
+When IdP group sync is enabled:
+
+- Background sync auto-creates/updates IdP groups and reconciles memberships for known ADE users only.
+- Background sync does not create missing ADE users from directory membership snapshots.
+- Known-user linking uses existing external mappings first, then SSO subject mapping, then guarded email linking for allowed provider domains.
+- First successful SSO sign-in hydrates that user's group memberships so access updates immediately.
+- Invitation workflows and JIT provisioning remain the user-creation paths.
+
 ## Forced Password Change Behavior
 
 - Login success includes `passwordChangeRequired`.

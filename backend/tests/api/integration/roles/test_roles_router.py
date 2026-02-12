@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import json
 from typing import Any
+from uuid import UUID
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy.orm import Session
 
+from ade_db.models import GroupMembership
 from tests.api.utils import login
 
 pytestmark = pytest.mark.asyncio
@@ -252,7 +255,7 @@ async def test_group_workspace_assignment_grants_workspace_access(
         headers={"X-API-Key": admin_token},
     )
     assert create_group_response.status_code == 201, create_group_response.text
-    group_id = create_group_response.json()["id"]
+    group_id = UUID(create_group_response.json()["id"])
 
     add_member_response = await async_client.post(
         f"/api/v1/groups/{group_id}/members/$ref",
@@ -265,7 +268,7 @@ async def test_group_workspace_assignment_grants_workspace_access(
         f"/api/v1/workspaces/{seed_identity.workspace_id}/roleAssignments",
         json={
             "principal_type": "group",
-            "principal_id": group_id,
+            "principal_id": str(group_id),
             "role_id": member_role_id,
         },
         headers={"X-API-Key": admin_token},
@@ -289,3 +292,57 @@ async def test_group_workspace_assignment_grants_workspace_access(
     assert read_workspace.status_code == 200, read_workspace.text
     payload = read_workspace.json()
     assert "workspace-member" in payload["roles"]
+
+
+async def test_provider_managed_group_memberships_are_read_only(
+    async_client: AsyncClient,
+    seed_identity,
+    db_session: Session,
+) -> None:
+    admin = seed_identity.admin
+    admin_token, _ = await login(async_client, email=admin.email, password=admin.password)
+    orphan = seed_identity.orphan
+
+    create_group_response = await async_client.post(
+        "/api/v1/groups",
+        json={
+            "display_name": "Synced Directory Group",
+            "slug": "synced-directory-group",
+            "membership_mode": "assigned",
+            "source": "idp",
+            "external_id": "entra-group-1",
+        },
+        headers={"X-API-Key": admin_token},
+    )
+    assert create_group_response.status_code == 201, create_group_response.text
+    group_id = create_group_response.json()["id"]
+
+    add_member_response = await async_client.post(
+        f"/api/v1/groups/{group_id}/members/$ref",
+        json={"memberId": str(orphan.id)},
+        headers={"X-API-Key": admin_token},
+    )
+    assert add_member_response.status_code == 409, add_member_response.text
+    assert (
+        add_member_response.json()["detail"]
+        == "Provider-managed group memberships are read-only"
+    )
+
+    db_session.add(
+        GroupMembership(
+            group_id=group_id,
+            user_id=orphan.id,
+            membership_source="idp",
+        )
+    )
+    db_session.flush()
+
+    remove_member_response = await async_client.delete(
+        f"/api/v1/groups/{group_id}/members/{orphan.id}/$ref",
+        headers={"X-API-Key": admin_token},
+    )
+    assert remove_member_response.status_code == 409, remove_member_response.text
+    assert (
+        remove_member_response.json()["detail"]
+        == "Provider-managed group memberships are read-only"
+    )

@@ -6,17 +6,25 @@ import logging
 import re
 from dataclasses import dataclass
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import httpx
-from sqlalchemy import Select, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ade_api.common.time import utc_now
-from ade_api.core.security.hashing import hash_password
-from ade_api.core.security.tokens import mint_opaque_token
 from ade_api.settings import Settings
-from ade_db.models import Group, GroupMembership, GroupMembershipMode, GroupSource, User
+from ade_db.models import (
+    Group,
+    GroupMembership,
+    GroupMembershipMode,
+    GroupSource,
+    SsoIdentity,
+    SsoProvider,
+    SsoProviderDomain,
+    SsoProviderStatus,
+    User,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +35,27 @@ def _slugify(value: str) -> str:
     normalized = _SLUG_RE.sub("-", value.strip().lower()).strip("-")
     normalized = re.sub(r"-{2,}", "-", normalized)
     return normalized or "group"
+
+
+def _extract_domain(email: str) -> str | None:
+    if "@" not in email:
+        return None
+    _, domain = email.rsplit("@", 1)
+    if not domain:
+        return None
+    lowered = domain.lower()
+    try:
+        return lowered.encode("idna").decode("ascii")
+    except UnicodeError:
+        return None
+
+
+def _entra_object_id_from_subject(subject: str) -> str | None:
+    _, separator, object_id = subject.strip().rpartition(":")
+    if not separator:
+        return None
+    candidate = object_id.strip()
+    return candidate or None
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,10 +77,12 @@ class ProviderGroup:
 
 @dataclass(frozen=True, slots=True)
 class GroupSyncStats:
-    users_upserted: int
+    known_users_linked: int
+    users_created: int
     groups_upserted: int
     memberships_added: int
     memberships_removed: int
+    unknown_members_skipped: int
 
 
 class EntraGraphAdapter:
@@ -173,6 +204,42 @@ class EntraGraphAdapter:
             )
         return groups
 
+    def fetch_groups_for_user(self, *, user_external_id: str) -> list[ProviderGroup]:
+        token = self._access_token()
+        records = self._collect_pages(
+            token,
+            "https://graph.microsoft.com/v1.0/users/"
+            f"{user_external_id}/memberOf"
+            "?$select=id,displayName,description,mailNickname,groupTypes,membershipRule",
+        )
+        groups: list[ProviderGroup] = []
+        for record in records:
+            # memberOf can contain non-group directory objects.
+            object_type = str(record.get("@odata.type") or "").strip().lower()
+            if object_type and object_type != "#microsoft.graph.group":
+                continue
+            external_id = str(record.get("id") or "").strip()
+            display_name = str(record.get("displayName") or "").strip()
+            if not external_id or not display_name:
+                continue
+            group_types = record.get("groupTypes")
+            dynamic = False
+            if isinstance(group_types, list):
+                dynamic = any(str(item) == "DynamicMembership" for item in group_types)
+            membership_rule = str(record.get("membershipRule") or "").strip()
+            dynamic = dynamic or bool(membership_rule)
+            groups.append(
+                ProviderGroup(
+                    external_id=external_id,
+                    display_name=display_name,
+                    description=str(record.get("description") or "").strip() or None,
+                    slug_hint=str(record.get("mailNickname") or "").strip() or None,
+                    dynamic=dynamic,
+                    member_external_ids=(user_external_id,),
+                )
+            )
+        return groups
+
 
 class GroupSyncService:
     """Reconcile provider-managed groups and memberships into ADE tables."""
@@ -207,104 +274,225 @@ class GroupSyncService:
                 },
             )
             return GroupSyncStats(
-                users_upserted=0,
+                known_users_linked=0,
+                users_created=0,
                 groups_upserted=0,
                 memberships_added=0,
                 memberships_removed=0,
+                unknown_members_skipped=0,
             )
 
-        users_by_external = self._upsert_users(provider_users=provider_users)
-        return self._upsert_groups_and_memberships(
+        users_by_external = self._link_known_users(provider_users=provider_users)
+        return self._reconcile_provider_groups(
             provider_groups=provider_groups,
             users_by_external=users_by_external,
+            known_users_linked=len(users_by_external),
         )
 
-    def _upsert_users(self, *, provider_users: list[ProviderUser]) -> dict[str, User]:
-        users_by_external: dict[str, User] = {}
-        users_upserted = 0
-        for provider_user in provider_users:
-            stmt: Select[tuple[User]] = select(User).where(
-                User.source == "idp",
-                User.external_id == provider_user.external_id,
+    def sync_user_memberships(
+        self,
+        *,
+        settings: Settings,
+        user: User,
+        user_external_id: str,
+    ) -> GroupSyncStats:
+        provider = (settings.auth_group_sync_provider or "").strip().lower()
+        if provider != "entra":
+            raise RuntimeError(f"Unsupported group sync provider: {provider!r}")
+
+        self._link_user_to_idp(
+            user=user,
+            external_id=user_external_id,
+            display_name=user.display_name,
+        )
+
+        if settings.auth_group_sync_dry_run:
+            return GroupSyncStats(
+                known_users_linked=1,
+                users_created=0,
+                groups_upserted=0,
+                memberships_added=0,
+                memberships_removed=0,
+                unknown_members_skipped=0,
             )
-            user = self._session.execute(stmt).scalar_one_or_none()
-            if user is None:
-                # If email already exists, link to that identity instead of creating a duplicate.
-                existing = self._session.execute(
-                    select(User).where(User.email_normalized == provider_user.email).limit(1)
-                ).scalar_one_or_none()
-                if existing is not None:
-                    user = existing
-                else:
-                    user = User(
-                        email=provider_user.email,
-                        hashed_password=hash_password(mint_opaque_token(32)),
-                        display_name=provider_user.display_name,
-                        is_active=True,
-                        is_verified=False,
-                        is_service_account=False,
-                    )
-                    self._session.add(user)
-                    self._session.flush([user])
 
-            user.display_name = provider_user.display_name or user.display_name
-            user.source = "idp"
-            user.external_id = provider_user.external_id
-            user.last_synced_at = utc_now()
+        adapter = EntraGraphAdapter(settings=settings)
+        provider_groups = adapter.fetch_groups_for_user(user_external_id=user_external_id)
+        return self._reconcile_user_groups(user=user, provider_groups=provider_groups)
+
+    def _link_user_to_idp(
+        self,
+        *,
+        user: User,
+        external_id: str,
+        display_name: str | None,
+    ) -> bool:
+        if user.external_id and user.external_id != external_id:
+            return False
+        user.source = "idp"
+        user.external_id = external_id
+        user.last_synced_at = utc_now()
+        if display_name:
+            user.display_name = display_name
+        return True
+
+    def _allowed_domains_for_active_provider(self) -> set[str]:
+        stmt = (
+            select(SsoProviderDomain.domain)
+            .join(SsoProvider, SsoProvider.id == SsoProviderDomain.provider_id)
+            .where(SsoProvider.status == SsoProviderStatus.ACTIVE)
+        )
+        return {
+            domain.strip().lower()
+            for domain in self._session.execute(stmt).scalars()
+            if domain
+        }
+
+    def _link_known_users(self, *, provider_users: list[ProviderUser]) -> dict[str, User]:
+        users_by_external: dict[str, User] = {}
+        provider_by_external = {item.external_id: item for item in provider_users}
+        if not provider_by_external:
+            return users_by_external
+
+        external_ids = tuple(provider_by_external)
+        mapped_users = self._session.execute(
+            select(User).where(User.external_id.in_(external_ids))
+        ).scalars()
+        for user in mapped_users:
+            if not user.external_id:
+                continue
+            provider_user = provider_by_external.get(user.external_id)
+            if provider_user is None:
+                continue
+            if not self._link_user_to_idp(
+                user=user,
+                external_id=provider_user.external_id,
+                display_name=provider_user.display_name,
+            ):
+                continue
             users_by_external[provider_user.external_id] = user
-            users_upserted += 1
 
-        logger.info("sso.group_sync.users.upserted", extra={"count": users_upserted})
+        identity_rows = self._session.execute(
+            select(SsoIdentity.subject, User).join(User, User.id == SsoIdentity.user_id)
+        ).all()
+        for subject, user in identity_rows:
+            object_id = _entra_object_id_from_subject(subject)
+            if not object_id or object_id in users_by_external:
+                continue
+            provider_user = provider_by_external.get(object_id)
+            if provider_user is None:
+                continue
+            if not self._link_user_to_idp(
+                user=user,
+                external_id=provider_user.external_id,
+                display_name=provider_user.display_name,
+            ):
+                continue
+            users_by_external[provider_user.external_id] = user
+
+        allowed_domains = self._allowed_domains_for_active_provider()
+        unresolved = [
+            provider_user
+            for provider_user in provider_users
+            if provider_user.external_id not in users_by_external
+        ]
+        candidate_emails = tuple(
+            provider_user.email
+            for provider_user in unresolved
+            if (domain := _extract_domain(provider_user.email))
+            and (not allowed_domains or domain in allowed_domains)
+        )
+        if candidate_emails:
+            users_by_email = {
+                user.email_normalized: user
+                for user in self._session.execute(
+                    select(User).where(User.email_normalized.in_(candidate_emails))
+                ).scalars()
+            }
+            for provider_user in unresolved:
+                domain = _extract_domain(provider_user.email)
+                if domain is None:
+                    continue
+                if allowed_domains and domain not in allowed_domains:
+                    continue
+                user = users_by_email.get(provider_user.email)
+                if user is None:
+                    continue
+                if not self._link_user_to_idp(
+                    user=user,
+                    external_id=provider_user.external_id,
+                    display_name=provider_user.display_name,
+                ):
+                    continue
+                users_by_external[provider_user.external_id] = user
+
+        logger.info(
+            "sso.group_sync.users.linked",
+            extra={
+                "known_users_linked": len(users_by_external),
+                "users_created": 0,
+            },
+        )
         return users_by_external
 
-    def _upsert_groups_and_memberships(
+    def _upsert_group(self, *, provider_group: ProviderGroup) -> Group:
+        group = self._session.execute(
+            select(Group).where(
+                Group.source == GroupSource.IDP,
+                Group.external_id == provider_group.external_id,
+            )
+        ).scalar_one_or_none()
+        if group is None:
+            slug_base = _slugify(provider_group.slug_hint or provider_group.display_name)
+            slug = slug_base
+            while self._session.execute(
+                select(Group.id).where(Group.slug == slug).limit(1)
+            ).scalar_one_or_none():
+                slug = f"{slug_base}-{uuid4().hex[:6]}"
+
+            group = Group(
+                display_name=provider_group.display_name,
+                slug=slug,
+                description=provider_group.description,
+                membership_mode=GroupMembershipMode.DYNAMIC,
+                source=GroupSource.IDP,
+                external_id=provider_group.external_id,
+                is_active=True,
+            )
+            self._session.add(group)
+            self._session.flush([group])
+        else:
+            group.display_name = provider_group.display_name
+            group.description = provider_group.description
+            group.membership_mode = (
+                GroupMembershipMode.DYNAMIC
+                if provider_group.dynamic
+                else GroupMembershipMode.ASSIGNED
+            )
+            group.is_active = True
+        return group
+
+    def _reconcile_provider_groups(
         self,
         *,
         provider_groups: list[ProviderGroup],
         users_by_external: dict[str, User],
+        known_users_linked: int,
     ) -> GroupSyncStats:
         groups_upserted = 0
         memberships_added = 0
         memberships_removed = 0
+        unknown_members_skipped = 0
 
         for provider_group in provider_groups:
-            group = self._session.execute(
-                select(Group).where(
-                    Group.source == GroupSource.IDP,
-                    Group.external_id == provider_group.external_id,
-                )
-            ).scalar_one_or_none()
-            if group is None:
-                slug_base = _slugify(provider_group.slug_hint or provider_group.display_name)
-                slug = slug_base
-                while self._session.execute(
-                    select(Group.id).where(Group.slug == slug).limit(1)
-                ).scalar_one_or_none():
-                    slug = f"{slug_base}-{uuid4().hex[:6]}"
-
-                group = Group(
-                    display_name=provider_group.display_name,
-                    slug=slug,
-                    description=provider_group.description,
-                    membership_mode=GroupMembershipMode.DYNAMIC,
-                    source=GroupSource.IDP,
-                    external_id=provider_group.external_id,
-                    is_active=True,
-                )
-                self._session.add(group)
-                self._session.flush([group])
-            else:
-                group.display_name = provider_group.display_name
-                group.description = provider_group.description
-                group.membership_mode = (
-                    GroupMembershipMode.DYNAMIC
-                    if provider_group.dynamic
-                    else GroupMembershipMode.ASSIGNED
-                )
-                group.is_active = True
-
+            group = self._upsert_group(provider_group=provider_group)
             groups_upserted += 1
 
+            unknown_members_skipped += sum(
+                1
+                for external_id in provider_group.member_external_ids
+                if external_id not in users_by_external
+            )
             desired_user_ids = {
                 users_by_external[external_id].id
                 for external_id in provider_group.member_external_ids
@@ -339,13 +527,67 @@ class GroupSyncService:
                 "groups_upserted": groups_upserted,
                 "memberships_added": memberships_added,
                 "memberships_removed": memberships_removed,
+                "unknown_members_skipped": unknown_members_skipped,
             },
         )
         return GroupSyncStats(
-            users_upserted=len(users_by_external),
+            known_users_linked=known_users_linked,
+            users_created=0,
             groups_upserted=groups_upserted,
             memberships_added=memberships_added,
             memberships_removed=memberships_removed,
+            unknown_members_skipped=unknown_members_skipped,
+        )
+
+    def _reconcile_user_groups(
+        self,
+        *,
+        user: User,
+        provider_groups: list[ProviderGroup],
+    ) -> GroupSyncStats:
+        groups_upserted = 0
+        memberships_added = 0
+        memberships_removed = 0
+        desired_group_ids: set[UUID] = set()
+
+        for provider_group in provider_groups:
+            group = self._upsert_group(provider_group=provider_group)
+            groups_upserted += 1
+            desired_group_ids.add(group.id)
+
+        existing_memberships = self._session.execute(
+            select(GroupMembership)
+            .join(Group, Group.id == GroupMembership.group_id)
+            .where(
+                GroupMembership.user_id == user.id,
+                GroupMembership.membership_source == "idp",
+                Group.source == GroupSource.IDP,
+            )
+        ).scalars().all()
+        existing_group_ids = {membership.group_id for membership in existing_memberships}
+
+        for group_id in desired_group_ids - existing_group_ids:
+            self._session.add(
+                GroupMembership(
+                    group_id=group_id,
+                    user_id=user.id,
+                    membership_source="idp",
+                )
+            )
+            memberships_added += 1
+
+        for membership in existing_memberships:
+            if membership.group_id not in desired_group_ids:
+                self._session.delete(membership)
+                memberships_removed += 1
+
+        return GroupSyncStats(
+            known_users_linked=1,
+            users_created=0,
+            groups_upserted=groups_upserted,
+            memberships_added=memberships_added,
+            memberships_removed=memberships_removed,
+            unknown_members_skipped=0,
         )
 
 

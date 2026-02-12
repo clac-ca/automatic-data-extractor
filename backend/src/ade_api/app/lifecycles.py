@@ -245,10 +245,12 @@ def create_application_lifespan(
             logger.info(
                 "sso.group_sync.complete",
                 extra={
-                    "users_upserted": stats.users_upserted,
+                    "known_users_linked": stats.known_users_linked,
+                    "users_created": stats.users_created,
                     "groups_upserted": stats.groups_upserted,
                     "memberships_added": stats.memberships_added,
                     "memberships_removed": stats.memberships_removed,
+                    "unknown_members_skipped": stats.unknown_members_skipped,
                 },
             )
 
