@@ -14,21 +14,23 @@ export function useDocumentsEventsStream({
   onEvent,
   onDisconnect,
   onReady,
+  onResync,
 }: {
   workspaceId?: string | null;
   enabled?: boolean;
   onEvent: (change: DocumentChangeNotification) => void;
   onDisconnect?: () => void;
   onReady?: (lastId: string | null) => void;
+  onResync?: () => void;
 }) {
   const [connectionState, setConnectionState] = useState<ConnectionState>("idle");
   const sourceRef = useRef<EventSource | null>(null);
   const connectionKeyRef = useRef<string | null>(null);
-  const handlersRef = useRef({ onEvent, onDisconnect, onReady });
+  const handlersRef = useRef({ onEvent, onDisconnect, onReady, onResync });
 
   useEffect(() => {
-    handlersRef.current = { onEvent, onDisconnect, onReady };
-  }, [onEvent, onDisconnect, onReady]);
+    handlersRef.current = { onEvent, onDisconnect, onReady, onResync };
+  }, [onEvent, onDisconnect, onReady, onResync]);
 
   const shouldConnect = Boolean(enabled && workspaceId);
 
@@ -90,6 +92,10 @@ export function useDocumentsEventsStream({
       }
     };
 
+    const handleResync = () => {
+      handlersRef.current.onResync?.();
+    };
+
     const handleErrorEvent = () => {
       if (!active) return;
       setConnectionState("closed");
@@ -98,6 +104,7 @@ export function useDocumentsEventsStream({
 
     source.addEventListener("open", handleOpen);
     source.addEventListener("ready", handleReady);
+    source.addEventListener("documents.resync", handleResync);
     source.addEventListener("document.changed", handleEvent);
     source.addEventListener("document.deleted", handleEvent);
     source.addEventListener("error", handleErrorEvent);

@@ -80,6 +80,9 @@ export function WorkspaceDocumentsStreamProvider({ children }: { readonly childr
         invalidateWorkspaceDocuments();
       }
     },
+    onResync: () => {
+      invalidateWorkspaceDocuments();
+    },
   });
 
   const value = useMemo(
