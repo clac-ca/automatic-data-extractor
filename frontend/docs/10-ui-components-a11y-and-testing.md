@@ -278,6 +278,16 @@ Tabs are used for:
 * Splitting views within a section (e.g. “Console” vs “Validation” in the workbench).
 * Settings sub‑sections where URL state isn’t required.
 
+#### Spreadsheet preview expectations
+
+Document preview follows spreadsheet ergonomics and has additional rules:
+
+* The preview grid is implemented with Glide Data Grid and owns both axes of scrolling (no split vertical/horizontal ownership across nested containers).
+* Built-in row markers and sticky header behavior keep orientation in large sheets.
+* The sheet selector rail remains reachable while scanning deep data (sticky bottom rail).
+* Display reduction controls (for example hide empties) must be keyboard operable and expose state (for example checked/unchecked semantics on a checkbox).
+* Summary copy must be explicit when data is reduced (for example “Showing X of Y rows”).
+
 #### `ContextMenu`
 
 Right‑click / kebab‑menu popup:
@@ -644,6 +654,13 @@ For each component, prefer small, focused tests:
   * Correct ARIA roles and attributes.
   * Arrow keys change focus and selection.
   * Only the active panel is visible.
+
+* **Spreadsheet preview**
+
+  * Grid renders through Glide Data Grid with readable column labels and row markers.
+  * Grid-level scroll remains functional when pointer focus is over the grid surface.
+  * Hide-empty checkbox updates copy/state and remains keyboard accessible.
+  * Count summary and inline metrics are rendered in a single meta row (no duplicated stat rows).
 
 * **ContextMenu**
 

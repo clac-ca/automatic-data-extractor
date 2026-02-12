@@ -189,7 +189,7 @@ export function DocumentsDetailPage({ documentId }: { documentId: string }) {
 
   if (documentQuery.isLoading) {
     return (
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
             Loading…
@@ -213,7 +213,7 @@ export function DocumentsDetailPage({ documentId }: { documentId: string }) {
           : "We couldn’t load that document.";
 
     return (
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <PageState title="Unable to load document" description={message} variant="error" />
       </div>
     );
@@ -221,7 +221,7 @@ export function DocumentsDetailPage({ documentId }: { documentId: string }) {
 
   if (!documentRow) {
     return (
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <PageState
           title="Document not available"
           description="We couldn’t load that document."
@@ -232,7 +232,7 @@ export function DocumentsDetailPage({ documentId }: { documentId: string }) {
   }
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background text-foreground">
+    <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background text-foreground">
       <DocumentTicketHeader
         workspaceId={workspace.id}
         document={documentRow}
@@ -247,50 +247,52 @@ export function DocumentsDetailPage({ documentId }: { documentId: string }) {
       />
 
       <TabsRoot value={detailState.tab} onValueChange={(value) => setTab(value as DocumentDetailTab)}>
-        <TabsList className="flex gap-1 border-b bg-background px-4 py-2">
-          <TabsTrigger
-            value="activity"
-            className={[
-              "rounded-md px-3 py-1.5 text-sm",
-              detailState.tab === "activity"
-                ? "bg-muted text-foreground"
-                : "text-muted-foreground hover:text-foreground",
-            ].join(" ")}
-          >
-            Activity
-          </TabsTrigger>
-          <TabsTrigger
-            value="preview"
-            className={[
-              "rounded-md px-3 py-1.5 text-sm",
-              detailState.tab === "preview"
-                ? "bg-muted text-foreground"
-                : "text-muted-foreground hover:text-foreground",
-            ].join(" ")}
-          >
-            Preview
-          </TabsTrigger>
-        </TabsList>
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <TabsList className="flex gap-1 border-b bg-background px-4 py-2">
+            <TabsTrigger
+              value="activity"
+              className={[
+                "rounded-md px-3 py-1.5 text-sm",
+                detailState.tab === "activity"
+                  ? "bg-muted text-foreground"
+                  : "text-muted-foreground hover:text-foreground",
+              ].join(" ")}
+            >
+              Activity
+            </TabsTrigger>
+            <TabsTrigger
+              value="preview"
+              className={[
+                "rounded-md px-3 py-1.5 text-sm",
+                detailState.tab === "preview"
+                  ? "bg-muted text-foreground"
+                  : "text-muted-foreground hover:text-foreground",
+              ].join(" ")}
+            >
+              Preview
+            </TabsTrigger>
+          </TabsList>
 
-        <div className="min-h-0 flex-1 overflow-hidden">
-          <TabsContent value="activity" className="min-h-0 flex h-full flex-col">
-            <DocumentActivityTab
-              workspaceId={workspace.id}
-              document={documentRow}
-              filter={detailState.activityFilter}
-              onFilterChange={setActivityFilter}
-            />
-          </TabsContent>
-          <TabsContent value="preview" className="min-h-0 flex h-full flex-col">
-            <DocumentPreviewTab
-              workspaceId={workspace.id}
-              document={documentRow}
-              source={detailState.source}
-              sheet={detailState.sheet}
-              onSourceChange={setPreviewSource}
-              onSheetChange={setPreviewSheet}
-            />
-          </TabsContent>
+          <div className="min-h-0 flex-1 overflow-hidden">
+            <TabsContent value="activity" className="min-h-0 flex h-full flex-col">
+              <DocumentActivityTab
+                workspaceId={workspace.id}
+                document={documentRow}
+                filter={detailState.activityFilter}
+                onFilterChange={setActivityFilter}
+              />
+            </TabsContent>
+            <TabsContent value="preview" className="min-h-0 flex h-full flex-col">
+              <DocumentPreviewTab
+                workspaceId={workspace.id}
+                document={documentRow}
+                source={detailState.source}
+                sheet={detailState.sheet}
+                onSourceChange={setPreviewSource}
+                onSheetChange={setPreviewSheet}
+              />
+            </TabsContent>
+          </div>
         </div>
       </TabsRoot>
       <RenameDocumentDialog

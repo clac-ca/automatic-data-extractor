@@ -4,8 +4,10 @@ import type { DocumentRow } from "@/pages/Workspace/sections/Documents/shared/ty
 import { DocumentPreviewGrid } from "./components/DocumentPreviewGrid";
 import { DocumentPreviewHeader } from "./components/DocumentPreviewHeader";
 import { DocumentPreviewSheetTabs } from "./components/DocumentPreviewSheetTabs";
+import { DocumentPreviewStatsRow } from "./components/DocumentPreviewStatsRow";
 import { DocumentPreviewUnavailableState } from "./components/DocumentPreviewUnavailableState";
 import { useDocumentPreviewModel } from "./hooks/useDocumentPreviewModel";
+import { usePreviewDisplayPreferences } from "./hooks/usePreviewDisplayPreferences";
 
 export function DocumentPreviewTab({
   workspaceId,
@@ -22,22 +24,39 @@ export function DocumentPreviewTab({
   onSourceChange: (source: DocumentPreviewSource) => void;
   onSheetChange: (sheet: string | null) => void;
 }) {
+  const {
+    preferences,
+    isCompactMode,
+    setCompactMode,
+  } = usePreviewDisplayPreferences(workspaceId);
+
   const model = useDocumentPreviewModel({
     workspaceId,
     document,
     source,
     sheet,
     onSheetChange,
+    displayPreferences: preferences,
   });
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-muted/10">
-      <DocumentPreviewHeader
-        name={document.name}
-        source={source}
-        onSourceChange={onSourceChange}
-        previewMeta={model.previewMeta}
-      />
+      <div className="sticky top-0 z-20 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/90">
+        <DocumentPreviewHeader
+          name={document.name}
+          source={source}
+          onSourceChange={onSourceChange}
+        />
+
+        {model.canLoadSelectedSource ? (
+          <DocumentPreviewStatsRow
+            previewCountSummary={model.previewCountSummary}
+            isCompactMode={isCompactMode}
+            onCompactModeChange={setCompactMode}
+            metrics={document.lastRunMetrics}
+          />
+        ) : null}
+      </div>
 
       {!model.canLoadSelectedSource ? (
         <DocumentPreviewUnavailableState
@@ -45,19 +64,18 @@ export function DocumentPreviewTab({
           onSwitchToOriginal={() => onSourceChange("original")}
         />
       ) : (
-        <>
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            <div className="min-h-0 flex-1 overflow-auto p-4">
-              <DocumentPreviewGrid
-                hasSheetError={model.hasSheetError}
-                hasPreviewError={model.hasPreviewError}
-                isLoading={model.isLoading}
-                hasSheets={model.sheets.length > 0}
-                hasData={Boolean(model.selectedSheet)}
-                rows={model.previewRows}
-                columnLabels={model.columnLabels}
-              />
-            </div>
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <div className="min-h-0 flex-1 p-4">
+            <DocumentPreviewGrid
+              hasSheetError={model.hasSheetError}
+              hasPreviewError={model.hasPreviewError}
+              isLoading={model.isLoading}
+              hasSheets={model.sheets.length > 0}
+              hasData={Boolean(model.selectedSheet)}
+              rows={model.previewRows}
+              columnLabels={model.columnLabels}
+              className="h-full"
+            />
           </div>
 
           <DocumentPreviewSheetTabs
@@ -66,7 +84,7 @@ export function DocumentPreviewTab({
             isLoading={model.isLoading}
             onSheetSelect={onSheetChange}
           />
-        </>
+        </div>
       )}
     </div>
   );

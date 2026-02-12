@@ -18,7 +18,7 @@ export function DocumentPreviewSheetTabs({
   onSheetSelect: (sheetName: string) => void;
 }) {
   return (
-    <div className="border-t border-border bg-background px-3 py-2">
+    <div className="sticky bottom-0 z-20 border-t border-border bg-background/95 px-3 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/90">
       {sheets.length > 0 ? (
         <div className="flex items-center gap-2 overflow-x-auto pb-1">
           {sheets.map((sheet) => {
