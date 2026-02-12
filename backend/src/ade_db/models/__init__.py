@@ -1,5 +1,16 @@
 """Central exports for ADE SQLAlchemy models."""
 
+from .access import (
+    AssignmentScopeType,
+    Group,
+    GroupMembership,
+    GroupMembershipMode,
+    GroupSource,
+    Invitation,
+    InvitationStatus,
+    PrincipalType,
+    RoleAssignment,
+)
 from .api_key import ApiKey
 from .application_setting import ApplicationSetting
 from .authn import (
@@ -46,6 +57,7 @@ from .workspace import Workspace, WorkspaceMembership
 
 __all__ = [
     "ApiKey",
+    "AssignmentScopeType",
     "ApplicationSetting",
     "AUTH_SESSION_AUTH_METHOD_VALUES",
     "AuthSession",
@@ -90,4 +102,12 @@ __all__ = [
     "UserRoleAssignment",
     "Workspace",
     "WorkspaceMembership",
+    "Group",
+    "GroupMembership",
+    "GroupMembershipMode",
+    "GroupSource",
+    "Invitation",
+    "InvitationStatus",
+    "PrincipalType",
+    "RoleAssignment",
 ]

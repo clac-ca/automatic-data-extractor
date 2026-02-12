@@ -1,6 +1,7 @@
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { MAX_PAGE_SIZE, useFlattenedPages } from "@/api/pagination";
+import { createInvitation } from "@/api/invitations/api";
 
 import { addWorkspaceMember, listWorkspaceMembers, removeWorkspaceMember, updateWorkspaceMemberRoles } from "@/api/workspaces/api";
 import { workspacesKeys } from "@/hooks/workspaces";
@@ -44,7 +45,9 @@ export function useWorkspaceMembersQuery(workspaceId: string) {
 }
 
 interface AddMemberInput {
-  readonly user: User;
+  readonly user?: User;
+  readonly invitedEmail?: string;
+  readonly displayName?: string;
   readonly roleIds: readonly string[];
 }
 
@@ -53,7 +56,36 @@ export function useAddWorkspaceMemberMutation(workspaceId: string) {
   const queryKey = workspacesKeys.members(workspaceId, memberListParams);
 
   return useMutation<WorkspaceMember, Error, AddMemberInput>({
-    mutationFn: async ({ user, roleIds }: AddMemberInput) => {
+    mutationFn: async ({ user, invitedEmail, displayName, roleIds }: AddMemberInput) => {
+      if (!user && !invitedEmail) {
+        throw new Error("Select an existing user or provide an invitation email.");
+      }
+      if (roleIds.length === 0) {
+        throw new Error("Select at least one role.");
+      }
+      if (invitedEmail) {
+        const invitation = await createInvitation({
+          invitedUserEmail: invitedEmail,
+          displayName: displayName ?? null,
+          workspaceContext: {
+            workspaceId,
+            roleAssignments: roleIds.map((roleId) => ({ roleId })),
+          },
+        });
+        return {
+          user_id: invitation.invited_user_id ?? "",
+          role_ids: [...roleIds],
+          role_slugs: [],
+          created_at: invitation.created_at,
+          user: invitation.invited_user_id
+            ? ({
+                id: invitation.invited_user_id,
+                email: invitation.email_normalized,
+                display_name: displayName ?? null,
+              } as WorkspaceMember["user"])
+            : undefined,
+        };
+      }
       const payload: WorkspaceMemberCreatePayload = {
         user_id: user.id,
         role_ids: Array.from(roleIds),

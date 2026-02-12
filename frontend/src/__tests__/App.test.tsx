@@ -48,7 +48,7 @@ describe("App routes", () => {
     { path: "/reset-password", testId: "reset-password-screen" },
     { path: "/setup", testId: "setup-screen" },
     { path: "/organization", testId: "org-settings-screen" },
-    { path: "/organization/users", testId: "org-settings-screen" },
+    { path: "/organization/access/users", testId: "org-settings-screen" },
     { path: "/workspaces", testId: "workspaces-screen" },
     { path: "/workspaces/new", testId: "workspace-new-screen" },
     { path: "/workspaces/ws-1", testId: "workspace-screen" },

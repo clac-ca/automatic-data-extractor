@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-import anyio
 import json
 from typing import Any
 
 import pytest
 from httpx import AsyncClient
 
-from ade_db.models import User
 from tests.api.utils import login
 
 pytestmark = pytest.mark.asyncio
@@ -128,7 +126,7 @@ async def test_roles_crud_and_delete(
     assert missing_response.status_code == 404
 
 
-async def test_workspace_member_listing_requires_permission(
+async def test_workspace_role_assignment_listing_requires_permission(
     async_client: AsyncClient,
     seed_identity,
 ) -> None:
@@ -136,13 +134,13 @@ async def test_workspace_member_listing_requires_permission(
     token, _ = await login(async_client, email=member.email, password=member.password)
 
     response = await async_client.get(
-        f"/api/v1/workspaces/{seed_identity.workspace_id}/members",
+        f"/api/v1/workspaces/{seed_identity.workspace_id}/roleAssignments",
         headers={"X-API-Key": token},
     )
     assert response.status_code == 403
 
 
-async def test_workspace_member_listing_admin(
+async def test_workspace_role_assignment_listing_admin(
     async_client: AsyncClient,
     seed_identity,
 ) -> None:
@@ -150,57 +148,20 @@ async def test_workspace_member_listing_admin(
     token, _ = await login(async_client, email=admin.email, password=admin.password)
 
     response = await async_client.get(
-        f"/api/v1/workspaces/{seed_identity.workspace_id}/members",
+        f"/api/v1/workspaces/{seed_identity.workspace_id}/roleAssignments",
         headers={"X-API-Key": token},
     )
     assert response.status_code == 200
     payload = response.json()
-    members = _items(payload)
-    assert any(str(m["user_id"]) == str(seed_identity.workspace_owner.id) for m in members)
-
-
-async def test_workspace_member_listing_excludes_inactive_by_default(
-    async_client: AsyncClient,
-    seed_identity,
-    db_session,
-) -> None:
-    admin = seed_identity.admin
-    member = seed_identity.member
-    token, _ = await login(async_client, email=admin.email, password=admin.password)
-    user = await anyio.to_thread.run_sync(db_session.get, User, member.id)
-    assert user is not None
-    user.is_active = False
-    await anyio.to_thread.run_sync(db_session.flush)
-
-    base_url = f"/api/v1/workspaces/{seed_identity.workspace_id}/members"
-
-    default_response = await async_client.get(
-        base_url,
-        headers={"X-API-Key": token},
+    assignments = _items(payload)
+    assert any(
+        str(item["principal_id"]) == str(seed_identity.workspace_owner.id)
+        and item["principal_type"] == "user"
+        for item in assignments
     )
-    assert default_response.status_code == 200
-    default_members = {str(item["user_id"]) for item in _items(default_response.json())}
-    assert str(member.id) not in default_members
-
-    inclusive = await async_client.get(
-        base_url,
-        headers={"X-API-Key": token},
-        params={
-            "filters": json.dumps(
-                [
-                    {"id": "isActive", "operator": "eq", "value": True},
-                    {"id": "isActive", "operator": "eq", "value": False},
-                ]
-            ),
-            "joinOperator": "or",
-        },
-    )
-    assert inclusive.status_code == 200, inclusive.text
-    inclusive_members = {str(item["user_id"]) for item in _items(inclusive.json())}
-    assert str(member.id) in inclusive_members
 
 
-async def test_assign_workspace_member_roles(
+async def test_assign_workspace_principal_roles(
     async_client: AsyncClient,
     seed_identity,
 ) -> None:
@@ -210,16 +171,16 @@ async def test_assign_workspace_member_roles(
     user_id = seed_identity.orphan.id
     user_id_str = str(user_id)
 
-    # Assign workspace-member to a user without existing membership
+    # Reject missing role_id payload.
     create_response = await async_client.post(
-        f"/api/v1/workspaces/{workspace_id}/members",
+        f"/api/v1/workspaces/{workspace_id}/roleAssignments",
         json={
-            "user_id": user_id_str,
-            "role_ids": [],
+            "principal_type": "user",
+            "principal_id": user_id_str,
         },
         headers={"X-API-Key": token},
     )
-    assert create_response.status_code == 422  # must include role_ids
+    assert create_response.status_code == 422
 
     # Load workspace-member role id
     roles_response = await async_client.get(
@@ -235,19 +196,96 @@ async def test_assign_workspace_member_roles(
     workspace_roles = {role["slug"]: role["id"] for role in _items(roles_response.json())}
     member_role_id = workspace_roles["workspace-member"]
 
-    add_response = await async_client.post(
-        f"/api/v1/workspaces/{workspace_id}/members",
-        json={"user_id": user_id_str, "role_ids": [member_role_id]},
+    create_assignment = await async_client.post(
+        f"/api/v1/workspaces/{workspace_id}/roleAssignments",
+        json={
+            "principal_type": "user",
+            "principal_id": user_id_str,
+            "role_id": member_role_id,
+        },
         headers={"X-API-Key": token},
     )
-    assert add_response.status_code == 201, add_response.text
-    added = add_response.json()
-    assert str(added["user_id"]) == user_id_str
-    assert member_role_id in added["role_ids"]
+    assert create_assignment.status_code == 201, create_assignment.text
+    created = create_assignment.json()
+    assert created["principal_type"] == "user"
+    assert str(created["principal_id"]) == user_id_str
+    assert created["role_id"] == member_role_id
+    assignment_id = created["id"]
 
-    # Remove membership
+    # Remove assignment
     delete_response = await async_client.delete(
-        f"/api/v1/workspaces/{workspace_id}/members/{user_id}",
+        f"/api/v1/roleAssignments/{assignment_id}",
         headers={"X-API-Key": token},
     )
     assert delete_response.status_code == 204
+
+
+async def test_group_workspace_assignment_grants_workspace_access(
+    async_client: AsyncClient,
+    seed_identity,
+) -> None:
+    admin = seed_identity.admin
+    admin_token, _ = await login(async_client, email=admin.email, password=admin.password)
+    orphan = seed_identity.orphan
+
+    roles_response = await async_client.get(
+        "/api/v1/roles",
+        params={
+            "filters": json.dumps(
+                [{"id": "scopeType", "operator": "eq", "value": "workspace"}]
+            )
+        },
+        headers={"X-API-Key": admin_token},
+    )
+    assert roles_response.status_code == 200
+    workspace_roles = {role["slug"]: role["id"] for role in _items(roles_response.json())}
+    member_role_id = workspace_roles["workspace-member"]
+
+    create_group_response = await async_client.post(
+        "/api/v1/groups",
+        json={
+            "display_name": "Workspace Access Group",
+            "slug": "workspace-access-group",
+            "membership_mode": "assigned",
+            "source": "internal",
+        },
+        headers={"X-API-Key": admin_token},
+    )
+    assert create_group_response.status_code == 201, create_group_response.text
+    group_id = create_group_response.json()["id"]
+
+    add_member_response = await async_client.post(
+        f"/api/v1/groups/{group_id}/members/$ref",
+        json={"memberId": str(orphan.id)},
+        headers={"X-API-Key": admin_token},
+    )
+    assert add_member_response.status_code == 200, add_member_response.text
+
+    create_assignment = await async_client.post(
+        f"/api/v1/workspaces/{seed_identity.workspace_id}/roleAssignments",
+        json={
+            "principal_type": "group",
+            "principal_id": group_id,
+            "role_id": member_role_id,
+        },
+        headers={"X-API-Key": admin_token},
+    )
+    assert create_assignment.status_code == 201, create_assignment.text
+
+    orphan_token, _ = await login(async_client, email=orphan.email, password=orphan.password)
+
+    list_workspaces = await async_client.get(
+        "/api/v1/workspaces",
+        headers={"X-API-Key": orphan_token},
+    )
+    assert list_workspaces.status_code == 200, list_workspaces.text
+    listed_ids = {item["id"] for item in _items(list_workspaces.json())}
+    assert str(seed_identity.workspace_id) in listed_ids
+
+    read_workspace = await async_client.get(
+        f"/api/v1/workspaces/{seed_identity.workspace_id}",
+        headers={"X-API-Key": orphan_token},
+    )
+    assert read_workspace.status_code == 200, read_workspace.text
+    payload = read_workspace.json()
+    assert "workspace-member" in payload["roles"]

@@ -21,12 +21,12 @@ describe("workspaces api", () => {
     });
   });
 
-  it("clamps member pagination to the API max", async () => {
+  it("lists workspace principals from role assignments", async () => {
     const getSpy = vi.spyOn(client, "GET").mockResolvedValue({
       data: {
         items: [],
         meta: {
-          limit: MAX_PAGE_SIZE,
+          limit: 50,
           hasMore: false,
           nextCursor: null,
           totalIncluded: false,
@@ -39,8 +39,8 @@ describe("workspaces api", () => {
 
     await listWorkspaceMembers("ws-123", { limit: 500 });
 
-    expect(getSpy).toHaveBeenCalledWith("/api/v1/workspaces/{workspaceId}/members", {
-      params: { path: { workspaceId: "ws-123" }, query: { limit: MAX_PAGE_SIZE } },
+    expect(getSpy).toHaveBeenCalledWith("/api/v1/workspaces/{workspaceId}/roleAssignments", {
+      params: { path: { workspaceId: "ws-123" } },
       signal: undefined,
     });
   });

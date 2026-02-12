@@ -47,6 +47,27 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     email_normalized: Mapped[str] = mapped_column(String(320), nullable=False, unique=True)
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
     display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    given_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    surname: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    job_title: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    department: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    office_location: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    mobile_phone: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    business_phones: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    employee_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    employee_type: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    preferred_language: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    city: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    state: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    country: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    source: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="internal",
+        server_default=text("'internal'"),
+    )
+    external_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    last_synced_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     is_service_account: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     is_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
@@ -66,11 +87,15 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         cascade="all, delete-orphan",
         lazy="selectin",
     )
-    auth_sessions: Mapped[list["AuthSession"]] = relationship(
+    auth_sessions: Mapped[list[AuthSession]] = relationship(
         "AuthSession",
         back_populates="user",
         cascade="all, delete-orphan",
         lazy="selectin",
+    )
+
+    __table_args__ = (
+        UniqueConstraint("source", "external_id", name="uq_users_source_external"),
     )
 
     @validates("email")

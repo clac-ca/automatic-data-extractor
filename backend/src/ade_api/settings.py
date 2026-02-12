@@ -129,6 +129,13 @@ class Settings(
     auth_idp_jit_provisioning_enabled: bool = True
     auth_sso_providers_json: str | None = None
     sso_encryption_key: SecretStr | None = None
+    auth_group_sync_enabled: bool = False
+    auth_group_sync_provider: Literal["entra"] = "entra"
+    auth_group_sync_interval_seconds: int = Field(3600, ge=300, le=86_400)
+    auth_group_sync_dry_run: bool = True
+    auth_group_sync_tenant_id: str | None = None
+    auth_group_sync_client_id: str | None = None
+    auth_group_sync_client_secret: SecretStr | None = None
 
     # Runs
     preview_timeout_seconds: float = Field(10, gt=0)

@@ -1,0 +1,54 @@
+%% Sequence 1: Workspace owner invites unknown user with workspace role assignment
+sequenceDiagram
+    autonumber
+    participant WO as Workspace Owner UI
+    participant API as ADE API
+    participant U as Users Store
+    participant I as Invitations Store
+    participant A as RoleAssignments Store
+
+    WO->>API: POST /api/v1/invitations (email, workspaceId, roleId)
+    API->>API: Check workspace.members.manage on workspaceId
+    API->>U: Lookup user by normalized email
+    alt user exists
+        U-->>API: userId
+        API->>A: Create workspace assignment (principal=user)
+        API->>I: Create invitation/audit record (status=pending or linked)
+    else user not found
+        API->>U: Create invited user stub (source=internal)
+        U-->>API: new userId
+        API->>I: Create invitation (pending)
+        API->>A: Create workspace assignment (principal=user)
+    end
+    API-->>WO: 201 Created (invitation + assignment summary)
+
+%% Sequence 2: Workspace add existing group and role assignment
+sequenceDiagram
+    autonumber
+    participant Admin as Workspace Access UI
+    participant API as ADE API
+    participant G as Groups Store
+    participant A as RoleAssignments Store
+
+    Admin->>API: POST /api/v1/workspaces/{workspaceId}/roleAssignments (principalType=group)
+    API->>API: Check workspace.members.manage
+    API->>G: Verify group exists and active
+    API->>A: Create assignment (group -> workspace role)
+    API-->>Admin: 201 Created
+
+%% Sequence 3: Dynamic group sync and effective permission refresh
+sequenceDiagram
+    autonumber
+    participant Sync as IdP Sync Job
+    participant API as ADE Sync Service
+    participant G as Groups Store
+    participant M as GroupMemberships Store
+    participant Authz as RBAC Evaluator
+
+    Sync->>API: Pull provider groups/memberships
+    API->>G: Upsert groups (source=idp, membership_mode=dynamic)
+    API->>M: Reconcile memberships (add/remove)
+    API->>Authz: Invalidate permission caches for changed users
+    Authz-->>API: Recompute on next authorization check
+    API-->>Sync: Sync run complete (counts + watermark)
+

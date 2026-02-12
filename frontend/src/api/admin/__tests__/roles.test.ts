@@ -11,7 +11,7 @@ import { client } from "@/api/client";
 vi.mock("@/api/client", () => ({
   client: {
     GET: vi.fn(),
-    PUT: vi.fn(),
+    POST: vi.fn(),
     DELETE: vi.fn(),
   },
 }));
@@ -39,23 +39,65 @@ describe("admin roles api", () => {
   });
 
   it("lists global permissions and manages assignments", async () => {
-    (client.GET as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      data: { items: [], meta: { limit: 50, hasMore: false, nextCursor: null, totalIncluded: false, totalCount: null, changesCursor: "0" }, facets: null },
-    });
-    (client.PUT as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({ data: { user_id: "u1", roles: [] } });
+    const getMock = client.GET as unknown as ReturnType<typeof vi.fn>;
+    getMock
+      .mockResolvedValueOnce({
+        data: {
+          items: [],
+          meta: {
+            limit: 50,
+            hasMore: false,
+            nextCursor: null,
+            totalIncluded: false,
+            totalCount: null,
+            changesCursor: "0",
+          },
+          facets: null,
+        },
+      })
+      .mockResolvedValue({
+        data: {
+          items: [
+            {
+              id: "a1",
+              principal_type: "user",
+              principal_id: "u1",
+              role_id: "r1",
+              role_slug: "global-admin",
+              scope_type: "organization",
+              scope_id: null,
+              created_at: "2026-01-01T00:00:00Z",
+            },
+          ],
+          meta: {
+            limit: 50,
+            hasMore: false,
+            nextCursor: null,
+            totalIncluded: false,
+            totalCount: null,
+            changesCursor: "0",
+          },
+          facets: null,
+        },
+      });
+    (client.POST as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({ data: null });
     (client.DELETE as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({ data: null });
 
     await listAdminPermissions({ scope: "global" });
     expect(client.GET).toHaveBeenCalledWith("/api/v1/permissions", expect.any(Object));
 
     await assignAdminUserRole("u1", "r1");
-    expect(client.PUT).toHaveBeenCalledWith("/api/v1/users/{userId}/roles/{roleId}", {
-      params: { path: { userId: "u1", roleId: "r1" } },
+    expect(client.POST).toHaveBeenCalledWith("/api/v1/roleAssignments", {
+      body: {
+        principal_type: "user",
+        principal_id: "u1",
+        role_id: "r1",
+      },
     });
 
     await removeAdminUserRole("u1", "r1", { ifMatch: "*" });
-    expect(client.DELETE).toHaveBeenCalledWith("/api/v1/users/{userId}/roles/{roleId}", {
-      params: { path: { userId: "u1", roleId: "r1" } },
+    expect(client.DELETE).toHaveBeenCalledWith("/api/v1/roleAssignments/{assignmentId}", {
+      params: { path: { assignmentId: expect.any(String) } },
       headers: { "If-Match": "*" },
     });
   });

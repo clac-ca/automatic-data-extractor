@@ -19,7 +19,7 @@ const navGroups: OrganizationSettingsNavGroup[] = [
         shortLabel: "Users",
         description: "Manage user accounts and access status.",
         icon: Users,
-        href: "/organization/users",
+        href: "/organization/access/users",
         canView: true,
         canEdit: true,
       },
@@ -30,7 +30,7 @@ const navGroups: OrganizationSettingsNavGroup[] = [
         shortLabel: "Roles",
         description: "Define global roles and permission bundles.",
         icon: ShieldUser,
-        href: "/organization/roles",
+        href: "/organization/access/roles",
         canView: true,
         canEdit: true,
       },
@@ -48,7 +48,7 @@ describe("OrganizationSettingsTopbarSearch", () => {
     const user = userEvent.setup();
 
     render(
-      <MemoryRouter initialEntries={["/organization/users"]}>
+      <MemoryRouter initialEntries={["/organization/access/users"]}>
         <Routes>
           <Route
             path="/organization/*"
@@ -68,14 +68,14 @@ describe("OrganizationSettingsTopbarSearch", () => {
     await user.type(input, "roles");
     await user.click(screen.getByText("Roles"));
 
-    expect(screen.getByTestId("location-path")).toHaveTextContent("/organization/roles");
+    expect(screen.getByTestId("location-path")).toHaveTextContent("/organization/access/roles");
   });
 
   it("only shows sections present in nav groups", async () => {
     const user = userEvent.setup();
 
     render(
-      <MemoryRouter initialEntries={["/organization/users"]}>
+      <MemoryRouter initialEntries={["/organization/access/users"]}>
         <Routes>
           <Route
             path="/organization/*"

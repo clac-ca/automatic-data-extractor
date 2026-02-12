@@ -16,20 +16,22 @@ describe("organization settings nav", () => {
     const links = navGroups.flatMap((group) => group.items.map((item) => item.href));
 
     expect(links).toEqual([
-      "/organization/users",
-      "/organization/roles",
+      "/organization/access/users",
+      "/organization/access/groups",
+      "/organization/access/roles",
       "/organization/api-keys",
       "/organization/system/sso",
       "/organization/system/safe-mode",
     ]);
     expect(labels).toEqual([
       "Users",
+      "Groups",
       "Roles",
       "API Keys",
       "Authentication",
       "Run controls",
     ]);
-    expect(defaultOrganizationSettingsSection.path).toBe("users");
+    expect(defaultOrganizationSettingsSection.path).toBe("access/users");
   });
 
   it("hides sections when the user has no matching permissions", () => {
@@ -40,7 +42,7 @@ describe("organization settings nav", () => {
   });
 
   it("resolves nested paths for deep links", () => {
-    const section = resolveOrganizationSectionByPath(["users", "abc-123"]);
+    const section = resolveOrganizationSectionByPath(["access", "users", "abc-123"]);
     expect(section?.id).toBe("identity.users");
   });
 
@@ -76,6 +78,7 @@ describe("organization settings nav", () => {
   it("exposes all configured sections", () => {
     expect(organizationSettingsSections.map((section) => section.id)).toEqual([
       "identity.users",
+      "identity.groups",
       "identity.roles",
       "security.apiKeys",
       "system.sso",

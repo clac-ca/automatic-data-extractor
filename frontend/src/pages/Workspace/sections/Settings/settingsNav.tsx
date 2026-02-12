@@ -2,6 +2,7 @@ import type { ReactElement } from "react";
 
 import { DangerSettingsPage } from "./pages/DangerSettingsPage";
 import { GeneralSettingsPage } from "./pages/GeneralSettingsPage";
+import { InvitationsSettingsPage } from "./pages/InvitationsSettingsPage";
 import { MembersSettingsPage } from "./pages/MembersSettingsPage";
 import { ProcessingSettingsPage } from "./pages/ProcessingSettingsPage";
 import { RolesSettingsPage } from "./pages/RolesSettingsPage";
@@ -9,8 +10,9 @@ import { RolesSettingsPage } from "./pages/RolesSettingsPage";
 export type WorkspaceSettingsRouteId =
   | "workspace.general"
   | "workspace.processing"
-  | "access.members"
+  | "access.principals"
   | "access.roles"
+  | "access.invitations"
   | "lifecycle.danger";
 
 export type SettingsGroupId = "workspace" | "access" | "lifecycle";
@@ -66,12 +68,12 @@ export const workspaceSettingsSections: SettingsSection[] = [
     element: <ProcessingSettingsPage />,
   },
   {
-    id: "access.members",
+    id: "access.principals",
     group: "access",
-    label: "Members",
-    description: "Manage members and access.",
-    path: "access/members",
-    required: { view: ["workspace.members.view"], edit: ["workspace.members.manage"] },
+    label: "Principals",
+    description: "Manage user and group access.",
+    path: "access/principals",
+    required: { view: ["workspace.members.read"], edit: ["workspace.members.manage"] },
     element: <MembersSettingsPage />,
   },
   {
@@ -80,8 +82,20 @@ export const workspaceSettingsSections: SettingsSection[] = [
     label: "Roles",
     description: "Workspace-scoped roles and permissions.",
     path: "access/roles",
-    required: { view: ["workspace.roles.view"], edit: ["workspace.roles.manage"] },
+    required: { view: ["workspace.roles.read"], edit: ["workspace.roles.manage"] },
     element: <RolesSettingsPage />,
+  },
+  {
+    id: "access.invitations",
+    group: "access",
+    label: "Invitations",
+    description: "Track and manage workspace invitations.",
+    path: "access/invitations",
+    required: {
+      view: ["workspace.invitations.read", "workspace.invitations.manage"],
+      edit: ["workspace.invitations.manage"],
+    },
+    element: <InvitationsSettingsPage />,
   },
   {
     id: "lifecycle.danger",

@@ -31,8 +31,13 @@ OPENAPI_TAG_METADATA: list[dict[str, str]] = [
         "name": "documents",
         "description": "Document upload, metadata, listing, and streaming updates.",
     },
+    {"name": "groups", "description": "Group directory and membership management endpoints."},
     {"name": "health", "description": "Service health and liveness checks."},
     {"name": "info", "description": "Runtime metadata and service identity."},
+    {
+        "name": "invitations",
+        "description": "Invitation lifecycle management for access onboarding.",
+    },
     {"name": "me", "description": "Authenticated user profile and effective permissions."},
     {"name": "meta", "description": "Installed ADE component version metadata."},
     {"name": "presence", "description": "Realtime workspace presence events and channels."},
@@ -40,7 +45,10 @@ OPENAPI_TAG_METADATA: list[dict[str, str]] = [
     {"name": "runs", "description": "Run creation, orchestration, output, and events."},
     {"name": "sso", "description": "Administrative SSO provider management endpoints."},
     {"name": "users", "description": "User administration endpoints."},
-    {"name": "workspaces", "description": "Workspace lifecycle and membership management."},
+    {
+        "name": "workspaces",
+        "description": "Workspace lifecycle and settings management.",
+    },
 ]
 
 
@@ -195,13 +203,12 @@ def configure_openapi(app: FastAPI, settings: Settings) -> None:
             ("/api/v1/workspaces/{workspaceId}/configurations/{configurationId}", "GET"),
             ("/api/v1/users/me/apikeys/{apiKeyId}", "GET"),
             ("/api/v1/users/{userId}/apikeys/{apiKeyId}", "GET"),
-            ("/api/v1/workspaces/{workspaceId}/roles/{roleId}", "GET"),
-            ("/api/v1/workspaces/{workspaceId}/roleassignments/{assignmentId}", "GET"),
+            ("/api/v1/roles/{roleId}", "GET"),
         }
         if_match_routes = {
-            ("/api/v1/workspaces/{workspaceId}/roles/{roleId}", "PATCH"),
-            ("/api/v1/workspaces/{workspaceId}/roles/{roleId}", "DELETE"),
-            ("/api/v1/workspaces/{workspaceId}/roleassignments/{assignmentId}", "DELETE"),
+            ("/api/v1/roles/{roleId}", "PATCH"),
+            ("/api/v1/roles/{roleId}", "DELETE"),
+            ("/api/v1/roleAssignments/{assignmentId}", "DELETE"),
             ("/api/v1/users/me/apikeys/{apiKeyId}", "DELETE"),
             ("/api/v1/users/{userId}/apikeys/{apiKeyId}", "DELETE"),
         }

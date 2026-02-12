@@ -9,6 +9,15 @@ export type AdminRoleUpdateRequest = components["schemas"]["RoleUpdate"];
 export type AdminPermissionPage = components["schemas"]["PermissionPage"];
 export type AdminPermission = components["schemas"]["PermissionOut"];
 export type AdminUserRoles = components["schemas"]["UserRolesEnvelope"];
+type RoleAssignmentOut = components["schemas"]["RoleAssignmentOut"];
+
+async function listOrganizationRoleAssignments(signal?: AbortSignal): Promise<RoleAssignmentOut[]> {
+  const { data } = await client.GET("/api/v1/roleAssignments", { signal });
+  if (!data?.items) {
+    throw new Error("Expected role assignments payload.");
+  }
+  return data.items as RoleAssignmentOut[];
+}
 
 export interface ListAdminRolesOptions {
   readonly limit?: number;
@@ -116,28 +125,32 @@ export async function listAdminPermissions(
 }
 
 export async function listAdminUserRoles(userId: string, options: { signal?: AbortSignal } = {}): Promise<AdminUserRoles> {
-  const { data } = await client.GET("/api/v1/users/{userId}/roles", {
-    params: { path: { userId } },
-    signal: options.signal,
-  });
+  const assignments = (await listOrganizationRoleAssignments(options.signal)).filter(
+    (assignment) =>
+      assignment.principal_type === "user" &&
+      assignment.principal_id === userId &&
+      assignment.scope_type === "organization",
+  );
 
-  if (!data) {
-    throw new Error("Expected user roles payload.");
-  }
-
-  return data;
+  return {
+    user_id: userId,
+    roles: assignments.map((assignment) => ({
+      role_id: assignment.role_id,
+      role_slug: assignment.role_slug,
+      created_at: assignment.created_at,
+    })),
+  };
 }
 
 export async function assignAdminUserRole(userId: string, roleId: string): Promise<AdminUserRoles> {
-  const { data } = await client.PUT("/api/v1/users/{userId}/roles/{roleId}", {
-    params: { path: { userId, roleId } },
+  await client.POST("/api/v1/roleAssignments", {
+    body: {
+      principal_type: "user",
+      principal_id: userId,
+      role_id: roleId,
+    },
   });
-
-  if (!data) {
-    throw new Error("Expected user roles payload.");
-  }
-
-  return data;
+  return listAdminUserRoles(userId);
 }
 
 export async function removeAdminUserRole(
@@ -145,8 +158,17 @@ export async function removeAdminUserRole(
   roleId: string,
   options: { ifMatch?: string | null } = {},
 ): Promise<void> {
-  await client.DELETE("/api/v1/users/{userId}/roles/{roleId}", {
-    params: { path: { userId, roleId } },
+  const assignments = await listOrganizationRoleAssignments();
+  const assignment = assignments.find(
+    (entry) =>
+      entry.principal_type === "user" &&
+      entry.principal_id === userId &&
+      entry.role_id === roleId &&
+      entry.scope_type === "organization",
+  );
+  if (!assignment) return;
+  await client.DELETE("/api/v1/roleAssignments/{assignmentId}", {
+    params: { path: { assignmentId: assignment.id } },
     headers: { "If-Match": options.ifMatch ?? "*" },
   });
 }

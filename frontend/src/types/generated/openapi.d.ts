@@ -511,6 +511,163 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List groups */
+        get: operations["list_groups_api_v1_groups_get"];
+        put?: never;
+        /** Create group */
+        post: operations["create_group_api_v1_groups_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/groups/{groupId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get group */
+        get: operations["get_group_api_v1_groups__groupId__get"];
+        put?: never;
+        post?: never;
+        /** Delete group */
+        delete: operations["delete_group_api_v1_groups__groupId__delete"];
+        options?: never;
+        head?: never;
+        /** Update group */
+        patch: operations["update_group_api_v1_groups__groupId__patch"];
+        trace?: never;
+    };
+    "/api/v1/groups/{groupId}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List group members */
+        get: operations["list_group_members_api_v1_groups__groupId__members_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/groups/{groupId}/members/$ref": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add group member by reference */
+        post: operations["add_group_member_ref_api_v1_groups__groupId__members__ref_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/groups/{groupId}/members/{memberId}/$ref": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove group member by reference */
+        delete: operations["remove_group_member_ref_api_v1_groups__groupId__members__memberId___ref_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/invitations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List invitations */
+        get: operations["list_invitations_api_v1_invitations_get"];
+        put?: never;
+        /** Create invitation */
+        post: operations["create_invitation_api_v1_invitations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/invitations/{invitationId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get invitation */
+        get: operations["get_invitation_api_v1_invitations__invitationId__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/invitations/{invitationId}/resend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resend invitation */
+        post: operations["resend_invitation_api_v1_invitations__invitationId__resend_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/invitations/{invitationId}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel invitation */
+        post: operations["cancel_invitation_api_v1_invitations__invitationId__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/permissions": {
         parameters: {
             query?: never;
@@ -565,58 +722,43 @@ export type paths = {
         patch: operations["update_role_api_v1_roles__roleId__patch"];
         trace?: never;
     };
-    "/api/v1/roleassignments": {
+    "/api/v1/roleAssignments": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** List role assignments (admin view) */
-        get: operations["list_assignments_api_v1_roleassignments_get"];
+        /** List organization role assignments */
+        get: operations["list_organization_role_assignments_api_v1_roleAssignments_get"];
         put?: never;
-        post?: never;
+        /** Create organization role assignment */
+        post: operations["create_organization_role_assignment_api_v1_roleAssignments_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/roleassignments/{assignmentId}": {
+    "/api/v1/workspaces/{workspaceId}/roleAssignments": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Retrieve a role assignment */
-        get: operations["read_assignment_api_v1_roleassignments__assignmentId__get"];
+        /** List workspace role assignments */
+        get: operations["list_workspace_role_assignments_api_v1_workspaces__workspaceId__roleAssignments_get"];
         put?: never;
-        post?: never;
+        /** Create workspace role assignment */
+        post: operations["create_workspace_role_assignment_api_v1_workspaces__workspaceId__roleAssignments_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/users/{userId}/roles": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List global roles assigned to a user */
-        get: operations["list_user_roles_api_v1_users__userId__roles_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/users/{userId}/roles/{roleId}": {
+    "/api/v1/roleAssignments/{assignmentId}": {
         parameters: {
             query?: never;
             header?: never;
@@ -624,11 +766,10 @@ export type paths = {
             cookie?: never;
         };
         get?: never;
-        /** Assign a global role to a user (idempotent) */
-        put: operations["assign_user_role_api_v1_users__userId__roles__roleId__put"];
+        put?: never;
         post?: never;
-        /** Remove a global role from a user */
-        delete: operations["remove_user_role_api_v1_users__userId__roles__roleId__delete"];
+        /** Delete a principal role assignment */
+        delete: operations["delete_role_assignment_api_v1_roleAssignments__assignmentId__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -785,54 +926,6 @@ export type paths = {
         put: operations["set_default_workspace_api_v1_workspaces__workspaceId__default_put"];
         post?: never;
         delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/workspaces/{workspaceId}/members": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List workspace members with their roles
-         * @description List workspace members with their roles.
-         */
-        get: operations["list_workspace_members_api_v1_workspaces__workspaceId__members_get"];
-        put?: never;
-        /**
-         * Add a workspace member with roles
-         * @description Add a workspace member with roles.
-         */
-        post: operations["add_workspace_member_api_v1_workspaces__workspaceId__members_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/workspaces/{workspaceId}/members/{userId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Replace workspace member roles
-         * @description Replace workspace member roles.
-         */
-        put: operations["update_workspace_member_api_v1_workspaces__workspaceId__members__userId__put"];
-        post?: never;
-        /**
-         * Remove a workspace member
-         * @description Remove a workspace member.
-         */
-        delete: operations["remove_workspace_member_api_v1_workspaces__workspaceId__members__userId__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2059,6 +2152,12 @@ export type components = {
             /** Last Used At */
             last_used_at?: string | null;
         };
+        /**
+         * AssignmentScopeType
+         * @description Scope dimension for role assignments.
+         * @enum {string}
+         */
+        AssignmentScopeType: "organization" | "workspace";
         /** AuthLoginMfaRequired */
         AuthLoginMfaRequired: {
             /**
@@ -3394,6 +3493,102 @@ export type components = {
          * @enum {string}
          */
         FilterJoinOperator: "and" | "or";
+        /** GroupCreate */
+        GroupCreate: {
+            /** Display Name */
+            display_name: string;
+            /** Slug */
+            slug?: string | null;
+            /** Description */
+            description?: string | null;
+            /** @default assigned */
+            membership_mode: components["schemas"]["GroupMembershipMode"];
+            /** @default internal */
+            source: components["schemas"]["GroupSource"];
+            /** External Id */
+            external_id?: string | null;
+        };
+        /** GroupListResponse */
+        GroupListResponse: {
+            /** Items */
+            items: components["schemas"]["GroupOut"][];
+        };
+        /** GroupMemberOut */
+        GroupMemberOut: {
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+            /** Email */
+            email: string;
+            /** Display Name */
+            display_name: string | null;
+        };
+        /** GroupMembersResponse */
+        GroupMembersResponse: {
+            /** Items */
+            items: components["schemas"]["GroupMemberOut"][];
+        };
+        /**
+         * GroupMembershipMode
+         * @description Group membership control mode.
+         * @enum {string}
+         */
+        GroupMembershipMode: "assigned" | "dynamic";
+        /** GroupMembershipRefCreate */
+        GroupMembershipRefCreate: {
+            /**
+             * Memberid
+             * Format: uuid
+             */
+            memberId: string;
+        };
+        /** GroupOut */
+        GroupOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Display Name */
+            display_name: string;
+            /** Slug */
+            slug: string;
+            /** Description */
+            description: string | null;
+            membership_mode: components["schemas"]["GroupMembershipMode"];
+            source: components["schemas"]["GroupSource"];
+            /** External Id */
+            external_id: string | null;
+            /** Is Active */
+            is_active: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Updated At */
+            updated_at: string | null;
+        };
+        /**
+         * GroupSource
+         * @description Source of truth for group lifecycle.
+         * @enum {string}
+         */
+        GroupSource: "internal" | "idp";
+        /** GroupUpdate */
+        GroupUpdate: {
+            /** Display Name */
+            display_name?: string | null;
+            /** Description */
+            description?: string | null;
+            membership_mode?: components["schemas"]["GroupMembershipMode"] | null;
+            /** Is Active */
+            is_active?: boolean | null;
+            /** External Id */
+            external_id?: string | null;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -3458,6 +3653,79 @@ export type components = {
              * Format: date-time
              */
             startedAt: string;
+        };
+        /** InvitationCreate */
+        InvitationCreate: {
+            /**
+             * Inviteduseremail
+             * Format: email
+             */
+            invitedUserEmail: string;
+            /** Displayname */
+            displayName?: string | null;
+            workspaceContext?: components["schemas"]["InvitationWorkspaceContext"] | null;
+        };
+        /** InvitationListResponse */
+        InvitationListResponse: {
+            /** Items */
+            items: components["schemas"]["InvitationOut"][];
+        };
+        /** InvitationOut */
+        InvitationOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Email Normalized */
+            email_normalized: string;
+            /** Invited User Id */
+            invited_user_id: string | null;
+            /**
+             * Invited By User Id
+             * Format: uuid
+             */
+            invited_by_user_id: string;
+            status: components["schemas"]["InvitationStatus"];
+            /** Expires At */
+            expires_at: string | null;
+            /** Redeemed At */
+            redeemed_at: string | null;
+            /** Metadata */
+            metadata: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Updated At */
+            updated_at: string | null;
+        };
+        /** InvitationRoleAssignmentSeed */
+        InvitationRoleAssignmentSeed: {
+            /**
+             * Roleid
+             * Format: uuid
+             */
+            roleId: string;
+        };
+        /**
+         * InvitationStatus
+         * @description Lifecycle states for invitation records.
+         * @enum {string}
+         */
+        InvitationStatus: "pending" | "accepted" | "expired" | "cancelled";
+        /** InvitationWorkspaceContext */
+        InvitationWorkspaceContext: {
+            /**
+             * Workspaceid
+             * Format: uuid
+             */
+            workspaceId: string;
+            /** Roleassignments */
+            roleAssignments?: components["schemas"]["InvitationRoleAssignmentSeed"][];
         };
         /**
          * MeContext
@@ -3644,6 +3912,12 @@ export type components = {
             } | null;
         };
         /**
+         * PrincipalType
+         * @description Principal kind for access assignment targets.
+         * @enum {string}
+         */
+        PrincipalType: "user" | "group";
+        /**
          * PublicSsoProvider
          * @description Provider summary returned to the login screen.
          */
@@ -3672,8 +3946,25 @@ export type components = {
             mode: "password_only" | "idp_only" | "password_and_idp";
         };
         /**
+         * RoleAssignmentCreate
+         * @description Payload for creating a principal role assignment.
+         */
+        RoleAssignmentCreate: {
+            principal_type: components["schemas"]["PrincipalType"];
+            /**
+             * Principal Id
+             * Format: uuid
+             */
+            principal_id: string;
+            /**
+             * Role Id
+             * Format: uuid
+             */
+            role_id: string;
+        };
+        /**
          * RoleAssignmentOut
-         * @description API representation of a role assignment to a user in a scope.
+         * @description API representation of a principal role assignment in a scope.
          */
         RoleAssignmentOut: {
             /**
@@ -3681,11 +3972,18 @@ export type components = {
              * Format: uuid
              */
             id: string;
+            principal_type: components["schemas"]["PrincipalType"];
             /**
-             * User Id
+             * Principal Id
              * Format: uuid
              */
-            user_id: string;
+            principal_id: string;
+            /** Principal Display Name */
+            principal_display_name?: string | null;
+            /** Principal Email */
+            principal_email?: string | null;
+            /** Principal Slug */
+            principal_slug?: string | null;
             /**
              * Role Id
              * Format: uuid
@@ -3693,7 +3991,7 @@ export type components = {
             role_id: string;
             /** Role Slug */
             role_slug: string;
-            scope_type: components["schemas"]["ScopeType"];
+            scope_type: components["schemas"]["AssignmentScopeType"];
             /** Scope Id */
             scope_id: string | null;
             /**
@@ -4513,6 +4811,36 @@ export type components = {
              * @description Optional display name for the user.
              */
             displayName?: string | null;
+            /** Givenname */
+            givenName?: string | null;
+            /** Surname */
+            surname?: string | null;
+            /** Jobtitle */
+            jobTitle?: string | null;
+            /** Department */
+            department?: string | null;
+            /** Officelocation */
+            officeLocation?: string | null;
+            /** Mobilephone */
+            mobilePhone?: string | null;
+            /** Businessphones */
+            businessPhones?: string | null;
+            /** Employeeid */
+            employeeId?: string | null;
+            /** Employeetype */
+            employeeType?: string | null;
+            /** Preferredlanguage */
+            preferredLanguage?: string | null;
+            /** City */
+            city?: string | null;
+            /** State */
+            state?: string | null;
+            /** Country */
+            country?: string | null;
+            /** Source */
+            source?: string | null;
+            /** Externalid */
+            externalId?: string | null;
             /** @description Password provisioning mode for the user account. */
             passwordProfile: components["schemas"]["UserPasswordProfile"];
         };
@@ -4543,6 +4871,41 @@ export type components = {
             is_service_account: boolean;
             /** Display Name */
             display_name?: string | null;
+            /** Given Name */
+            given_name?: string | null;
+            /** Surname */
+            surname?: string | null;
+            /** Job Title */
+            job_title?: string | null;
+            /** Department */
+            department?: string | null;
+            /** Office Location */
+            office_location?: string | null;
+            /** Mobile Phone */
+            mobile_phone?: string | null;
+            /** Business Phones */
+            business_phones?: string | null;
+            /** Employee Id */
+            employee_id?: string | null;
+            /** Employee Type */
+            employee_type?: string | null;
+            /** Preferred Language */
+            preferred_language?: string | null;
+            /** City */
+            city?: string | null;
+            /** State */
+            state?: string | null;
+            /** Country */
+            country?: string | null;
+            /**
+             * Source
+             * @default internal
+             */
+            source: string;
+            /** External Id */
+            external_id?: string | null;
+            /** Last Synced At */
+            last_synced_at?: string | null;
             /** Preferred Workspace Id */
             preferred_workspace_id?: string | null;
             /** Roles */
@@ -4607,37 +4970,6 @@ export type components = {
             forceChangeOnNextSignIn: boolean;
         };
         /**
-         * UserRoleSummary
-         * @description Summary of a single role assignment for a user (global scope).
-         */
-        UserRoleSummary: {
-            /**
-             * Role Id
-             * Format: uuid
-             */
-            role_id: string;
-            /** Role Slug */
-            role_slug: string;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-        };
-        /**
-         * UserRolesEnvelope
-         * @description Envelope for listing all global roles for a user.
-         */
-        UserRolesEnvelope: {
-            /**
-             * User Id
-             * Format: uuid
-             */
-            user_id: string;
-            /** Roles */
-            roles: components["schemas"]["UserRoleSummary"][];
-        };
-        /**
          * UserSummary
          * @description Minimal representation of a user for list/detail payloads.
          */
@@ -4674,6 +5006,36 @@ export type components = {
              * @description Whether the account is active and allowed to authenticate.
              */
             is_active?: boolean | null;
+            /** Given Name */
+            given_name?: string | null;
+            /** Surname */
+            surname?: string | null;
+            /** Job Title */
+            job_title?: string | null;
+            /** Department */
+            department?: string | null;
+            /** Office Location */
+            office_location?: string | null;
+            /** Mobile Phone */
+            mobile_phone?: string | null;
+            /** Business Phones */
+            business_phones?: string | null;
+            /** Employee Id */
+            employee_id?: string | null;
+            /** Employee Type */
+            employee_type?: string | null;
+            /** Preferred Language */
+            preferred_language?: string | null;
+            /** City */
+            city?: string | null;
+            /** State */
+            state?: string | null;
+            /** Country */
+            country?: string | null;
+            /** Source */
+            source?: string | null;
+            /** External Id */
+            external_id?: string | null;
         };
         /** ValidationError */
         ValidationError: {
@@ -4745,62 +5107,6 @@ export type components = {
              * @description Optional processing pause state for the workspace.
              */
             processing_paused?: boolean | null;
-        };
-        /**
-         * WorkspaceMemberCreate
-         * @description Payload for adding a new workspace member with roles.
-         */
-        WorkspaceMemberCreate: {
-            /**
-             * User Id
-             * Format: uuid
-             * @description UUIDv7 (RFC 9562) generated in the application layer.
-             */
-            user_id: string;
-            /** Role Ids */
-            role_ids: string[];
-        };
-        /**
-         * WorkspaceMemberOut
-         * @description Workspace member with their role IDs and slugs.
-         */
-        WorkspaceMemberOut: {
-            /**
-             * User Id
-             * Format: uuid
-             * @description UUIDv7 (RFC 9562) generated in the application layer.
-             */
-            user_id: string;
-            /** Role Ids */
-            role_ids: string[];
-            /** Role Slugs */
-            role_slugs: string[];
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-        };
-        /**
-         * WorkspaceMemberPage
-         * @description Cursor-based collection of workspace members.
-         */
-        WorkspaceMemberPage: {
-            /** Items */
-            items: components["schemas"]["WorkspaceMemberOut"][];
-            meta: components["schemas"]["CursorMeta"];
-            /** Facets */
-            facets?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /**
-         * WorkspaceMemberUpdate
-         * @description Payload for updating workspace member roles.
-         */
-        WorkspaceMemberUpdate: {
-            /** Role Ids */
-            role_ids: string[];
         };
         /**
          * WorkspaceOut
@@ -6369,6 +6675,484 @@ export interface operations {
             default: components["responses"]["ProblemDetails"];
         };
     };
+    list_groups_api_v1_groups_get: {
+        parameters: {
+            query?: {
+                q?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    create_group_api_v1_groups_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GroupCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    get_group_api_v1_groups__groupId__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Group identifier */
+                groupId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    delete_group_api_v1_groups__groupId__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Group identifier */
+                groupId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    update_group_api_v1_groups__groupId__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Group identifier */
+                groupId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GroupUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    list_group_members_api_v1_groups__groupId__members_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Group identifier */
+                groupId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupMembersResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    add_group_member_ref_api_v1_groups__groupId__members__ref_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Group identifier */
+                groupId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GroupMembershipRefCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupMembersResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    remove_group_member_ref_api_v1_groups__groupId__members__memberId___ref_delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Group identifier */
+                groupId: string;
+                /** @description Member identifier */
+                memberId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    list_invitations_api_v1_invitations_get: {
+        parameters: {
+            query?: {
+                workspace_id?: string | null;
+                invitation_status?: components["schemas"]["InvitationStatus"] | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitationListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    create_invitation_api_v1_invitations_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InvitationCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitationOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    get_invitation_api_v1_invitations__invitationId__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Invitation identifier */
+                invitationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitationOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    resend_invitation_api_v1_invitations__invitationId__resend_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Invitation identifier */
+                invitationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitationOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    cancel_invitation_api_v1_invitations__invitationId__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Invitation identifier */
+                invitationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitationOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
     list_permissions_api_v1_permissions_get: {
         parameters: {
             query?: {
@@ -6521,6 +7305,7 @@ export interface operations {
             200: {
                 headers: {
                     "X-Request-Id": components["headers"]["X-Request-Id"];
+                    ETag: components["headers"]["ETag"];
                     [name: string]: unknown;
                 };
                 content: {
@@ -6543,8 +7328,10 @@ export interface operations {
     delete_role_api_v1_roles__roleId__delete: {
         parameters: {
             query?: never;
-            header?: {
+            header: {
                 "X-CSRF-Token"?: string | null;
+                /** @description ETag value required for optimistic concurrency checks. */
+                "If-Match": components["parameters"]["IfMatch"];
             };
             path: {
                 /** @description Role identifier */
@@ -6578,8 +7365,10 @@ export interface operations {
     update_role_api_v1_roles__roleId__patch: {
         parameters: {
             query?: never;
-            header?: {
+            header: {
                 "X-CSRF-Token"?: string | null;
+                /** @description ETag value required for optimistic concurrency checks. */
+                "If-Match": components["parameters"]["IfMatch"];
             };
             path: {
                 /** @description Role identifier */
@@ -6616,7 +7405,7 @@ export interface operations {
             default: components["responses"]["ProblemDetails"];
         };
     };
-    list_assignments_api_v1_roleassignments_get: {
+    list_organization_role_assignments_api_v1_roleAssignments_get: {
         parameters: {
             query?: {
                 /** @description Items per page (max 200) */
@@ -6665,20 +7454,23 @@ export interface operations {
             default: components["responses"]["ProblemDetails"];
         };
     };
-    read_assignment_api_v1_roleassignments__assignmentId__get: {
+    create_organization_role_assignment_api_v1_roleAssignments_post: {
         parameters: {
             query?: never;
-            header?: never;
-            path: {
-                /** @description Role assignment identifier */
-                assignmentId: string;
+            header?: {
+                "X-CSRF-Token"?: string | null;
             };
+            path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RoleAssignmentCreate"];
+            };
+        };
         responses: {
             /** @description Successful Response */
-            200: {
+            201: {
                 headers: {
                     "X-Request-Id": components["headers"]["X-Request-Id"];
                     [name: string]: unknown;
@@ -6700,13 +7492,13 @@ export interface operations {
             default: components["responses"]["ProblemDetails"];
         };
     };
-    list_user_roles_api_v1_users__userId__roles_get: {
+    list_workspace_role_assignments_api_v1_workspaces__workspaceId__roleAssignments_get: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description User identifier */
-                userId: string;
+                /** @description Workspace identifier */
+                workspaceId: string;
             };
             cookie?: never;
         };
@@ -6719,7 +7511,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["UserRolesEnvelope"];
+                    "application/json": components["schemas"]["RoleAssignmentPage"];
                 };
             };
             /** @description Validation Error */
@@ -6735,30 +7527,32 @@ export interface operations {
             default: components["responses"]["ProblemDetails"];
         };
     };
-    assign_user_role_api_v1_users__userId__roles__roleId__put: {
+    create_workspace_role_assignment_api_v1_workspaces__workspaceId__roleAssignments_post: {
         parameters: {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
             };
             path: {
-                /** @description User identifier */
-                userId: string;
-                /** @description Role identifier */
-                roleId: string;
+                /** @description Workspace identifier */
+                workspaceId: string;
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RoleAssignmentCreate"];
+            };
+        };
         responses: {
             /** @description Successful Response */
-            200: {
+            201: {
                 headers: {
                     "X-Request-Id": components["headers"]["X-Request-Id"];
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["UserRolesEnvelope"];
+                    "application/json": components["schemas"]["RoleAssignmentOut"];
                 };
             };
             /** @description Validation Error */
@@ -6774,17 +7568,17 @@ export interface operations {
             default: components["responses"]["ProblemDetails"];
         };
     };
-    remove_user_role_api_v1_users__userId__roles__roleId__delete: {
+    delete_role_assignment_api_v1_roleAssignments__assignmentId__delete: {
         parameters: {
             query?: never;
-            header?: {
+            header: {
                 "X-CSRF-Token"?: string | null;
+                /** @description ETag value required for optimistic concurrency checks. */
+                "If-Match": components["parameters"]["IfMatch"];
             };
             path: {
-                /** @description User identifier */
-                userId: string;
-                /** @description Role identifier */
-                roleId: string;
+                /** @description Role assignment identifier */
+                assignmentId: string;
             };
             cookie?: never;
         };
@@ -7383,179 +8177,6 @@ export interface operations {
             };
             /** @description Workspace access denied for the authenticated user. */
             403: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-            default: components["responses"]["ProblemDetails"];
-        };
-    };
-    list_workspace_members_api_v1_workspaces__workspaceId__members_get: {
-        parameters: {
-            query?: {
-                /** @description Items per page (max 200) */
-                limit?: number;
-                /** @description Opaque cursor token for pagination. */
-                cursor?: string | null;
-                /** @description JSON array of {id, desc}. */
-                sort?: string | null;
-                /** @description URL-encoded JSON array of filter objects. */
-                filters?: string | null;
-                /** @description Logical operator to join filters (and/or). */
-                joinOperator?: components["schemas"]["FilterJoinOperator"];
-                /** @description Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored. */
-                q?: string | null;
-                /** @description Include totalCount in the response. */
-                includeTotal?: boolean;
-                /** @description Include facet counts in the response. */
-                includeFacets?: boolean;
-            };
-            header?: never;
-            path: {
-                /** @description Workspace identifier */
-                workspaceId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WorkspaceMemberPage"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-            default: components["responses"]["ProblemDetails"];
-        };
-    };
-    add_workspace_member_api_v1_workspaces__workspaceId__members_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "X-CSRF-Token"?: string | null;
-            };
-            path: {
-                /** @description Workspace identifier */
-                workspaceId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["WorkspaceMemberCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WorkspaceMemberOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-            default: components["responses"]["ProblemDetails"];
-        };
-    };
-    update_workspace_member_api_v1_workspaces__workspaceId__members__userId__put: {
-        parameters: {
-            query?: never;
-            header?: {
-                "X-CSRF-Token"?: string | null;
-            };
-            path: {
-                /** @description Workspace identifier */
-                workspaceId: string;
-                /** @description User identifier */
-                userId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["WorkspaceMemberUpdate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WorkspaceMemberOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-            default: components["responses"]["ProblemDetails"];
-        };
-    };
-    remove_workspace_member_api_v1_workspaces__workspaceId__members__userId__delete: {
-        parameters: {
-            query?: never;
-            header?: {
-                "X-CSRF-Token"?: string | null;
-            };
-            path: {
-                /** @description Workspace identifier */
-                workspaceId: string;
-                /** @description User identifier */
-                userId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
                 headers: {
                     "X-Request-Id": components["headers"]["X-Request-Id"];
                     [name: string]: unknown;

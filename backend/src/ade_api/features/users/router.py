@@ -99,6 +99,21 @@ def create_user(
     return service.create_user(
         email=str(payload.email),
         display_name=payload.display_name,
+        given_name=payload.given_name,
+        surname=payload.surname,
+        job_title=payload.job_title,
+        department=payload.department,
+        office_location=payload.office_location,
+        mobile_phone=payload.mobile_phone,
+        business_phones=payload.business_phones,
+        employee_id=payload.employee_id,
+        employee_type=payload.employee_type,
+        preferred_language=payload.preferred_language,
+        city=payload.city,
+        state=payload.state,
+        country=payload.country,
+        source=payload.source,
+        external_id=payload.external_id,
         password_profile=payload.password_profile,
     )
 

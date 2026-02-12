@@ -3,6 +3,7 @@ import type { LucideIcon } from "lucide-react";
 import { KeyRound, ShieldCheck, ShieldUser, UserRoundCog, Users } from "lucide-react";
 
 import { ApiKeysSettingsPage } from "./pages/ApiKeysSettingsPage";
+import { GroupsSettingsPage } from "./pages/GroupsSettingsPage";
 import { RolesSettingsPage } from "./pages/RolesSettingsPage";
 import { SystemSafeModeSettingsPage } from "./pages/SystemSafeModeSettingsPage";
 import { SystemSsoSettingsPage } from "./pages/SystemSsoSettingsPage";
@@ -10,6 +11,7 @@ import { UsersSettingsPage } from "./pages/UsersSettingsPage";
 
 export type OrganizationSettingsRouteId =
   | "identity.users"
+  | "identity.groups"
   | "identity.roles"
   | "security.apiKeys"
   | "system.sso"
@@ -63,10 +65,25 @@ export const organizationSettingsSections: OrganizationSettingsSection[] = [
     label: "Users",
     shortLabel: "Users",
     description: "Manage user accounts and access status.",
-    path: "users",
+    path: "access/users",
     icon: Users,
     required: { view: ["users.read_all", "users.manage_all"], edit: ["users.manage_all"] },
     element: <UsersSettingsPage />,
+  },
+  {
+    id: "identity.groups",
+    group: "identity",
+    groupOrder: 1,
+    label: "Groups",
+    shortLabel: "Groups",
+    description: "Manage principal groups and membership.",
+    path: "access/groups",
+    icon: Users,
+    required: {
+      view: ["groups.read_all", "groups.manage_all"],
+      edit: ["groups.manage_all"],
+    },
+    element: <GroupsSettingsPage />,
   },
   {
     id: "identity.roles",
@@ -75,7 +92,7 @@ export const organizationSettingsSections: OrganizationSettingsSection[] = [
     label: "Roles",
     shortLabel: "Roles",
     description: "Define global roles and permission bundles.",
-    path: "roles",
+    path: "access/roles",
     icon: ShieldUser,
     required: { view: ["roles.read_all", "roles.manage_all"], edit: ["roles.manage_all"] },
     element: <RolesSettingsPage />,

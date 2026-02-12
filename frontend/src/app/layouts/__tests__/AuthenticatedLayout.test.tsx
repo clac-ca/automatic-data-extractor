@@ -84,7 +84,7 @@ describe("AuthenticatedLayout", () => {
 
   it.each([
     { path: "/account", routePath: "account/*" },
-    { path: "/organization/users", routePath: "organization/*" },
+    { path: "/organization/access/users", routePath: "organization/*" },
     { path: "/workspaces", routePath: "workspaces" },
     { path: "/workspaces/new", routePath: "workspaces/new" },
   ])("renders a home action on $path routes", async ({ path, routePath }) => {

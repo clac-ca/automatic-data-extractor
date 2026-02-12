@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
 from typing import Annotated
 from uuid import UUID
 
@@ -9,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Request, Response, 
 from ade_api.api.deps import ReadSessionDep, WriteSessionDep
 from ade_api.common.concurrency import require_if_match
 from ade_api.common.cursor_listing import (
+    CursorMeta,
     CursorQueryParams,
     cursor_query_params,
     resolve_cursor_sort,
@@ -16,25 +16,22 @@ from ade_api.common.cursor_listing import (
     strict_cursor_query_guard,
 )
 from ade_api.common.etag import build_etag_token, format_weak_etag
-from ade_api.common.list_filters import FilterItem, FilterJoinOperator, FilterOperator
 from ade_api.core.auth.principal import AuthenticatedPrincipal
-from ade_api.core.http import get_current_principal, require_csrf
-from ade_api.core.rbac.types import ScopeType
+from ade_api.core.http import get_current_principal, require_csrf, require_workspace
 from ade_api.features.rbac.schemas import (
     PermissionOut,
     PermissionPage,
+    RoleAssignmentCreate,
     RoleAssignmentOut,
     RoleAssignmentPage,
     RoleCreate,
     RoleOut,
     RolePage,
     RoleUpdate,
-    UserRolesEnvelope,
-    UserRoleSummary,
-    WorkspaceMemberOut,
 )
 from ade_api.features.rbac.service import (
     AssignmentError,
+    AssignmentNotFoundError,
     RbacService,
     RoleConflictError,
     RoleImmutableError,
@@ -44,10 +41,6 @@ from ade_api.features.rbac.service import (
     _role_permissions,
 )
 from ade_api.features.rbac.sorting import (
-    ASSIGNMENT_CURSOR_FIELDS,
-    ASSIGNMENT_DEFAULT_SORT,
-    ASSIGNMENT_ID_FIELD,
-    ASSIGNMENT_SORT_FIELDS,
     PERMISSION_CURSOR_FIELDS,
     PERMISSION_DEFAULT_SORT,
     PERMISSION_ID_FIELD,
@@ -55,19 +48,14 @@ from ade_api.features.rbac.sorting import (
     ROLE_CURSOR_FIELDS,
     ROLE_DEFAULT_SORT,
 )
-from ade_db.models import Role, User, UserRoleAssignment
+from ade_db.models import AssignmentScopeType, Role, RoleAssignment, User
 
 router = APIRouter(tags=["rbac"])
 
-user_roles_router = APIRouter(
-    prefix="/users/{userId}/roles",
-    tags=["rbac"],
-)
-
 PrincipalDep = Annotated[AuthenticatedPrincipal, Depends(get_current_principal)]
-UserPath = Annotated[
+WorkspacePath = Annotated[
     UUID,
-    Path(description="User identifier", alias="userId"),
+    Path(description="Workspace identifier", alias="workspaceId"),
 ]
 RolePath = Annotated[
     UUID,
@@ -80,7 +68,7 @@ AssignmentPath = Annotated[
 
 
 # ---------------------------------------------------------------------------
-# Helpers for serialization and permission checks
+# Helpers
 # ---------------------------------------------------------------------------
 
 
@@ -98,43 +86,25 @@ def _serialize_role(role: Role) -> RoleOut:
     )
 
 
-def _serialize_user_role(assignment: UserRoleAssignment) -> UserRoleSummary:
-    role_slug = assignment.role.slug if assignment.role is not None else ""
-    return UserRoleSummary(
-        role_id=assignment.role_id,
-        role_slug=role_slug,
-        created_at=assignment.created_at,
+def _serialize_assignment(service: RbacService, assignment: RoleAssignment) -> RoleAssignmentOut:
+    role = service.get_role(assignment.role_id)
+    role_slug = role.slug if role is not None else ""
+    principal_display_name, principal_email, principal_slug = service.get_principal_identity(
+        principal_type=assignment.principal_type,
+        principal_id=assignment.principal_id,
     )
-
-
-def _serialize_assignment(assignment: UserRoleAssignment) -> RoleAssignmentOut:
-    scope_type = ScopeType.WORKSPACE if assignment.workspace_id else ScopeType.GLOBAL
     return RoleAssignmentOut(
         id=assignment.id,
-        user_id=assignment.user_id,
+        principal_type=assignment.principal_type,
+        principal_id=assignment.principal_id,
+        principal_display_name=principal_display_name,
+        principal_email=principal_email,
+        principal_slug=principal_slug,
         role_id=assignment.role_id,
-        role_slug=assignment.role.slug if assignment.role is not None else "",
-        scope_type=scope_type,
-        scope_id=assignment.workspace_id,
+        role_slug=role_slug,
+        scope_type=assignment.scope_type,
+        scope_id=assignment.scope_id,
         created_at=assignment.created_at,
-    )
-
-
-def _serialize_member(assignments: Iterable[UserRoleAssignment]) -> WorkspaceMemberOut:
-    assignments = list(assignments)
-    if not assignments:
-        raise ValueError("workspace member requires at least one assignment")
-    user_id = assignments[0].user_id
-    role_ids = [assignment.role_id for assignment in assignments]
-    role_slugs = [
-        assignment.role.slug if assignment.role is not None else "" for assignment in assignments
-    ]
-    created_at = min(assignment.created_at for assignment in assignments)
-    return WorkspaceMemberOut(
-        user_id=user_id,
-        role_ids=role_ids,
-        role_slugs=role_slugs,
-        created_at=created_at,
     )
 
 
@@ -150,29 +120,22 @@ def _ensure_global_permission(
         workspace_id=None,
     )
     if not ok:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Forbidden",
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
 
 
-def _ensure_workspace_permission(
-    *,
-    service: RbacService,
-    principal: AuthenticatedPrincipal,
-    permission_key: str,
-    workspace_id: UUID,
-) -> None:
-    ok = service.has_permission_for_user_id(
-        user_id=principal.user_id,
-        permission_key=permission_key,
-        workspace_id=workspace_id,
+def _role_assignment_page(items: list[RoleAssignmentOut], limit: int) -> RoleAssignmentPage:
+    return RoleAssignmentPage(
+        items=items,
+        meta=CursorMeta(
+            limit=limit,
+            has_more=False,
+            next_cursor=None,
+            total_included=True,
+            total_count=len(items),
+            changes_cursor="0",
+        ),
+        facets=None,
     )
-    if not ok:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Forbidden",
-        )
 
 
 # ---------------------------------------------------------------------------
@@ -193,7 +156,6 @@ def list_permissions(
     _guard: Annotated[None, Depends(strict_cursor_query_guard())],
 ) -> PermissionPage:
     service = RbacService(session=session)
-    # Require ability to read roles/permissions
     _ensure_global_permission(
         service=service,
         principal=principal,
@@ -446,151 +408,50 @@ def delete_role(
 
 
 # ---------------------------------------------------------------------------
-# Admin assignments listing (optional)
+# Principal-aware role assignments
 # ---------------------------------------------------------------------------
 
 
 @router.get(
-    "/roleassignments",
+    "/roleAssignments",
     response_model=RoleAssignmentPage,
     response_model_exclude_none=True,
-    summary="List role assignments (admin view)",
+    summary="List organization role assignments",
 )
-def list_assignments(
+def list_organization_role_assignments(
     principal: PrincipalDep,
     session: ReadSessionDep,
     list_query: Annotated[CursorQueryParams, Depends(cursor_query_params)],
     _guard: Annotated[None, Depends(strict_cursor_query_guard())],
 ) -> RoleAssignmentPage:
+    del list_query
     service = RbacService(session=session)
     _ensure_global_permission(
         service=service,
         principal=principal,
         permission_key="roles.read_all",
     )
-
-    resolved_sort = resolve_cursor_sort(
-        list_query.sort,
-        allowed=ASSIGNMENT_SORT_FIELDS,
-        cursor_fields=ASSIGNMENT_CURSOR_FIELDS,
-        default=ASSIGNMENT_DEFAULT_SORT,
-        id_field=ASSIGNMENT_ID_FIELD,
+    assignments = service.list_principal_assignments(
+        scope_type=AssignmentScopeType.ORGANIZATION,
+        scope_id=None,
     )
-    assignments = service.list_assignments(
-        filters=list_query.filters,
-        join_operator=list_query.join_operator,
-        q=list_query.q,
-        resolved_sort=resolved_sort,
-        limit=list_query.limit,
-        cursor=list_query.cursor,
-        include_total=list_query.include_total,
-    )
-    return RoleAssignmentPage(
-        items=[_serialize_assignment(item) for item in assignments.items],
-        meta=assignments.meta,
-        facets=assignments.facets,
-    )
+    items = [_serialize_assignment(service, assignment) for assignment in assignments]
+    return _role_assignment_page(items, limit=max(len(items), 1))
 
 
-@router.get(
-    "/roleassignments/{assignmentId}",
+@router.post(
+    "/roleAssignments",
+    dependencies=[Security(require_csrf)],
     response_model=RoleAssignmentOut,
     response_model_exclude_none=True,
-    summary="Retrieve a role assignment",
+    status_code=status.HTTP_201_CREATED,
+    summary="Create organization role assignment",
 )
-def read_assignment(
-    assignment_id: AssignmentPath,
-    principal: PrincipalDep,
-    session: ReadSessionDep,
-    response: Response,
-) -> RoleAssignmentOut:
-    service = RbacService(session=session)
-    _ensure_global_permission(
-        service=service,
-        principal=principal,
-        permission_key="roles.read_all",
-    )
-
-    assignment = service.get_assignment(assignment_id=assignment_id)
-    if assignment is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Role assignment not found")
-
-    payload = _serialize_assignment(assignment)
-    etag = format_weak_etag(build_etag_token(assignment.id, assignment.created_at))
-    if etag:
-        response.headers["ETag"] = etag
-    return payload
-
-
-# ---------------------------------------------------------------------------
-# Global role assignments per user
-# ---------------------------------------------------------------------------
-
-
-def _load_user_role_assignments(
-    *,
-    service: RbacService,
-    user_id: UUID,
-) -> list[UserRoleAssignment]:
-    resolved_sort = resolve_cursor_sort(
-        [],
-        allowed=ASSIGNMENT_SORT_FIELDS,
-        cursor_fields=ASSIGNMENT_CURSOR_FIELDS,
-        default=ASSIGNMENT_DEFAULT_SORT,
-        id_field=ASSIGNMENT_ID_FIELD,
-    )
-    assignments_page = service.list_assignments(
-        filters=[
-            FilterItem(id="userId", operator=FilterOperator.EQ, value=str(user_id)),
-            FilterItem(id="scopeId", operator=FilterOperator.IS_EMPTY, value=None),
-        ],
-        join_operator=FilterJoinOperator.AND,
-        q=None,
-        resolved_sort=resolved_sort,
-        limit=1000,
-        cursor=None,
-        include_total=False,
-        default_active_only=False,
-    )
-    return list(assignments_page.items)
-
-
-@user_roles_router.get(
-    "",
-    response_model=UserRolesEnvelope,
-    summary="List global roles assigned to a user",
-)
-def list_user_roles(
-    user_id: UserPath,
-    principal: PrincipalDep,
-    session: ReadSessionDep,
-) -> UserRolesEnvelope:
-    service = RbacService(session=session)
-    _ensure_global_permission(
-        service=service,
-        principal=principal,
-        permission_key="roles.read_all",
-    )
-
-    assignments = _load_user_role_assignments(service=service, user_id=user_id)
-    return UserRolesEnvelope(
-        user_id=user_id,
-        roles=[_serialize_user_role(assignment) for assignment in assignments],
-    )
-
-
-@user_roles_router.put(
-    "/{roleId}",
-    dependencies=[Security(require_csrf)],
-    response_model=UserRolesEnvelope,
-    summary="Assign a global role to a user (idempotent)",
-)
-def assign_user_role(
-    user_id: UserPath,
-    role_id: RolePath,
+def create_organization_role_assignment(
+    payload: RoleAssignmentCreate,
     principal: PrincipalDep,
     session: WriteSessionDep,
-) -> UserRolesEnvelope:
+) -> RoleAssignmentOut:
     service = RbacService(session=session)
     _ensure_global_permission(
         service=service,
@@ -599,64 +460,112 @@ def assign_user_role(
     )
 
     try:
-        service.assign_role_if_missing(
-            user_id=user_id,
-            role_id=role_id,
-            workspace_id=None,
+        assignment = service.assign_principal_role_if_missing(
+            principal_type=payload.principal_type,
+            principal_id=payload.principal_id,
+            role_id=payload.role_id,
+            scope_type=AssignmentScopeType.ORGANIZATION,
+            scope_id=None,
         )
     except (RoleNotFoundError, AssignmentError) as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except ScopeMismatchError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
 
-    assignments = _load_user_role_assignments(service=service, user_id=user_id)
-    return UserRolesEnvelope(
-        user_id=user_id,
-        roles=[_serialize_user_role(assignment) for assignment in assignments],
+    return _serialize_assignment(service, assignment)
+
+
+@router.get(
+    "/workspaces/{workspaceId}/roleAssignments",
+    response_model=RoleAssignmentPage,
+    response_model_exclude_none=True,
+    summary="List workspace role assignments",
+)
+def list_workspace_role_assignments(
+    workspace_id: WorkspacePath,
+    session: ReadSessionDep,
+    _actor: Annotated[
+        User,
+        Security(require_workspace("workspace.members.read"), scopes=["{workspaceId}"]),
+    ],
+) -> RoleAssignmentPage:
+    service = RbacService(session=session)
+    assignments = service.list_principal_assignments(
+        scope_type=AssignmentScopeType.WORKSPACE,
+        scope_id=workspace_id,
     )
+    items = [_serialize_assignment(service, assignment) for assignment in assignments]
+    return _role_assignment_page(items, limit=max(len(items), 1))
 
 
-@user_roles_router.delete(
-    "/{roleId}",
+@router.post(
+    "/workspaces/{workspaceId}/roleAssignments",
+    dependencies=[Security(require_csrf)],
+    response_model=RoleAssignmentOut,
+    response_model_exclude_none=True,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create workspace role assignment",
+)
+def create_workspace_role_assignment(
+    workspace_id: WorkspacePath,
+    payload: RoleAssignmentCreate,
+    _actor: Annotated[
+        User,
+        Security(require_workspace("workspace.members.manage"), scopes=["{workspaceId}"]),
+    ],
+    session: WriteSessionDep,
+) -> RoleAssignmentOut:
+    service = RbacService(session=session)
+    try:
+        assignment = service.assign_principal_role_if_missing(
+            principal_type=payload.principal_type,
+            principal_id=payload.principal_id,
+            role_id=payload.role_id,
+            scope_type=AssignmentScopeType.WORKSPACE,
+            scope_id=workspace_id,
+        )
+    except (RoleNotFoundError, AssignmentError) as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ScopeMismatchError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
+    return _serialize_assignment(service, assignment)
+
+
+@router.delete(
+    "/roleAssignments/{assignmentId}",
     dependencies=[Security(require_csrf)],
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="Remove a global role from a user",
+    summary="Delete a principal role assignment",
 )
-def remove_user_role(
-    user_id: UserPath,
-    role_id: RolePath,
+def delete_role_assignment(
+    assignment_id: AssignmentPath,
     principal: PrincipalDep,
     session: WriteSessionDep,
-    request: Request,
 ) -> Response:
     service = RbacService(session=session)
-    _ensure_global_permission(
-        service=service,
-        principal=principal,
-        permission_key="roles.manage_all",
-    )
-
-    assignment = service.get_assignment_for_user_role(
-        user_id=user_id,
-        role_id=role_id,
-        workspace_id=None,
-    )
+    assignment = service.get_principal_assignment(assignment_id=assignment_id)
     if assignment is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Role assignment not found")
 
+    if assignment.scope_type == AssignmentScopeType.ORGANIZATION:
+        _ensure_global_permission(
+            service=service,
+            principal=principal,
+            permission_key="roles.manage_all",
+        )
+    elif assignment.scope_id is None or not service.has_permission_for_user_id(
+        user_id=principal.user_id,
+        permission_key="workspace.members.manage",
+        workspace_id=assignment.scope_id,
+    ):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
     try:
-        require_if_match(
-            request.headers.get("if-match"),
-            expected_token=build_etag_token(assignment.id, assignment.created_at),
-        )
-        service.delete_assignment(
-            assignment_id=assignment.id,
-            workspace_id=None,
-        )
-    except ScopeMismatchError as exc:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
+        service.delete_principal_assignment(assignment_id=assignment_id)
+    except AssignmentNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-__all__ = ["router", "user_roles_router"]
+__all__ = ["router"]

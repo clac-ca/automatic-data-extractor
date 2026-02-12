@@ -81,7 +81,7 @@ export function UsersSettingsPage() {
   const selectedUserId = selectedParam && selectedParam !== "new" ? decodeURIComponent(selectedParam) : null;
   const selectedUser = users.find((entry) => entry.id === selectedUserId);
 
-  const basePath = "/organization/users";
+  const basePath = "/organization/access/users";
   const suffix = `${location.search}${location.hash}`;
   const closeDrawer = () => navigate(`${basePath}${suffix}`, { replace: true });
   const openCreateDrawer = () => navigate(`${basePath}/new${suffix}`);

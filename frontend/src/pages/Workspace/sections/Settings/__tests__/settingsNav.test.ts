@@ -14,8 +14,9 @@ describe("settingsNav", () => {
     expect(links).toEqual([
       "/workspaces/ws-123/settings/general",
       "/workspaces/ws-123/settings/processing",
-      "/workspaces/ws-123/settings/access/members",
+      "/workspaces/ws-123/settings/access/principals",
       "/workspaces/ws-123/settings/access/roles",
+      "/workspaces/ws-123/settings/access/invitations",
       "/workspaces/ws-123/settings/lifecycle/danger",
     ]);
     expect(defaultSettingsSection.path).toBe("general");
@@ -39,14 +40,15 @@ describe("settingsNav", () => {
     expect(workspaceSettingsSections.map((section) => section.id)).toEqual([
       "workspace.general",
       "workspace.processing",
-      "access.members",
+      "access.principals",
       "access.roles",
+      "access.invitations",
       "lifecycle.danger",
     ]);
   });
 
   it("resolves nested section paths for deep links", () => {
-    const section = resolveSectionByPath(["access", "members", "user-123"]);
-    expect(section?.id).toBe("access.members");
+    const section = resolveSectionByPath(["access", "principals", "user-123"]);
+    expect(section?.id).toBe("access.principals");
   });
 });

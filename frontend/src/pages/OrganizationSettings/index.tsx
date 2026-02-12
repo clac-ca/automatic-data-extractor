@@ -112,7 +112,14 @@ function normalizeSectionSegments(
   hash: string,
   defaultPath: string,
 ) {
-  const initialSegments = sectionSegments.length > 0 ? [...sectionSegments] : defaultPath.split("/");
+  const aliases = new Map<string, string>([
+    ["users", "access/users"],
+    ["roles", "access/roles"],
+  ]);
+  const incoming = sectionSegments.join("/");
+  const aliasedPath = aliases.get(incoming);
+  const initialSegments =
+    sectionSegments.length > 0 ? (aliasedPath ? aliasedPath.split("/") : [...sectionSegments]) : defaultPath.split("/");
   const joined = initialSegments.join("/");
   const needsDefaultRedirect = sectionSegments.length === 0;
   const isKnownPath = organizationSettingsSections.some(
@@ -121,6 +128,9 @@ function normalizeSectionSegments(
 
   return {
     effectiveSegments: isKnownPath ? initialSegments : defaultPath.split("/"),
-    redirectTo: needsDefaultRedirect || !isKnownPath ? `/organization/${defaultPath}${search}${hash}` : null,
+    redirectTo:
+      needsDefaultRedirect || !isKnownPath || Boolean(aliasedPath)
+        ? `/organization/${isKnownPath ? joined : defaultPath}${search}${hash}`
+        : null,
   };
 }
