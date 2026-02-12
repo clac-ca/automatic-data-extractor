@@ -21,6 +21,7 @@ _GROUP_CORE_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:Group"
 
 _SLUG_RE = re.compile(r"[^a-z0-9]+")
 _FILTER_RE = re.compile(r"^\s*([A-Za-z][\w]*)\s+eq\s+\"([^\"]*)\"\s*$")
+_MEMBER_FILTER_RE = re.compile(r"""^members\[value\s+eq\s+["']([^"']+)["']\]$""")
 
 
 def _slugify(value: str) -> str:
@@ -142,7 +143,10 @@ class ScimProvisioningService:
         user.external_id = self._extract_str(payload.get("externalId"))
         user.source = "scim"
         user.is_active = self._extract_bool(payload.get("active"), default=True)
-        self._session.flush([user])
+        try:
+            self._session.flush([user])
+        except IntegrityError as exc:
+            raise ScimApiError(status_code=409, detail="User conflict") from exc
         return self._serialize_user(user)
 
     def patch_user(self, *, user_id: UUID, payload: dict[str, Any]) -> dict[str, Any]:
@@ -179,7 +183,10 @@ class ScimProvisioningService:
                 for key, nested_value in value.items():
                     self._apply_user_path(user=user, path=str(key), value=nested_value)
 
-        self._session.flush([user])
+        try:
+            self._session.flush([user])
+        except IntegrityError as exc:
+            raise ScimApiError(status_code=409, detail="User conflict") from exc
         return self._serialize_user(user)
 
     def list_groups(
@@ -258,12 +265,15 @@ class ScimProvisioningService:
         group.external_id = self._extract_str(payload.get("externalId"))
         if not group.slug:
             group.slug = self._allocate_group_slug(display_name)
-        self._session.flush([group])
+        try:
+            self._session.flush([group])
 
-        members = payload.get("members")
-        if isinstance(members, list):
-            self._replace_group_members(group=group, members=members)
-        self._session.flush()
+            members = payload.get("members")
+            if isinstance(members, list):
+                self._replace_group_members(group=group, members=members)
+            self._session.flush()
+        except IntegrityError as exc:
+            raise ScimApiError(status_code=409, detail="Group conflict") from exc
         return self._serialize_group(group)
 
     def patch_group(self, *, group_id: UUID, payload: dict[str, Any]) -> dict[str, Any]:
@@ -295,8 +305,20 @@ class ScimProvisioningService:
                     self._apply_group_scalar_path(group=group, path=path, value=value)
                 continue
 
-            if path.startswith("members") or path == "members":
-                self._apply_group_member_patch(group=group, action=action, value=value)
+            if path == "members" or path.startswith("members["):
+                self._apply_group_member_patch(
+                    group=group,
+                    action=action,
+                    path=path,
+                    value=value,
+                )
+                continue
+            if path.startswith("members"):
+                raise ScimApiError(
+                    status_code=400,
+                    detail=f"Unsupported members path: {path}",
+                    scim_type="invalidPath",
+                )
                 continue
 
             if not path and isinstance(value, dict):
@@ -310,11 +332,39 @@ class ScimProvisioningService:
 
         group.source = GroupSource.IDP
         group.membership_mode = GroupMembershipMode.DYNAMIC
-        self._session.flush([group])
-        self._session.flush()
+        try:
+            self._session.flush([group])
+            self._session.flush()
+        except IntegrityError as exc:
+            raise ScimApiError(status_code=409, detail="Group conflict") from exc
         return self._serialize_group(group)
 
-    def _apply_group_member_patch(self, *, group: Group, action: str, value: Any) -> None:
+    def _apply_group_member_patch(
+        self,
+        *,
+        group: Group,
+        action: str,
+        path: str = "members",
+        value: Any,
+    ) -> None:
+        if path != "members":
+            if action != "remove" or value is not None:
+                raise ScimApiError(
+                    status_code=400,
+                    detail=f"Unsupported members path: {path}",
+                    scim_type="invalidPath",
+                )
+            user_id = self._parse_member_filter_user_id(path)
+            membership = self._session.execute(
+                select(GroupMembership).where(
+                    GroupMembership.group_id == group.id,
+                    GroupMembership.user_id == user_id,
+                )
+            ).scalar_one_or_none()
+            if membership is not None:
+                self._session.delete(membership)
+            return
+
         if action == "remove" and value is None:
             for membership in self._session.execute(
                 select(GroupMembership).where(GroupMembership.group_id == group.id)
@@ -384,6 +434,17 @@ class ScimProvisioningService:
     def _replace_group_members(self, *, group: Group, members: list[Any]) -> None:
         parsed_members = [member for member in members if isinstance(member, dict)]
         self._apply_group_member_patch(group=group, action="replace", value=parsed_members)
+
+    @staticmethod
+    def _parse_member_filter_user_id(path: str) -> UUID:
+        match = _MEMBER_FILTER_RE.match(path)
+        if match is None:
+            raise ScimApiError(
+                status_code=400,
+                detail=f"Unsupported members path: {path}",
+                scim_type="invalidPath",
+            )
+        return _ensure_scim_id(match.group(1), label="member value")
 
     @staticmethod
     def _apply_group_scalar_path(*, group: Group, path: str, value: Any) -> None:
