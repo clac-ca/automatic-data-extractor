@@ -10,7 +10,7 @@ import sqlalchemy as sa
 from alembic import op
 
 # Revision identifiers, used by Alembic.
-revision = "0003_invitation_lifecycle_derived_status"
+revision = "0003_invitation_lifecycle_status"
 down_revision = "0002_access_model_hard_cutover"
 branch_labels = None
 depends_on = None
