@@ -38,9 +38,3 @@ export function buildUploadRunOptions(
   }
   return { active_sheet_only: true };
 }
-
-export async function readWorkbookSheetNames(file: File): Promise<string[]> {
-  const { read } = await import("xlsx");
-  const workbook = read(await file.arrayBuffer(), { type: "array", bookSheets: true });
-  return normalizeSheetNames(workbook.SheetNames ?? []);
-}
