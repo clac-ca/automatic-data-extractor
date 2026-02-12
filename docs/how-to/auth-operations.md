@@ -51,17 +51,17 @@ Use this sequence:
 ### `jit`
 
 1. unknown users can be created/linked at successful sign-in (policy dependent)
-2. signed-in user memberships are hydrated from provider after login
+2. no group synchronization is performed
 
 ### `scim`
 
-1. unknown SSO users are denied auto-provisioning
-2. SCIM and invitation paths provide identity provisioning
+1. unknown SSO users are denied auto-provisioning at login
+2. SCIM is the recommended path for automated user provisioning and group sync
 
 ## IdP Group Membership Contract
 
-1. membership hydration occurs for signed-in user only in JIT path
-2. hydration failures do not block login
+1. JIT does not create/update/remove provider-managed groups or memberships
+2. SCIM is the only automatic path that manages provider-managed groups/memberships
 3. provider-managed groups are read-only in manual membership endpoints
 
 ## Password and MFA Behavior
