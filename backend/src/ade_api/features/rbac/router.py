@@ -491,10 +491,10 @@ def create_organization_role_assignment(
             scope_type=AssignmentScopeType.ORGANIZATION,
             scope_id=None,
         )
-    except (RoleNotFoundError, AssignmentError) as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except ScopeMismatchError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
+    except (RoleNotFoundError, AssignmentError) as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
     return _serialize_assignment(service, assignment)
 
@@ -567,10 +567,10 @@ def create_workspace_role_assignment(
             scope_type=AssignmentScopeType.WORKSPACE,
             scope_id=workspace_id,
         )
-    except (RoleNotFoundError, AssignmentError) as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except ScopeMismatchError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
+    except (RoleNotFoundError, AssignmentError) as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return _serialize_assignment(service, assignment)
 
 

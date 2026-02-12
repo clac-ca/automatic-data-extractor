@@ -475,6 +475,156 @@ async def test_group_workspace_assignment_grants_workspace_access(
     assert "workspace-member" in payload["roles"]
 
 
+async def _set_provisioning_mode(
+    async_client: AsyncClient,
+    *,
+    admin_token: str,
+    mode: str,
+) -> None:
+    headers = {"X-API-Key": admin_token}
+    current = await async_client.get("/api/v1/admin/settings", headers=headers)
+    assert current.status_code == 200, current.text
+    revision = current.json()["revision"]
+
+    updated = await async_client.patch(
+        "/api/v1/admin/settings",
+        headers=headers,
+        json={
+            "revision": revision,
+            "changes": {
+                "auth": {
+                    "identityProvider": {
+                        "provisioningMode": mode,
+                    }
+                }
+            },
+        },
+    )
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["values"]["auth"]["identityProvider"]["provisioningMode"] == mode
+
+
+async def test_idp_group_assignments_require_scim_mode(
+    async_client: AsyncClient,
+    seed_identity,
+    db_session: Session,
+) -> None:
+    admin = seed_identity.admin
+    admin_token, _ = await login(async_client, email=admin.email, password=admin.password)
+    global_user_role_id = _role_id_by_slug(db_session, "global-user")
+
+    create_group_response = await async_client.post(
+        "/api/v1/groups",
+        json={
+            "display_name": "IdP Managed",
+            "slug": "idp-managed-assignment",
+            "membership_mode": "assigned",
+            "source": "idp",
+            "external_id": "entra-group-assignment",
+        },
+        headers={"X-API-Key": admin_token},
+    )
+    assert create_group_response.status_code == 201, create_group_response.text
+    group_id = create_group_response.json()["id"]
+
+    await _set_provisioning_mode(async_client, admin_token=admin_token, mode="jit")
+
+    blocked = await async_client.post(
+        "/api/v1/roleAssignments",
+        json={
+            "principal_type": "group",
+            "principal_id": str(group_id),
+            "role_id": global_user_role_id,
+        },
+        headers={"X-API-Key": admin_token},
+    )
+    assert blocked.status_code == 422, blocked.text
+    assert (
+        blocked.json()["detail"]
+        == "Provider-managed groups are SCIM-managed and can only be used for role assignment when provisioning mode is SCIM."
+    )
+
+    await _set_provisioning_mode(async_client, admin_token=admin_token, mode="scim")
+
+    allowed = await async_client.post(
+        "/api/v1/roleAssignments",
+        json={
+            "principal_type": "group",
+            "principal_id": str(group_id),
+            "role_id": global_user_role_id,
+        },
+        headers={"X-API-Key": admin_token},
+    )
+    assert allowed.status_code == 201, allowed.text
+
+
+async def test_idp_group_workspace_grants_are_effective_only_in_scim_mode(
+    async_client: AsyncClient,
+    seed_identity,
+    db_session: Session,
+) -> None:
+    admin = seed_identity.admin
+    admin_token, _ = await login(async_client, email=admin.email, password=admin.password)
+    orphan = seed_identity.orphan
+    workspace_member_role_id = _role_id_by_slug(db_session, "workspace-member")
+
+    create_group_response = await async_client.post(
+        "/api/v1/groups",
+        json={
+            "display_name": "IdP Workspace Access",
+            "slug": "idp-workspace-access",
+            "membership_mode": "assigned",
+            "source": "idp",
+            "external_id": "entra-group-workspace",
+        },
+        headers={"X-API-Key": admin_token},
+    )
+    assert create_group_response.status_code == 201, create_group_response.text
+    group_id = create_group_response.json()["id"]
+
+    db_session.add(
+        GroupMembership(
+            group_id=group_id,
+            user_id=orphan.id,
+            membership_source="idp",
+        )
+    )
+    db_session.flush()
+
+    await _set_provisioning_mode(async_client, admin_token=admin_token, mode="scim")
+
+    assign_response = await async_client.post(
+        f"/api/v1/workspaces/{seed_identity.workspace_id}/roleAssignments",
+        json={
+            "principal_type": "group",
+            "principal_id": str(group_id),
+            "role_id": workspace_member_role_id,
+        },
+        headers={"X-API-Key": admin_token},
+    )
+    assert assign_response.status_code == 201, assign_response.text
+
+    orphan_token, _ = await login(async_client, email=orphan.email, password=orphan.password)
+
+    workspaces_scim = await async_client.get(
+        "/api/v1/workspaces",
+        headers={"X-API-Key": orphan_token},
+    )
+    assert workspaces_scim.status_code == 200, workspaces_scim.text
+    listed_scim = {item["id"] for item in _items(workspaces_scim.json())}
+    assert str(seed_identity.workspace_id) in listed_scim
+
+    await _set_provisioning_mode(async_client, admin_token=admin_token, mode="jit")
+
+    workspaces_jit = await async_client.get(
+        "/api/v1/workspaces",
+        headers={"X-API-Key": orphan_token},
+    )
+    assert workspaces_jit.status_code == 200, workspaces_jit.text
+    listed_jit = {item["id"] for item in _items(workspaces_jit.json())}
+    assert str(seed_identity.workspace_id) not in listed_jit
+
+
 async def test_provider_managed_group_memberships_are_read_only(
     async_client: AsyncClient,
     seed_identity,

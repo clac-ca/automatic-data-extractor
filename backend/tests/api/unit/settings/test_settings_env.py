@@ -257,3 +257,30 @@ def test_cors_origin_regex_validation(monkeypatch: pytest.MonkeyPatch) -> None:
 
     with pytest.raises(re.error):
         Settings(_env_file=None)
+
+
+@pytest.mark.parametrize(
+    "env_name",
+    [
+        "ADE_AUTH_EXTERNAL_ENABLED",
+        "ADE_AUTH_FORCE_SSO",
+        "ADE_AUTH_SSO_AUTO_PROVISION",
+        "ADE_AUTH_ENFORCE_LOCAL_MFA",
+        "ADE_AUTH_GROUP_SYNC_PROVIDER",
+        "ADE_AUTH_GROUP_SYNC_TENANT_ID",
+        "ADE_AUTH_GROUP_SYNC_CLIENT_ID",
+        "ADE_AUTH_GROUP_SYNC_CLIENT_SECRET",
+    ],
+)
+def test_removed_auth_env_vars_raise_validation_error(
+    monkeypatch: pytest.MonkeyPatch,
+    env_name: str,
+) -> None:
+    monkeypatch.setenv("ADE_DATABASE_URL", "postgresql+psycopg://ade:ade@postgres:5432/ade?sslmode=disable")
+    monkeypatch.setenv("ADE_BLOB_CONTAINER", "ade-test")
+    monkeypatch.setenv("ADE_BLOB_CONNECTION_STRING", "UseDevelopmentStorage=true")
+    monkeypatch.setenv("ADE_SECRET_KEY", "test-secret-key-for-tests-please-change")
+    monkeypatch.setenv(env_name, "1")
+
+    with pytest.raises(ValidationError, match="Removed auth environment variables are no longer supported"):
+        Settings(_env_file=None)

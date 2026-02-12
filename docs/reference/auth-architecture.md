@@ -39,13 +39,13 @@ Mode behavior:
 
 1. `disabled`: unknown SSO users are denied until invited/admin-provisioned.
 2. `jit`: unknown users can be created/linked at successful SSO sign-in per policy checks.
-3. `scim`: unknown SSO users are denied; SCIM/invitation paths provide provisioning.
+3. `scim`: unknown SSO users are denied at login; SCIM/invitation paths provide provisioning.
 
 ## IdP Group Membership Behavior
 
-1. JIT membership hydration runs for the signed-in user after successful SSO identity resolution.
-2. Hydration is best-effort and must not block login on transient failures.
-3. Provider-managed groups can be auto-upserted as metadata containers.
+1. JIT does not perform any group synchronization.
+2. SCIM is the only automatic path for provider-managed group and membership sync.
+3. Provider-managed group assignments are effective only when provisioning mode is `scim`.
 4. Manual membership mutations are blocked for provider-managed groups.
 
 ## SCIM Provisioning Model

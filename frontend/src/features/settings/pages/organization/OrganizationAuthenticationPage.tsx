@@ -302,6 +302,9 @@ export function OrganizationAuthenticationPage() {
       </SettingsDetailSection>
 
       <SettingsDetailSection id="provisioning" title="Provisioning">
+        <Alert tone="info" heading="Recommended setup">
+          Use SCIM for enterprise provisioning and group synchronization. JIT auto-provisions users on sign-in only and does not sync groups.
+        </Alert>
         <FormField label="Identity provider provisioning mode">
           <Select value={provisioningMode} onValueChange={(value) => setProvisioningMode(value as typeof provisioningMode)}>
             <SelectTrigger disabled={!canManage || patchMutation.isPending}>
@@ -314,6 +317,9 @@ export function OrganizationAuthenticationPage() {
             </SelectContent>
           </Select>
         </FormField>
+        <p className="text-sm text-muted-foreground">
+          JIT: auto-provision user identity on successful sign-in only. SCIM (recommended): automatic user provisioning plus group sync.
+        </p>
 
         {provisioningMode === "scim" ? (
           <div className="space-y-3 rounded-lg border border-border/70 bg-muted/20 p-4">
