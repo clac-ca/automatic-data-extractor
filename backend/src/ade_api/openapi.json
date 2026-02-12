@@ -4109,20 +4109,147 @@
             }
           },
           {
-            "name": "invitation_status",
+            "name": "status",
             "in": "query",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "$ref": "#/components/schemas/InvitationStatus"
+                  "$ref": "#/components/schemas/InvitationLifecycleStatus"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "title": "Invitation Status"
+              "title": "Status"
             }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "description": "Items per page (max 200)",
+              "default": 50,
+              "title": "Limit"
+            },
+            "description": "Items per page (max 200)"
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Opaque cursor token for pagination.",
+              "title": "Cursor"
+            },
+            "description": "Opaque cursor token for pagination."
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "JSON array of {id, desc}.",
+              "title": "Sort"
+            },
+            "description": "JSON array of {id, desc}."
+          },
+          {
+            "name": "filters",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "URL-encoded JSON array of filter objects.",
+              "examples": [
+                "[{\"id\":\"status\",\"operator\":\"in\",\"value\":[\"processing\",\"failed\"]}]"
+              ],
+              "title": "Filters"
+            },
+            "description": "URL-encoded JSON array of filter objects."
+          },
+          {
+            "name": "joinOperator",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/FilterJoinOperator",
+              "description": "Logical operator to join filters (and/or).",
+              "default": "and"
+            },
+            "description": "Logical operator to join filters (and/or)."
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored.",
+              "examples": [
+                "acme invoice"
+              ],
+              "title": "Q"
+            },
+            "description": "Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored."
+          },
+          {
+            "name": "includeTotal",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Include totalCount in the response.",
+              "default": false,
+              "title": "Includetotal"
+            },
+            "description": "Include totalCount in the response."
+          },
+          {
+            "name": "includeFacets",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Include facet counts in the response.",
+              "default": false,
+              "title": "Includefacets"
+            },
+            "description": "Include facet counts in the response."
           }
         ],
         "responses": {
@@ -4131,7 +4258,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/InvitationListResponse"
+                  "$ref": "#/components/schemas/InvitationPage"
                 }
               }
             },
@@ -20227,22 +20354,15 @@
         ],
         "title": "InvitationCreate"
       },
-      "InvitationListResponse": {
-        "properties": {
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/InvitationOut"
-            },
-            "type": "array",
-            "title": "Items"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "items"
+      "InvitationLifecycleStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "accepted",
+          "expired",
+          "cancelled"
         ],
-        "title": "InvitationListResponse"
+        "title": "InvitationLifecycleStatus"
       },
       "InvitationOut": {
         "properties": {
@@ -20272,8 +20392,20 @@
             "format": "uuid",
             "title": "Invited By User Id"
           },
+          "workspace_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workspace Id"
+          },
           "status": {
-            "$ref": "#/components/schemas/InvitationStatus"
+            "$ref": "#/components/schemas/InvitationLifecycleStatus"
           },
           "expires_at": {
             "anyOf": [
@@ -20299,17 +20431,15 @@
             ],
             "title": "Redeemed At"
           },
-          "metadata": {
+          "workspaceContext": {
             "anyOf": [
               {
-                "additionalProperties": true,
-                "type": "object"
+                "$ref": "#/components/schemas/InvitationWorkspaceContextOut"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Metadata"
+            ]
           },
           "created_at": {
             "type": "string",
@@ -20336,14 +20466,63 @@
           "email_normalized",
           "invited_user_id",
           "invited_by_user_id",
+          "workspace_id",
           "status",
           "expires_at",
           "redeemed_at",
-          "metadata",
           "created_at",
           "updated_at"
         ],
         "title": "InvitationOut"
+      },
+      "InvitationPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/InvitationOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/CursorMeta"
+          },
+          "facets": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Facets"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items",
+          "meta"
+        ],
+        "title": "InvitationPage",
+        "description": "Cursor-based invitation collection."
+      },
+      "InvitationRoleAssignmentOut": {
+        "properties": {
+          "roleId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Roleid"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "roleId"
+        ],
+        "title": "InvitationRoleAssignmentOut"
       },
       "InvitationRoleAssignmentSeed": {
         "properties": {
@@ -20359,17 +20538,6 @@
           "roleId"
         ],
         "title": "InvitationRoleAssignmentSeed"
-      },
-      "InvitationStatus": {
-        "type": "string",
-        "enum": [
-          "pending",
-          "accepted",
-          "expired",
-          "cancelled"
-        ],
-        "title": "InvitationStatus",
-        "description": "Lifecycle states for invitation records."
       },
       "InvitationWorkspaceContext": {
         "properties": {
@@ -20392,6 +20560,28 @@
           "workspaceId"
         ],
         "title": "InvitationWorkspaceContext"
+      },
+      "InvitationWorkspaceContextOut": {
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Workspaceid"
+          },
+          "roleAssignments": {
+            "items": {
+              "$ref": "#/components/schemas/InvitationRoleAssignmentOut"
+            },
+            "type": "array",
+            "title": "Roleassignments"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "workspaceId"
+        ],
+        "title": "InvitationWorkspaceContextOut"
       },
       "MeContext": {
         "properties": {

@@ -3,15 +3,22 @@ from __future__ import annotations
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Path, Security, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Security, status
 
 from ade_api.api.deps import ReadSessionDep, WriteSessionDep
+from ade_api.common.cursor_listing import (
+    CursorQueryParams,
+    cursor_query_params,
+    resolve_cursor_sort,
+    strict_cursor_query_guard,
+)
 from ade_api.core.http import require_authenticated, require_csrf
 from ade_api.features.rbac.service import RbacService
-from ade_db.models import InvitationStatus, User
+from ade_db.models import User
 
-from .schemas import InvitationCreate, InvitationListResponse, InvitationOut
+from .schemas import InvitationCreate, InvitationLifecycleStatus, InvitationOut, InvitationPage
 from .service import InvitationsService
+from .sorting import CURSOR_FIELDS, DEFAULT_SORT, ID_FIELD, SORT_FIELDS
 
 router = APIRouter(tags=["invitations"], dependencies=[Security(require_authenticated)])
 
@@ -19,19 +26,6 @@ InvitationPath = Annotated[
     UUID,
     Path(description="Invitation identifier", alias="invitationId"),
 ]
-
-
-def _workspace_id_from_metadata(metadata: dict[str, object]) -> tuple[UUID | None, bool]:
-    workspace_raw = metadata.get("workspaceId")
-    if workspace_raw is None:
-        return None, False
-    if not isinstance(workspace_raw, str):
-        return None, True
-    try:
-        return UUID(workspace_raw), False
-    except (TypeError, ValueError):
-        return None, True
-
 
 def _can_manage_invitation_scope(
     *,
@@ -103,22 +97,42 @@ def _can_read_invitation_scope(
 
 @router.get(
     "/invitations",
-    response_model=InvitationListResponse,
+    response_model=InvitationPage,
     response_model_exclude_none=True,
     summary="List invitations",
 )
 def list_invitations(
     actor: Annotated[User, Security(require_authenticated)],
     session: ReadSessionDep,
+    list_query: Annotated[CursorQueryParams, Depends(cursor_query_params)],
+    _guard: Annotated[
+        None,
+        Depends(strict_cursor_query_guard(allowed_extra={"workspace_id", "status"})),
+    ],
     workspace_id: UUID | None = None,
-    invitation_status: InvitationStatus | None = None,
-) -> InvitationListResponse:
+    status_value: Annotated[InvitationLifecycleStatus | None, Query(alias="status")] = None,
+) -> InvitationPage:
     rbac = RbacService(session=session)
     if not _can_read_invitation_scope(actor=actor, rbac=rbac, workspace_id=workspace_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
 
+    resolved_sort = resolve_cursor_sort(
+        list_query.sort,
+        allowed=SORT_FIELDS,
+        cursor_fields=CURSOR_FIELDS,
+        default=DEFAULT_SORT,
+        id_field=ID_FIELD,
+    )
     service = InvitationsService(session=session)
-    return service.list_invitations(workspace_id=workspace_id, status_value=invitation_status)
+    return service.list_invitations(
+        workspace_id=workspace_id,
+        status_value=status_value,
+        q=list_query.q,
+        resolved_sort=resolved_sort,
+        limit=list_query.limit,
+        cursor=list_query.cursor,
+        include_total=list_query.include_total,
+    )
 
 
 @router.post(
@@ -156,16 +170,14 @@ def get_invitation(
 ) -> InvitationOut:
     service = InvitationsService(session=session)
     invitation = service.get_invitation(invitation_id=invitation_id)
-    metadata = invitation.metadata_payload or {}
-    workspace_id, invalid_workspace_scope = _workspace_id_from_metadata(metadata)
     rbac = RbacService(session=session)
-    if invalid_workspace_scope or not _can_read_invitation_scope(
+    if not _can_read_invitation_scope(
         actor=actor,
         rbac=rbac,
-        workspace_id=workspace_id,
+        workspace_id=invitation.workspace_id,
     ):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
-    return service.get_invitation_out(invitation_id=invitation_id)
+    return service.serialize_invitation(invitation)
 
 
 @router.post(
@@ -182,13 +194,11 @@ def resend_invitation(
 ) -> InvitationOut:
     service = InvitationsService(session=session)
     invitation = service.get_invitation(invitation_id=invitation_id)
-    metadata = invitation.metadata_payload or {}
-    workspace_id, invalid_workspace_scope = _workspace_id_from_metadata(metadata)
     rbac = RbacService(session=session)
-    if invalid_workspace_scope or not _can_manage_invitation_scope(
+    if not _can_manage_invitation_scope(
         actor=actor,
         rbac=rbac,
-        workspace_id=workspace_id,
+        workspace_id=invitation.workspace_id,
     ):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
     return service.resend_invitation(invitation_id=invitation_id)
@@ -208,13 +218,11 @@ def cancel_invitation(
 ) -> InvitationOut:
     service = InvitationsService(session=session)
     invitation = service.get_invitation(invitation_id=invitation_id)
-    metadata = invitation.metadata_payload or {}
-    workspace_id, invalid_workspace_scope = _workspace_id_from_metadata(metadata)
     rbac = RbacService(session=session)
-    if invalid_workspace_scope or not _can_manage_invitation_scope(
+    if not _can_manage_invitation_scope(
         actor=actor,
         rbac=rbac,
-        workspace_id=workspace_id,
+        workspace_id=invitation.workspace_id,
     ):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
     return service.cancel_invitation(invitation_id=invitation_id)

@@ -29,6 +29,7 @@ export function SettingsDataTable<T>({
   focusStorageKey,
   openActionLabel = "Open",
   rowClassName,
+  rowsAreCurrentPage = false,
 }: {
   readonly rows: readonly T[];
   readonly columns: readonly SettingsTableColumnSpec<T>[];
@@ -42,6 +43,7 @@ export function SettingsDataTable<T>({
   readonly focusStorageKey?: string;
   readonly openActionLabel?: string;
   readonly rowClassName?: string;
+  readonly rowsAreCurrentPage?: boolean;
 }) {
   const { rememberRow, focusKey } = useSettingsFocusRestore(focusStorageKey ?? "");
 
@@ -50,12 +52,17 @@ export function SettingsDataTable<T>({
   const safePage = Math.min(Math.max(page, 1), totalPages);
 
   const pageRows = useMemo(() => {
+    if (rowsAreCurrentPage) {
+      return rows.slice(0, safePageSize);
+    }
     const start = (safePage - 1) * safePageSize;
     return rows.slice(start, start + safePageSize);
-  }, [rows, safePage, safePageSize]);
+  }, [rows, rowsAreCurrentPage, safePage, safePageSize]);
 
   const startLabel = totalCount === 0 ? 0 : (safePage - 1) * safePageSize + 1;
-  const endLabel = Math.min(totalCount, safePage * safePageSize);
+  const endLabel = rowsAreCurrentPage
+    ? Math.min(totalCount, (safePage - 1) * safePageSize + pageRows.length)
+    : Math.min(totalCount, safePage * safePageSize);
 
   const handleRowOpen = (row: T) => {
     if (!onRowOpen) {

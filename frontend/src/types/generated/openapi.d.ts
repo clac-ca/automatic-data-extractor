@@ -4025,11 +4025,11 @@ export type components = {
             displayName?: string | null;
             workspaceContext?: components["schemas"]["InvitationWorkspaceContext"] | null;
         };
-        /** InvitationListResponse */
-        InvitationListResponse: {
-            /** Items */
-            items: components["schemas"]["InvitationOut"][];
-        };
+        /**
+         * InvitationLifecycleStatus
+         * @enum {string}
+         */
+        InvitationLifecycleStatus: "pending" | "accepted" | "expired" | "cancelled";
         /** InvitationOut */
         InvitationOut: {
             /**
@@ -4046,15 +4046,14 @@ export type components = {
              * Format: uuid
              */
             invited_by_user_id: string;
-            status: components["schemas"]["InvitationStatus"];
+            /** Workspace Id */
+            workspace_id: string | null;
+            status: components["schemas"]["InvitationLifecycleStatus"];
             /** Expires At */
             expires_at: string | null;
             /** Redeemed At */
             redeemed_at: string | null;
-            /** Metadata */
-            metadata: {
-                [key: string]: unknown;
-            } | null;
+            workspaceContext?: components["schemas"]["InvitationWorkspaceContextOut"] | null;
             /**
              * Created At
              * Format: date-time
@@ -4062,6 +4061,27 @@ export type components = {
             created_at: string;
             /** Updated At */
             updated_at: string | null;
+        };
+        /**
+         * InvitationPage
+         * @description Cursor-based invitation collection.
+         */
+        InvitationPage: {
+            /** Items */
+            items: components["schemas"]["InvitationOut"][];
+            meta: components["schemas"]["CursorMeta"];
+            /** Facets */
+            facets?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** InvitationRoleAssignmentOut */
+        InvitationRoleAssignmentOut: {
+            /**
+             * Roleid
+             * Format: uuid
+             */
+            roleId: string;
         };
         /** InvitationRoleAssignmentSeed */
         InvitationRoleAssignmentSeed: {
@@ -4071,12 +4091,6 @@ export type components = {
              */
             roleId: string;
         };
-        /**
-         * InvitationStatus
-         * @description Lifecycle states for invitation records.
-         * @enum {string}
-         */
-        InvitationStatus: "pending" | "accepted" | "expired" | "cancelled";
         /** InvitationWorkspaceContext */
         InvitationWorkspaceContext: {
             /**
@@ -4086,6 +4100,16 @@ export type components = {
             workspaceId: string;
             /** Roleassignments */
             roleAssignments?: components["schemas"]["InvitationRoleAssignmentSeed"][];
+        };
+        /** InvitationWorkspaceContextOut */
+        InvitationWorkspaceContextOut: {
+            /**
+             * Workspaceid
+             * Format: uuid
+             */
+            workspaceId: string;
+            /** Roleassignments */
+            roleAssignments?: components["schemas"]["InvitationRoleAssignmentOut"][];
         };
         /**
          * MeContext
@@ -7684,7 +7708,23 @@ export interface operations {
         parameters: {
             query?: {
                 workspace_id?: string | null;
-                invitation_status?: components["schemas"]["InvitationStatus"] | null;
+                status?: components["schemas"]["InvitationLifecycleStatus"] | null;
+                /** @description Items per page (max 200) */
+                limit?: number;
+                /** @description Opaque cursor token for pagination. */
+                cursor?: string | null;
+                /** @description JSON array of {id, desc}. */
+                sort?: string | null;
+                /** @description URL-encoded JSON array of filter objects. */
+                filters?: string | null;
+                /** @description Logical operator to join filters (and/or). */
+                joinOperator?: components["schemas"]["FilterJoinOperator"];
+                /** @description Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored. */
+                q?: string | null;
+                /** @description Include totalCount in the response. */
+                includeTotal?: boolean;
+                /** @description Include facet counts in the response. */
+                includeFacets?: boolean;
             };
             header?: never;
             path?: never;
@@ -7699,7 +7739,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["InvitationListResponse"];
+                    "application/json": components["schemas"]["InvitationPage"];
                 };
             };
             /** @description Validation Error */

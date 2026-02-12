@@ -46,7 +46,7 @@ export type WorkspaceUpdate = GeneratedComponents["schemas"]["WorkspaceUpdate"];
 export type RoleAssignmentOut = GeneratedComponents["schemas"]["RoleAssignmentOut"];
 export type RoleAssignmentPage = GeneratedComponents["schemas"]["RoleAssignmentPage"];
 export type InvitationOut = GeneratedComponents["schemas"]["InvitationOut"];
-export type InvitationListResponse = GeneratedComponents["schemas"]["InvitationListResponse"];
+export type InvitationPage = GeneratedComponents["schemas"]["InvitationPage"];
 export type GroupOut = GeneratedComponents["schemas"]["GroupOut"];
 export type GroupListResponse = GeneratedComponents["schemas"]["GroupListResponse"];
 
