@@ -40,6 +40,10 @@ REMOVED_AUTH_ENV_VARS = (
     "ADE_AUTH_FORCE_SSO",
     "ADE_AUTH_SSO_AUTO_PROVISION",
     "ADE_AUTH_ENFORCE_LOCAL_MFA",
+    "ADE_AUTH_GROUP_SYNC_PROVIDER",
+    "ADE_AUTH_GROUP_SYNC_TENANT_ID",
+    "ADE_AUTH_GROUP_SYNC_CLIENT_ID",
+    "ADE_AUTH_GROUP_SYNC_CLIENT_SECRET",
 )
 
 
@@ -129,10 +133,6 @@ class Settings(
     auth_idp_provisioning_mode: Literal["disabled", "jit", "scim"] = "jit"
     auth_sso_providers_json: str | None = None
     sso_encryption_key: SecretStr | None = None
-    auth_group_sync_provider: Literal["entra"] = "entra"
-    auth_group_sync_tenant_id: str | None = None
-    auth_group_sync_client_id: str | None = None
-    auth_group_sync_client_secret: SecretStr | None = None
 
     # Runs
     preview_timeout_seconds: float = Field(10, gt=0)

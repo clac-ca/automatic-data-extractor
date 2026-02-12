@@ -28,10 +28,12 @@ from ade_api.core.rbac.registry import (
     role_allows_scope,
 )
 from ade_api.core.rbac.types import ScopeType
+from ade_api.features.admin_settings.service import RuntimeSettingsService
 from ade_db.models import (
     AssignmentScopeType,
     Group,
     GroupMembership,
+    GroupSource,
     Permission,
     PrincipalType,
     Role,
@@ -279,6 +281,33 @@ class RbacService:
 
     def _set_cached(self, key: tuple[str, ...], value: Any) -> None:
         self._cache[key] = value
+
+    def _effective_idp_provisioning_mode(self) -> str:
+        cache_key = ("idp_provisioning_mode",)
+        cached = self._get_cached(cache_key)
+        if isinstance(cached, str):
+            return cached
+
+        try:
+            mode = (
+                RuntimeSettingsService(session=self._session)
+                .get_effective_values()
+                .auth.identity_provider.provisioning_mode
+            )
+        except Exception:
+            logger.exception("rbac.provisioning_mode.resolve_failed")
+            mode = "jit"
+
+        self._set_cached(cache_key, mode)
+        return mode
+
+    def _idp_groups_allowed(self) -> bool:
+        return self._effective_idp_provisioning_mode() == "scim"
+
+    def _group_source_filter(self) -> Any:
+        if self._idp_groups_allowed():
+            return true()
+        return Group.source == GroupSource.INTERNAL
 
     # ------------- registry sync -----------------
 
@@ -967,11 +996,14 @@ class RbacService:
             if self._session.get(User, principal_id) is None:
                 raise AssignmentError("User not found")
         elif principal_type == PrincipalType.GROUP:
-            # Import inline to avoid cyc dependency at module import.
-            from ade_db.models import Group
-
-            if self._session.get(Group, principal_id) is None:
+            group = self._session.get(Group, principal_id)
+            if group is None:
                 raise AssignmentError("Group not found")
+            if group.source == GroupSource.IDP and not self._idp_groups_allowed():
+                raise ScopeMismatchError(
+                    "Provider-managed groups are SCIM-managed and can only be used "
+                    "for role assignment when provisioning mode is SCIM."
+                )
 
         if scope_type == AssignmentScopeType.WORKSPACE:
             if scope_id is None:
@@ -1107,6 +1139,7 @@ class RbacService:
                 RoleAssignment.principal_type == PrincipalType.GROUP,
                 RoleAssignment.scope_type == AssignmentScopeType.ORGANIZATION,
                 Group.is_active == true(),
+                self._group_source_filter(),
                 Permission.scope_type == ScopeType.GLOBAL,
             )
         )
@@ -1180,6 +1213,7 @@ class RbacService:
                 RoleAssignment.scope_type == AssignmentScopeType.WORKSPACE,
                 RoleAssignment.scope_id == workspace_id,
                 Group.is_active == true(),
+                self._group_source_filter(),
                 Permission.scope_type == ScopeType.WORKSPACE,
             )
         )
@@ -1280,6 +1314,7 @@ class RbacService:
                 RoleAssignment.principal_type == PrincipalType.GROUP,
                 RoleAssignment.scope_type == AssignmentScopeType.ORGANIZATION,
                 Group.is_active == true(),
+                self._group_source_filter(),
             )
         )
         from_group_assignments = set(self._session.execute(stmt_v2_group).scalars().all())
