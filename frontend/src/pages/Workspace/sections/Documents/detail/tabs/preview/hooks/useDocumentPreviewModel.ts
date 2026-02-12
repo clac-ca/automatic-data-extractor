@@ -45,6 +45,28 @@ function pickDefaultSheet(sheets: PreviewSheet[]) {
   return sheets.find((sheet) => sheet.is_active) ?? sheets[0];
 }
 
+export function resolveVisibleColumnCount({
+  previewRows,
+  totalColumns,
+  maxColumns,
+}: {
+  previewRows: unknown[][];
+  totalColumns?: number;
+  maxColumns: number;
+}) {
+  const returnedWidth = previewRows.reduce((max, row) => Math.max(max, row.length), 0);
+
+  if (returnedWidth > 0) {
+    return returnedWidth;
+  }
+
+  if (typeof totalColumns === "number") {
+    return Math.min(totalColumns, maxColumns);
+  }
+
+  return 0;
+}
+
 export function useDocumentPreviewModel({
   workspaceId,
   document,
@@ -144,10 +166,11 @@ export function useDocumentPreviewModel({
   const previewRows = useMemo(() => previewQuery.data?.rows ?? [], [previewQuery.data]);
 
   const columnLabels = useMemo(() => {
-    const fallbackColumnCount =
-      typeof previewQuery.data?.totalColumns === "number"
-        ? previewQuery.data.totalColumns
-        : previewRows.reduce((max, row) => Math.max(max, row.length), 0);
+    const fallbackColumnCount = resolveVisibleColumnCount({
+      previewRows,
+      totalColumns: previewQuery.data?.totalColumns,
+      maxColumns: DEFAULT_MAX_COLUMNS,
+    });
 
     return Array.from({ length: fallbackColumnCount }, (_, index) => spreadsheetColumnLabel(index));
   }, [previewQuery.data?.totalColumns, previewRows]);
