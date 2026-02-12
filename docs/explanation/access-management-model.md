@@ -44,14 +44,15 @@ Effective permissions are computed as:
 `auth.identityProvider.provisioningMode`:
 
 1. `disabled`: no automatic unknown-user provisioning; invite/admin create only
-2. `jit`: unknown user can be created at sign-in based on policy; memberships hydrated for signed-in user
+2. `jit`: unknown user can be created at sign-in based on policy; no group sync
 3. `scim`: SCIM is authoritative provisioning path; unknown-user JIT create is blocked
 
 ## Group Model
 
 - `source=internal`: ADE-managed groups
-- `source=idp`: provider-managed groups
+- `source=idp`: provider-managed groups (SCIM-managed)
 - provider-managed memberships are read-only in ADE manual membership APIs
+- provider-managed group grants are effective only when provisioning mode is `scim`
 
 ## Why This Model
 

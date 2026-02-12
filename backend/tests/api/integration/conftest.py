@@ -187,6 +187,14 @@ def _clear_runtime_settings_override_env(monkeypatch: pytest.MonkeyPatch) -> Non
         "ADE_AUTH_DISABLED",
         "ADE_AUTH_DISABLED_USER_EMAIL",
         "ADE_AUTH_DISABLED_USER_NAME",
+        "ADE_AUTH_EXTERNAL_ENABLED",
+        "ADE_AUTH_FORCE_SSO",
+        "ADE_AUTH_SSO_AUTO_PROVISION",
+        "ADE_AUTH_ENFORCE_LOCAL_MFA",
+        "ADE_AUTH_GROUP_SYNC_PROVIDER",
+        "ADE_AUTH_GROUP_SYNC_TENANT_ID",
+        "ADE_AUTH_GROUP_SYNC_CLIENT_ID",
+        "ADE_AUTH_GROUP_SYNC_CLIENT_SECRET",
     ):
         monkeypatch.delenv(key, raising=False)
 
