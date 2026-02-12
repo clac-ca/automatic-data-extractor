@@ -242,12 +242,20 @@ Preview behavior:
 * `source=normalized` is the default.
 * Normalized preview **never auto-falls back** to original.
 * When normalized output is unavailable (no run, running, failed), the UI shows an explicit unavailable state and the user can switch to `source=original`.
+* Preview defaults to a **compact display** (`trimEmptyRows=true`, `trimEmptyColumns=true`) so sparse sheets are readable; users can clear the “Hide empty rows and columns” checkbox to reveal empties.
+* Compact display preference is persisted per workspace in UI storage (`ade.ui.workspace.<workspaceId>.documents.detail.preview.display`).
 
 Interaction model:
 
 * Header is sticky and always keeps document identity + download actions visible.
 * Activity is collaboration-first with a pinned comment composer.
-* Preview uses a spreadsheet mental model with bottom sheet tabs.
+* Preview uses a spreadsheet mental model with:
+
+  * source toggle in the preview header,
+  * a single sticky meta row with hide-empty checkbox, visible-vs-total count summary, and compact inline run metrics,
+  * a Glide Data Grid viewport that owns both horizontal and vertical scrolling with built-in row markers and header context,
+  * a sticky bottom sheet rail so sheet switching remains reachable.
+* When the preview is reduced (by trim or row/column limits), the UI must render explicit visible-vs-total copy (for example, “Showing 200 of 350 rows”).
 
 Rules:
 
