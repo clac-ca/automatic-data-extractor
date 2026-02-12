@@ -627,10 +627,11 @@ async def stream_document_changes(
             with session_factory() as session:
                 return get_latest_document_change_id(session, workspace_id)
 
-        try:
-            token_value = await asyncio.to_thread(_current_token)
-        except Exception:
-            token_value = start_token
+        if start_token is None:
+            try:
+                token_value = await asyncio.to_thread(_current_token)
+            except Exception:
+                token_value = start_token
 
         ready_id = str(token_value) if token_value is not None else None
         yield sse_json("ready", {"lastId": ready_id})

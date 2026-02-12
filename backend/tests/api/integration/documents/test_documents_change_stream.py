@@ -296,3 +296,44 @@ async def test_document_change_stream_round_trip(
     items = listing.json()["items"]
     assert len(items) == 1
     assert items[0]["id"] == created_id
+
+
+async def test_document_change_stream_honors_cursor_on_connect(
+    committed_client: AsyncClient,
+    committed_app,
+) -> None:
+    session_factory = get_session_factory_from_app(committed_app)
+    with session_factory() as session:
+        seed_identity = _seed_identity(session)
+
+    member = seed_identity.member
+    token, _ = await login(committed_client, email=member.email, password=member.password)
+    workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
+    headers = {"X-API-Key": token}
+
+    created = await committed_client.post(
+        f"{workspace_base}/documents",
+        headers=headers,
+        files={"file": ("seed.txt", b"seed", "text/plain")},
+        timeout=15.0,
+    )
+    assert created.status_code == 201, created.text
+
+    task, collector, disconnect = await _open_sse_stream(
+        committed_app,
+        path=f"/api/v1/workspaces/{seed_identity.workspace_id}/documents/stream",
+        headers={**headers, "Accept": "text/event-stream"},
+        query_string="cursor=0",
+    )
+    try:
+        ready = await _wait_for_event(collector.events, expected={"ready"})
+        ready_payload = json.loads(ready["data"])
+        assert ready_payload.get("lastId") == "0"
+    finally:
+        disconnect.set()
+        try:
+            await asyncio.wait_for(task, timeout=2.0)
+        except asyncio.TimeoutError:
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
