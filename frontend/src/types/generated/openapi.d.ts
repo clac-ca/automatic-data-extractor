@@ -8199,7 +8199,24 @@ export interface operations {
     };
     list_workspace_role_assignments_api_v1_workspaces__workspaceId__roleAssignments_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Items per page (max 200) */
+                limit?: number;
+                /** @description Opaque cursor token for pagination. */
+                cursor?: string | null;
+                /** @description JSON array of {id, desc}. */
+                sort?: string | null;
+                /** @description URL-encoded JSON array of filter objects. */
+                filters?: string | null;
+                /** @description Logical operator to join filters (and/or). */
+                joinOperator?: components["schemas"]["FilterJoinOperator"];
+                /** @description Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored. */
+                q?: string | null;
+                /** @description Include totalCount in the response. */
+                includeTotal?: boolean;
+                /** @description Include facet counts in the response. */
+                includeFacets?: boolean;
+            };
             header?: never;
             path: {
                 /** @description Workspace identifier */
@@ -8276,10 +8293,8 @@ export interface operations {
     delete_role_assignment_api_v1_roleAssignments__assignmentId__delete: {
         parameters: {
             query?: never;
-            header: {
+            header?: {
                 "X-CSRF-Token"?: string | null;
-                /** @description ETag value required for optimistic concurrency checks. */
-                "If-Match": components["parameters"]["IfMatch"];
             };
             path: {
                 /** @description Role assignment identifier */

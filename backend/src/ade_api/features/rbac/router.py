@@ -8,7 +8,6 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Request, Response, 
 from ade_api.api.deps import ReadSessionDep, WriteSessionDep
 from ade_api.common.concurrency import require_if_match
 from ade_api.common.cursor_listing import (
-    CursorMeta,
     CursorQueryParams,
     cursor_query_params,
     resolve_cursor_sort,
@@ -45,8 +44,13 @@ from ade_api.features.rbac.sorting import (
     PERMISSION_DEFAULT_SORT,
     PERMISSION_ID_FIELD,
     PERMISSION_SORT_FIELDS,
+    PRINCIPAL_ASSIGNMENT_CURSOR_FIELDS,
+    PRINCIPAL_ASSIGNMENT_DEFAULT_SORT,
+    PRINCIPAL_ASSIGNMENT_ID_FIELD,
+    PRINCIPAL_ASSIGNMENT_SORT_FIELDS,
     ROLE_CURSOR_FIELDS,
     ROLE_DEFAULT_SORT,
+    PrincipalAssignmentRow,
 )
 from ade_db.models import AssignmentScopeType, Role, RoleAssignment, User
 
@@ -108,6 +112,22 @@ def _serialize_assignment(service: RbacService, assignment: RoleAssignment) -> R
     )
 
 
+def _serialize_principal_assignment_row(item: PrincipalAssignmentRow) -> RoleAssignmentOut:
+    return RoleAssignmentOut(
+        id=item.id,
+        principal_type=item.principal_type,
+        principal_id=item.principal_id,
+        principal_display_name=item.principal_display_name,
+        principal_email=item.principal_email,
+        principal_slug=item.principal_slug,
+        role_id=item.role_id,
+        role_slug=item.role_slug,
+        scope_type=item.scope_type,
+        scope_id=item.scope_id,
+        created_at=item.created_at,
+    )
+
+
 def _ensure_global_permission(
     *,
     service: RbacService,
@@ -121,21 +141,6 @@ def _ensure_global_permission(
     )
     if not ok:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
-
-
-def _role_assignment_page(items: list[RoleAssignmentOut], limit: int) -> RoleAssignmentPage:
-    return RoleAssignmentPage(
-        items=items,
-        meta=CursorMeta(
-            limit=limit,
-            has_more=False,
-            next_cursor=None,
-            total_included=True,
-            total_count=len(items),
-            changes_cursor="0",
-        ),
-        facets=None,
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -424,19 +429,35 @@ def list_organization_role_assignments(
     list_query: Annotated[CursorQueryParams, Depends(cursor_query_params)],
     _guard: Annotated[None, Depends(strict_cursor_query_guard())],
 ) -> RoleAssignmentPage:
-    del list_query
     service = RbacService(session=session)
     _ensure_global_permission(
         service=service,
         principal=principal,
         permission_key="roles.read_all",
     )
+    resolved_sort = resolve_cursor_sort(
+        list_query.sort,
+        allowed=PRINCIPAL_ASSIGNMENT_SORT_FIELDS,
+        cursor_fields=PRINCIPAL_ASSIGNMENT_CURSOR_FIELDS,
+        default=PRINCIPAL_ASSIGNMENT_DEFAULT_SORT,
+        id_field=PRINCIPAL_ASSIGNMENT_ID_FIELD,
+    )
     assignments = service.list_principal_assignments(
         scope_type=AssignmentScopeType.ORGANIZATION,
         scope_id=None,
+        filters=list_query.filters,
+        join_operator=list_query.join_operator,
+        q=list_query.q,
+        resolved_sort=resolved_sort,
+        limit=list_query.limit,
+        cursor=list_query.cursor,
+        include_total=list_query.include_total,
     )
-    items = [_serialize_assignment(service, assignment) for assignment in assignments]
-    return _role_assignment_page(items, limit=max(len(items), 1))
+    return RoleAssignmentPage(
+        items=[_serialize_principal_assignment_row(item) for item in assignments.items],
+        meta=assignments.meta,
+        facets=assignments.facets,
+    )
 
 
 @router.post(
@@ -483,6 +504,8 @@ def create_organization_role_assignment(
 )
 def list_workspace_role_assignments(
     workspace_id: WorkspacePath,
+    list_query: Annotated[CursorQueryParams, Depends(cursor_query_params)],
+    _guard: Annotated[None, Depends(strict_cursor_query_guard())],
     session: ReadSessionDep,
     _actor: Annotated[
         User,
@@ -490,12 +513,29 @@ def list_workspace_role_assignments(
     ],
 ) -> RoleAssignmentPage:
     service = RbacService(session=session)
+    resolved_sort = resolve_cursor_sort(
+        list_query.sort,
+        allowed=PRINCIPAL_ASSIGNMENT_SORT_FIELDS,
+        cursor_fields=PRINCIPAL_ASSIGNMENT_CURSOR_FIELDS,
+        default=PRINCIPAL_ASSIGNMENT_DEFAULT_SORT,
+        id_field=PRINCIPAL_ASSIGNMENT_ID_FIELD,
+    )
     assignments = service.list_principal_assignments(
         scope_type=AssignmentScopeType.WORKSPACE,
         scope_id=workspace_id,
+        filters=list_query.filters,
+        join_operator=list_query.join_operator,
+        q=list_query.q,
+        resolved_sort=resolved_sort,
+        limit=list_query.limit,
+        cursor=list_query.cursor,
+        include_total=list_query.include_total,
     )
-    items = [_serialize_assignment(service, assignment) for assignment in assignments]
-    return _role_assignment_page(items, limit=max(len(items), 1))
+    return RoleAssignmentPage(
+        items=[_serialize_principal_assignment_row(item) for item in assignments.items],
+        meta=assignments.meta,
+        facets=assignments.facets,
+    )
 
 
 @router.post(

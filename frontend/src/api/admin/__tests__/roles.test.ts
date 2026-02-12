@@ -95,11 +95,25 @@ describe("admin roles api", () => {
       },
     });
 
-    await removeAdminUserRole("u1", "r1", { ifMatch: "*" });
+    await removeAdminUserRole("u1", "r1");
+    expect(client.GET).toHaveBeenCalledWith("/api/v1/roleAssignments", {
+      params: {
+        query: {
+          limit: 1,
+          filters: JSON.stringify([
+            { id: "principalType", operator: "eq", value: "user" },
+            { id: "principalId", operator: "eq", value: "u1" },
+            { id: "roleId", operator: "eq", value: "r1" },
+            { id: "scopeType", operator: "eq", value: "organization" },
+          ]),
+          includeTotal: false,
+        },
+      },
+      signal: undefined,
+    });
     expect(client.DELETE).toHaveBeenCalledWith("/api/v1/roleAssignments/{assignmentId}", {
       params: {
         path: { assignmentId: expect.any(String) },
-        header: { "If-Match": "*" },
       },
     });
   });

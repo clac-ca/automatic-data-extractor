@@ -16,6 +16,7 @@ from ade_db.models import (
     FileVersion,
     Permission,
     Role,
+    RoleAssignment,
     Run,
     User,
     UserRoleAssignment,
@@ -104,6 +105,14 @@ SEARCH_REGISTRY = SearchRegistry({
         _has_field("roleSlug", UserRoleAssignment.role, Role.slug),
         _field("scopeType", _ASSIGNMENT_SCOPE_TYPE),
         _field_cast("scopeId", UserRoleAssignment.workspace_id),
+    ],
+    "principalroleassignments": [
+        _field_cast("principalType", RoleAssignment.principal_type),
+        _field_cast("principalId", RoleAssignment.principal_id),
+        _field_cast("roleId", RoleAssignment.role_id),
+        _field("roleSlug", Role.slug),
+        _field_cast("scopeType", RoleAssignment.scope_type),
+        _field_cast("scopeId", RoleAssignment.scope_id),
     ],
 })
 

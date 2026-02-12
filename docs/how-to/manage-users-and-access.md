@@ -160,7 +160,7 @@ curl -sS -X POST "$ADE_URL/api/v1/\$batch" \
 ```bash
 curl -sS "$ADE_URL/api/v1/roleAssignments" -H "X-API-Key: $ADE_API_KEY"
 curl -sS "$ADE_URL/api/v1/workspaces/$WORKSPACE_ID/roleAssignments" -H "X-API-Key: $ADE_API_KEY"
-curl -sS "$ADE_URL/api/v1/invitations?workspaceId=$WORKSPACE_ID" -H "X-API-Key: $ADE_API_KEY"
+curl -sS "$ADE_URL/api/v1/invitations?workspace_id=$WORKSPACE_ID" -H "X-API-Key: $ADE_API_KEY"
 ```
 
 ## If Something Fails

@@ -149,7 +149,8 @@ async def test_batch_dependency_failure_returns_424_and_skips_dependent_item(
         headers={"X-API-Key": token},
     )
     assert orphan_get.status_code == 200, orphan_get.text
-    assert orphan_get.json()["display_name"] is None
+    orphan_payload = orphan_get.json()
+    assert "display_name" not in orphan_payload
 
 
 async def test_batch_permissions_are_enforced_per_subrequest(

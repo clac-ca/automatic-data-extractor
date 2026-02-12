@@ -172,6 +172,140 @@ async def test_workspace_role_assignment_listing_admin(
     )
 
 
+async def test_organization_role_assignment_listing_supports_pagination_and_filters(
+    async_client: AsyncClient,
+    seed_identity,
+) -> None:
+    admin = seed_identity.admin
+    token, _ = await login(async_client, email=admin.email, password=admin.password)
+
+    first_page = await async_client.get(
+        "/api/v1/roleAssignments",
+        params={
+            "limit": 2,
+            "sort": json.dumps([{"id": "createdAt", "desc": True}]),
+            "includeTotal": "true",
+        },
+        headers={"X-API-Key": token},
+    )
+    assert first_page.status_code == 200, first_page.text
+    first_payload = first_page.json()
+    first_items = _items(first_payload)
+    assert len(first_items) == 2
+    assert first_payload["meta"]["hasMore"] is True
+    assert first_payload["meta"]["nextCursor"] is not None
+    assert first_payload["meta"]["totalIncluded"] is True
+    assert isinstance(first_payload["meta"]["totalCount"], int)
+
+    second_page = await async_client.get(
+        "/api/v1/roleAssignments",
+        params={
+            "limit": 2,
+            "sort": json.dumps([{"id": "createdAt", "desc": True}]),
+            "cursor": first_payload["meta"]["nextCursor"],
+        },
+        headers={"X-API-Key": token},
+    )
+    assert second_page.status_code == 200, second_page.text
+    second_payload = second_page.json()
+    second_items = _items(second_payload)
+    assert second_items
+    first_ids = {item["id"] for item in first_items}
+    second_ids = {item["id"] for item in second_items}
+    assert first_ids.isdisjoint(second_ids)
+
+    filtered = await async_client.get(
+        "/api/v1/roleAssignments",
+        params={
+            "filters": json.dumps([
+                {"id": "principalId", "operator": "eq", "value": str(seed_identity.orphan.id)},
+                {"id": "scopeType", "operator": "eq", "value": "organization"},
+            ]),
+            "includeTotal": "true",
+        },
+        headers={"X-API-Key": token},
+    )
+    assert filtered.status_code == 200, filtered.text
+    filtered_items = _items(filtered.json())
+    assert filtered_items
+    assert all(str(item["principal_id"]) == str(seed_identity.orphan.id) for item in filtered_items)
+    assert all(item["scope_type"] == "organization" for item in filtered_items)
+
+
+async def test_workspace_role_assignment_listing_supports_pagination_and_filters(
+    async_client: AsyncClient,
+    seed_identity,
+) -> None:
+    admin = seed_identity.admin
+    token, _ = await login(async_client, email=admin.email, password=admin.password)
+
+    first_page = await async_client.get(
+        f"/api/v1/workspaces/{seed_identity.workspace_id}/roleAssignments",
+        params={
+            "limit": 1,
+            "sort": json.dumps([{"id": "createdAt", "desc": True}]),
+            "includeTotal": "true",
+        },
+        headers={"X-API-Key": token},
+    )
+    assert first_page.status_code == 200, first_page.text
+    first_payload = first_page.json()
+    first_items = _items(first_payload)
+    assert len(first_items) == 1
+    assert first_payload["meta"]["hasMore"] is True
+    assert first_payload["meta"]["nextCursor"] is not None
+
+    second_page = await async_client.get(
+        f"/api/v1/workspaces/{seed_identity.workspace_id}/roleAssignments",
+        params={
+            "limit": 1,
+            "sort": json.dumps([{"id": "createdAt", "desc": True}]),
+            "cursor": first_payload["meta"]["nextCursor"],
+        },
+        headers={"X-API-Key": token},
+    )
+    assert second_page.status_code == 200, second_page.text
+    second_items = _items(second_page.json())
+    assert second_items
+    assert first_items[0]["id"] != second_items[0]["id"]
+
+    filtered = await async_client.get(
+        f"/api/v1/workspaces/{seed_identity.workspace_id}/roleAssignments",
+        params={
+            "filters": json.dumps([
+                {"id": "principalId", "operator": "eq", "value": str(seed_identity.workspace_owner.id)},
+                {"id": "scopeType", "operator": "eq", "value": "workspace"},
+            ]),
+            "includeTotal": "true",
+        },
+        headers={"X-API-Key": token},
+    )
+    assert filtered.status_code == 200, filtered.text
+    filtered_items = _items(filtered.json())
+    assert filtered_items
+    assert all(str(item["principal_id"]) == str(seed_identity.workspace_owner.id) for item in filtered_items)
+    assert all(item["scope_type"] == "workspace" for item in filtered_items)
+
+
+async def test_role_assignment_listing_rejects_unknown_query_params(
+    async_client: AsyncClient,
+    seed_identity,
+) -> None:
+    admin = seed_identity.admin
+    token, _ = await login(async_client, email=admin.email, password=admin.password)
+
+    response = await async_client.get(
+        "/api/v1/roleAssignments",
+        params={"workspaceId": str(seed_identity.workspace_id)},
+        headers={"X-API-Key": token},
+    )
+    assert response.status_code == 422, response.text
+    payload = response.json()
+    errors = payload.get("errors")
+    assert isinstance(errors, list)
+    assert any(item.get("path") == "workspaceId" for item in errors)
+
+
 async def test_workspace_owner_can_manage_workspace_assignments_but_not_org_assignments(
     async_client: AsyncClient,
     seed_identity,

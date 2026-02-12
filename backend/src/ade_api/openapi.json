@@ -5434,6 +5434,133 @@
               "title": "Workspaceid"
             },
             "description": "Workspace identifier"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "description": "Items per page (max 200)",
+              "default": 50,
+              "title": "Limit"
+            },
+            "description": "Items per page (max 200)"
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Opaque cursor token for pagination.",
+              "title": "Cursor"
+            },
+            "description": "Opaque cursor token for pagination."
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "JSON array of {id, desc}.",
+              "title": "Sort"
+            },
+            "description": "JSON array of {id, desc}."
+          },
+          {
+            "name": "filters",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "URL-encoded JSON array of filter objects.",
+              "examples": [
+                "[{\"id\":\"status\",\"operator\":\"in\",\"value\":[\"processing\",\"failed\"]}]"
+              ],
+              "title": "Filters"
+            },
+            "description": "URL-encoded JSON array of filter objects."
+          },
+          {
+            "name": "joinOperator",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/FilterJoinOperator",
+              "description": "Logical operator to join filters (and/or).",
+              "default": "and"
+            },
+            "description": "Logical operator to join filters (and/or)."
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored.",
+              "examples": [
+                "acme invoice"
+              ],
+              "title": "Q"
+            },
+            "description": "Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored."
+          },
+          {
+            "name": "includeTotal",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Include totalCount in the response.",
+              "default": false,
+              "title": "Includetotal"
+            },
+            "description": "Include totalCount in the response."
+          },
+          {
+            "name": "includeFacets",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Include facet counts in the response.",
+              "default": false,
+              "title": "Includefacets"
+            },
+            "description": "Include facet counts in the response."
           }
         ],
         "responses": {
@@ -5606,9 +5733,6 @@
               ],
               "title": "X-Csrf-Token"
             }
-          },
-          {
-            "$ref": "#/components/parameters/IfMatch"
           }
         ],
         "responses": {

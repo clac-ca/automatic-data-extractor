@@ -213,7 +213,6 @@ def configure_openapi(app: FastAPI, settings: Settings) -> None:
         if_match_routes = {
             ("/api/v1/roles/{roleId}", "PATCH"),
             ("/api/v1/roles/{roleId}", "DELETE"),
-            ("/api/v1/roleAssignments/{assignmentId}", "DELETE"),
             ("/api/v1/users/me/apikeys/{apiKeyId}", "DELETE"),
             ("/api/v1/users/{userId}/apikeys/{apiKeyId}", "DELETE"),
         }

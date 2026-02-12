@@ -1,4 +1,5 @@
 import { buildListQuery, type FilterItem } from "@/api/listing";
+import { collectAllPages, MAX_PAGE_SIZE } from "@/api/pagination";
 import { client } from "@/api/client";
 import type { components } from "@/types";
 
@@ -9,6 +10,7 @@ export type AdminRoleUpdateRequest = components["schemas"]["RoleUpdate"];
 export type AdminPermissionPage = components["schemas"]["PermissionPage"];
 export type AdminPermission = components["schemas"]["PermissionOut"];
 type RoleAssignmentOut = components["schemas"]["RoleAssignmentOut"];
+type RoleAssignmentPage = components["schemas"]["RoleAssignmentPage"];
 export interface AdminUserRoles {
   readonly user_id: string;
   readonly roles: ReadonlyArray<{
@@ -18,12 +20,52 @@ export interface AdminUserRoles {
   }>;
 }
 
-async function listOrganizationRoleAssignments(signal?: AbortSignal): Promise<RoleAssignmentOut[]> {
-  const { data } = await client.GET("/api/v1/roleAssignments", { signal });
-  if (!data?.items) {
+const ROLE_ASSIGNMENT_PAGE_SIZE = MAX_PAGE_SIZE;
+
+interface ListOrganizationRoleAssignmentsOptions {
+  readonly limit?: number;
+  readonly cursor?: string | null;
+  readonly sort?: string | null;
+  readonly q?: string | null;
+  readonly filters?: FilterItem[];
+  readonly includeTotal?: boolean;
+  readonly signal?: AbortSignal;
+}
+
+async function listOrganizationRoleAssignmentsPage(
+  options: ListOrganizationRoleAssignmentsOptions = {},
+): Promise<RoleAssignmentPage> {
+  const query = buildListQuery({
+    limit: options.limit,
+    cursor: options.cursor ?? null,
+    sort: options.sort ?? null,
+    q: options.q ?? null,
+    filters: options.filters,
+    includeTotal: options.includeTotal,
+  });
+
+  const { data } = await client.GET("/api/v1/roleAssignments", {
+    params: { query },
+    signal: options.signal,
+  });
+  if (!data) {
     throw new Error("Expected role assignments payload.");
   }
-  return data.items as RoleAssignmentOut[];
+  return data;
+}
+
+async function listOrganizationRoleAssignments(
+  options: Omit<ListOrganizationRoleAssignmentsOptions, "cursor"> = {},
+): Promise<RoleAssignmentOut[]> {
+  const page = await collectAllPages((cursor) =>
+    listOrganizationRoleAssignmentsPage({
+      ...options,
+      cursor,
+      limit: options.limit ?? ROLE_ASSIGNMENT_PAGE_SIZE,
+      includeTotal: true,
+    }),
+  );
+  return page.items as RoleAssignmentOut[];
 }
 
 export interface ListAdminRolesOptions {
@@ -136,12 +178,14 @@ export async function listAdminPermissions(
 }
 
 export async function listAdminUserRoles(userId: string, options: { signal?: AbortSignal } = {}): Promise<AdminUserRoles> {
-  const assignments = (await listOrganizationRoleAssignments(options.signal)).filter(
-    (assignment) =>
-      assignment.principal_type === "user" &&
-      assignment.principal_id === userId &&
-      assignment.scope_type === "organization",
-  );
+  const assignments = await listOrganizationRoleAssignments({
+    signal: options.signal,
+    filters: [
+      { id: "principalType", operator: "eq", value: "user" },
+      { id: "principalId", operator: "eq", value: userId },
+      { id: "scopeType", operator: "eq", value: "organization" },
+    ],
+  });
 
   return {
     user_id: userId,
@@ -167,21 +211,24 @@ export async function assignAdminUserRole(userId: string, roleId: string): Promi
 export async function removeAdminUserRole(
   userId: string,
   roleId: string,
-  options: { ifMatch?: string | null } = {},
+  options: { signal?: AbortSignal } = {},
 ): Promise<void> {
-  const assignments = await listOrganizationRoleAssignments();
-  const assignment = assignments.find(
-    (entry) =>
-      entry.principal_type === "user" &&
-      entry.principal_id === userId &&
-      entry.role_id === roleId &&
-      entry.scope_type === "organization",
-  );
+  const matching = await listOrganizationRoleAssignmentsPage({
+    limit: 1,
+    includeTotal: false,
+    signal: options.signal,
+    filters: [
+      { id: "principalType", operator: "eq", value: "user" },
+      { id: "principalId", operator: "eq", value: userId },
+      { id: "roleId", operator: "eq", value: roleId },
+      { id: "scopeType", operator: "eq", value: "organization" },
+    ],
+  });
+  const assignment = matching.items[0];
   if (!assignment) return;
   await client.DELETE("/api/v1/roleAssignments/{assignmentId}", {
     params: {
       path: { assignmentId: assignment.id },
-      header: { "If-Match": options.ifMatch ?? "*" },
     },
   });
 }

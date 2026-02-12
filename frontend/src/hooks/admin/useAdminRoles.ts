@@ -112,7 +112,7 @@ export function useAssignAdminUserRoleMutation() {
 export function useRemoveAdminUserRoleMutation() {
   const queryClient = useQueryClient();
   return useMutation<void, Error, { userId: string; roleId: string }>({
-    mutationFn: ({ userId, roleId }) => removeAdminUserRole(userId, roleId, { ifMatch: "*" }),
+    mutationFn: ({ userId, roleId }) => removeAdminUserRole(userId, roleId),
     onSuccess: (_data, vars) => {
       queryClient.invalidateQueries({ queryKey: adminKeys.userRoles(vars.userId) });
       queryClient.invalidateQueries({ queryKey: adminKeys.users() });

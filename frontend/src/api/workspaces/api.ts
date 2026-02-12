@@ -1,5 +1,5 @@
 import { buildListQuery, type FilterItem, type FilterJoinOperator } from "@/api/listing";
-import { clampPageSize, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from "@/api/pagination";
+import { clampPageSize, collectAllPages, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from "@/api/pagination";
 import { client } from "@/api/client";
 import type { paths, ScopeType } from "@/types";
 import type { PathsWithMethod } from "openapi-typescript-helpers";
@@ -109,22 +109,58 @@ export interface ListWorkspacePrincipalsOptions {
 type RoleAssignmentOut = components["schemas"]["RoleAssignmentOut"];
 type RoleAssignmentPage = components["schemas"]["RoleAssignmentPage"];
 
-export async function listWorkspaceRoleAssignmentsRaw(
+const ROLE_ASSIGNMENT_PAGE_SIZE = MAX_PAGE_SIZE;
+
+export type ListWorkspaceRoleAssignmentsOptions = ListWorkspacePrincipalsOptions;
+
+async function listWorkspaceRoleAssignmentsPage(
   workspaceId: string,
-  options: { signal?: AbortSignal } = {},
-): Promise<RoleAssignmentOut[]> {
+  options: ListWorkspaceRoleAssignmentsOptions = {},
+): Promise<RoleAssignmentPage> {
+  const query = buildListQuery({
+    limit: clampPageSize(options.limit ?? ROLE_ASSIGNMENT_PAGE_SIZE),
+    cursor: options.cursor ?? null,
+    sort: options.sort ?? null,
+    q: options.q ?? null,
+    filters: options.filters,
+    joinOperator: options.joinOperator,
+    includeTotal: options.includeTotal,
+  });
   const { data } = await client.GET("/api/v1/workspaces/{workspaceId}/roleAssignments", {
     params: {
       path: { workspaceId },
+      query,
     },
     signal: options.signal,
   });
 
-  if (!data?.items) {
+  if (!data) {
     throw new Error("Expected workspace role assignments payload.");
   }
 
-  return (data as RoleAssignmentPage).items;
+  return data;
+}
+
+async function listAllWorkspaceRoleAssignments(
+  workspaceId: string,
+  options: Omit<ListWorkspaceRoleAssignmentsOptions, "cursor"> = {},
+): Promise<RoleAssignmentOut[]> {
+  const page = await collectAllPages((cursor) =>
+    listWorkspaceRoleAssignmentsPage(workspaceId, {
+      ...options,
+      cursor,
+      limit: options.limit ?? ROLE_ASSIGNMENT_PAGE_SIZE,
+      includeTotal: true,
+    }),
+  );
+  return page.items as RoleAssignmentOut[];
+}
+
+export async function listWorkspaceRoleAssignmentsRaw(
+  workspaceId: string,
+  options: ListWorkspaceRoleAssignmentsOptions = {},
+): Promise<RoleAssignmentOut[]> {
+  return listAllWorkspaceRoleAssignments(workspaceId, options);
 }
 
 function toWorkspacePrincipalPage(assignments: RoleAssignmentOut[]): WorkspacePrincipalPage {
@@ -211,8 +247,8 @@ export async function listWorkspacePrincipals(
   workspaceId: string,
   options: ListWorkspacePrincipalsOptions = {},
 ): Promise<WorkspacePrincipalPage> {
-  void options;
-  const assignments = await listWorkspaceRoleAssignmentsRaw(workspaceId, { signal: options.signal });
+  const { cursor: _cursor, ...assignmentOptions } = options;
+  const assignments = await listAllWorkspaceRoleAssignments(workspaceId, assignmentOptions);
   return toWorkspacePrincipalPage(assignments);
 }
 
@@ -298,7 +334,6 @@ export async function updateWorkspacePrincipalRoles(
       client.DELETE("/api/v1/roleAssignments/{assignmentId}", {
         params: {
           path: { assignmentId: assignment.id },
-          header: { "If-Match": "*" },
         },
       }),
     ),
@@ -322,7 +357,6 @@ export async function removeWorkspacePrincipal(
       client.DELETE("/api/v1/roleAssignments/{assignmentId}", {
         params: {
           path: { assignmentId: assignment.id },
-          header: { "If-Match": "*" },
         },
       }),
     ),

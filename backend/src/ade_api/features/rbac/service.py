@@ -3,12 +3,12 @@ from __future__ import annotations
 import logging
 import re
 from collections import deque
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import Select, and_, delete, func, select, true
+from sqlalchemy import Select, and_, case, delete, func, select, true
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
@@ -46,9 +46,11 @@ from ade_db.models import (
 from .filters import (
     apply_assignment_filters,
     apply_permission_filters,
+    apply_principal_assignment_filters,
     evaluate_role_filters,
     parse_role_filters,
 )
+from .sorting import PrincipalAssignmentRow
 
 logger = logging.getLogger(__name__)
 
@@ -229,6 +231,33 @@ def _assignment_scope_filter_v2(
     return and_(
         RoleAssignment.scope_type == AssignmentScopeType.WORKSPACE,
         RoleAssignment.scope_id == scope_id,
+    )
+
+
+def _map_principal_assignment_row(row: Mapping[str, Any]) -> PrincipalAssignmentRow:
+    principal_type = row.get("principal_type")
+    scope_type = row.get("scope_type")
+
+    return PrincipalAssignmentRow(
+        id=row["id"],
+        principal_type=(
+            principal_type
+            if isinstance(principal_type, PrincipalType)
+            else PrincipalType(str(principal_type))
+        ),
+        principal_id=row["principal_id"],
+        role_id=row["role_id"],
+        role_slug=str(row.get("role_slug") or ""),
+        scope_type=(
+            scope_type
+            if isinstance(scope_type, AssignmentScopeType)
+            else AssignmentScopeType(str(scope_type))
+        ),
+        scope_id=row.get("scope_id"),
+        created_at=row["created_at"],
+        principal_display_name=row.get("principal_display_name"),
+        principal_email=row.get("principal_email"),
+        principal_slug=row.get("principal_slug"),
     )
 
 
@@ -768,15 +797,83 @@ class RbacService:
         *,
         scope_type: AssignmentScopeType,
         scope_id: UUID | None,
-    ) -> list[RoleAssignment]:
+        filters: list[FilterItem],
+        join_operator: FilterJoinOperator,
+        q: str | None,
+        resolved_sort: ResolvedCursorSort[PrincipalAssignmentRow],
+        limit: int,
+        cursor: str | None,
+        include_total: bool,
+    ) -> CursorPage[PrincipalAssignmentRow]:
+        principal_display_name = case(
+            (
+                RoleAssignment.principal_type == PrincipalType.USER,
+                func.coalesce(User.display_name, User.email),
+            ),
+            (
+                RoleAssignment.principal_type == PrincipalType.GROUP,
+                Group.display_name,
+            ),
+            else_=None,
+        ).label("principal_display_name")
+        principal_email = case(
+            (RoleAssignment.principal_type == PrincipalType.USER, User.email),
+            else_=None,
+        ).label("principal_email")
+        principal_slug = case(
+            (RoleAssignment.principal_type == PrincipalType.GROUP, Group.slug),
+            else_=None,
+        ).label("principal_slug")
+
         stmt = (
-            select(RoleAssignment)
-            .options(selectinload(RoleAssignment.workspace))
+            select(
+                RoleAssignment.id.label("id"),
+                RoleAssignment.principal_type.label("principal_type"),
+                RoleAssignment.principal_id.label("principal_id"),
+                RoleAssignment.role_id.label("role_id"),
+                Role.slug.label("role_slug"),
+                RoleAssignment.scope_type.label("scope_type"),
+                RoleAssignment.scope_id.label("scope_id"),
+                RoleAssignment.created_at.label("created_at"),
+                principal_display_name,
+                principal_email,
+                principal_slug,
+            )
+            .select_from(RoleAssignment)
+            .join(Role, Role.id == RoleAssignment.role_id)
+            .outerjoin(
+                User,
+                and_(
+                    RoleAssignment.principal_type == PrincipalType.USER,
+                    User.id == RoleAssignment.principal_id,
+                ),
+            )
+            .outerjoin(
+                Group,
+                and_(
+                    RoleAssignment.principal_type == PrincipalType.GROUP,
+                    Group.id == RoleAssignment.principal_id,
+                ),
+            )
             .where(_assignment_scope_filter_v2(scope_type=scope_type, scope_id=scope_id))
-            .order_by(RoleAssignment.created_at.asc(), RoleAssignment.id.asc())
         )
-        result = self._session.execute(stmt)
-        return list(result.scalars().all())
+        stmt = apply_principal_assignment_filters(
+            stmt,
+            filters,
+            join_operator=join_operator,
+            q=q,
+        )
+
+        return paginate_query_cursor(
+            self._session,
+            stmt,
+            resolved_sort=resolved_sort,
+            limit=limit,
+            cursor=cursor,
+            include_total=include_total,
+            changes_cursor="0",
+            row_mapper=_map_principal_assignment_row,
+        )
 
     def get_principal_assignment(self, *, assignment_id: UUID) -> RoleAssignment | None:
         stmt = (

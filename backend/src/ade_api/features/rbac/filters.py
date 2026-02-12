@@ -21,7 +21,15 @@ from ade_api.common.search import build_q_predicate, matches_tokens, parse_q
 from ade_api.core.rbac.registry import role_allows_scope
 from ade_api.core.rbac.types import ScopeType
 from ade_api.features.search_registry import SEARCH_REGISTRY
-from ade_db.models import Permission, Role, User, UserRoleAssignment
+from ade_db.models import (
+    AssignmentScopeType,
+    Permission,
+    PrincipalType,
+    Role,
+    RoleAssignment,
+    User,
+    UserRoleAssignment,
+)
 
 PERMISSION_FILTER_REGISTRY = FilterRegistry([
     FilterField(
@@ -175,6 +183,79 @@ ASSIGNMENT_FILTER_REGISTRY = FilterRegistry([
     ),
 ])
 
+PRINCIPAL_ASSIGNMENT_FILTER_REGISTRY = FilterRegistry([
+    FilterField(
+        id="principalType",
+        column=RoleAssignment.principal_type,
+        operators={
+            FilterOperator.EQ,
+            FilterOperator.NE,
+            FilterOperator.IN,
+            FilterOperator.NOT_IN,
+        },
+        value_type=FilterValueType.ENUM,
+        enum_type=PrincipalType,
+    ),
+    FilterField(
+        id="principalId",
+        column=RoleAssignment.principal_id,
+        operators={
+            FilterOperator.EQ,
+            FilterOperator.NE,
+            FilterOperator.IN,
+            FilterOperator.NOT_IN,
+        },
+        value_type=FilterValueType.UUID,
+    ),
+    FilterField(
+        id="roleId",
+        column=RoleAssignment.role_id,
+        operators={
+            FilterOperator.EQ,
+            FilterOperator.NE,
+            FilterOperator.IN,
+            FilterOperator.NOT_IN,
+        },
+        value_type=FilterValueType.UUID,
+    ),
+    FilterField(
+        id="roleSlug",
+        column=Role.slug,
+        operators={
+            FilterOperator.EQ,
+            FilterOperator.NE,
+            FilterOperator.ILIKE,
+            FilterOperator.NOT_ILIKE,
+        },
+        value_type=FilterValueType.STRING,
+    ),
+    FilterField(
+        id="scopeType",
+        column=RoleAssignment.scope_type,
+        operators={
+            FilterOperator.EQ,
+            FilterOperator.NE,
+            FilterOperator.IN,
+            FilterOperator.NOT_IN,
+        },
+        value_type=FilterValueType.ENUM,
+        enum_type=AssignmentScopeType,
+    ),
+    FilterField(
+        id="scopeId",
+        column=RoleAssignment.scope_id,
+        operators={
+            FilterOperator.EQ,
+            FilterOperator.NE,
+            FilterOperator.IN,
+            FilterOperator.NOT_IN,
+            FilterOperator.IS_EMPTY,
+            FilterOperator.IS_NOT_EMPTY,
+        },
+        value_type=FilterValueType.UUID,
+    ),
+])
+
 
 def apply_permission_filters(
     stmt: Select,
@@ -225,6 +306,30 @@ def apply_assignment_filters(
         stmt = stmt.where(combined)
 
     q_predicate = build_q_predicate(resource="roleassignments", q=q, registry=SEARCH_REGISTRY)
+    if q_predicate is not None:
+        stmt = stmt.where(q_predicate)
+    return stmt
+
+
+def apply_principal_assignment_filters(
+    stmt: Select,
+    filters: list[FilterItem],
+    *,
+    join_operator: FilterJoinOperator,
+    q: str | None,
+) -> Select:
+    parsed = prepare_filters(filters, PRINCIPAL_ASSIGNMENT_FILTER_REGISTRY)
+    predicates = [build_predicate(item) for item in parsed]
+
+    combined = combine_predicates(predicates, join_operator)
+    if combined is not None:
+        stmt = stmt.where(combined)
+
+    q_predicate = build_q_predicate(
+        resource="principalroleassignments",
+        q=q,
+        registry=SEARCH_REGISTRY,
+    )
     if q_predicate is not None:
         stmt = stmt.where(q_predicate)
     return stmt
@@ -310,9 +415,11 @@ def _combine_results(results: Sequence[bool], join_operator: FilterJoinOperator)
 
 __all__ = [
     "ASSIGNMENT_FILTER_REGISTRY",
+    "PRINCIPAL_ASSIGNMENT_FILTER_REGISTRY",
     "PERMISSION_FILTER_REGISTRY",
     "ROLE_FILTER_REGISTRY",
     "apply_assignment_filters",
+    "apply_principal_assignment_filters",
     "apply_permission_filters",
     "evaluate_role_filters",
     "parse_role_filters",

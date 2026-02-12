@@ -51,7 +51,7 @@ SCIM endpoints (`/scim/v2/*`) require SCIM bearer token auth issued via
 | `GET` | `/api/v1/workspaces/{workspaceId}/roleAssignments` | protected | `200` | path | role assignment page | `401`, `403`, `404` |
 | `POST` | `/api/v1/workspaces/{workspaceId}/roleAssignments` | protected + CSRF | `201` | path + JSON assignment create | role assignment | `401`, `403`, `404`, `409`, `422` |
 | `DELETE` | `/api/v1/roleAssignments/{assignmentId}` | protected + CSRF | `204` | path | empty | `401`, `403`, `404` |
-| `GET` | `/api/v1/invitations` | protected | `200` | query: workspace/status | invitation list | `401`, `403` |
+| `GET` | `/api/v1/invitations` | protected | `200` | query: `workspace_id` / `invitation_status` | invitation list | `401`, `403` |
 | `POST` | `/api/v1/invitations` | protected + CSRF | `201` | JSON invitation create | invitation | `401`, `403`, `404`, `409`, `422` |
 | `GET` | `/api/v1/invitations/{invitationId}` | protected | `200` | path | invitation | `401`, `403`, `404` |
 | `POST` | `/api/v1/invitations/{invitationId}/resend` | protected + CSRF | `200` | path | invitation | `401`, `403`, `404`, `409` |

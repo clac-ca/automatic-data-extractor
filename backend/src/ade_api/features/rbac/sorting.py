@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+from datetime import datetime
+from uuid import UUID
+
 from ade_api.common.cursor_listing import (
     CursorFieldSpec,
     cursor_field,
@@ -10,7 +14,29 @@ from ade_api.common.cursor_listing import (
     parse_uuid,
 )
 from ade_api.common.sql import nulls_last
-from ade_db.models import Permission, Role, UserRoleAssignment
+from ade_db.models import (
+    AssignmentScopeType,
+    Permission,
+    PrincipalType,
+    Role,
+    RoleAssignment,
+    UserRoleAssignment,
+)
+
+
+@dataclass(frozen=True)
+class PrincipalAssignmentRow:
+    id: UUID
+    principal_type: PrincipalType
+    principal_id: UUID
+    role_id: UUID
+    role_slug: str
+    scope_type: AssignmentScopeType
+    scope_id: UUID | None
+    created_at: datetime
+    principal_display_name: str | None
+    principal_email: str | None
+    principal_slug: str | None
 
 PERMISSION_SORT_FIELDS = {
     "id": (Permission.id.asc(), Permission.id.desc()),
@@ -36,6 +62,21 @@ ASSIGNMENT_SORT_FIELDS = {
 ASSIGNMENT_DEFAULT_SORT = ["-createdAt"]
 ASSIGNMENT_ID_FIELD = (UserRoleAssignment.id.asc(), UserRoleAssignment.id.desc())
 
+PRINCIPAL_ASSIGNMENT_SORT_FIELDS = {
+    "id": (RoleAssignment.id.asc(), RoleAssignment.id.desc()),
+    "createdAt": (RoleAssignment.created_at.asc(), RoleAssignment.created_at.desc()),
+    "principalType": (RoleAssignment.principal_type.asc(), RoleAssignment.principal_type.desc()),
+    "principalId": (RoleAssignment.principal_id.asc(), RoleAssignment.principal_id.desc()),
+    "roleId": (RoleAssignment.role_id.asc(), RoleAssignment.role_id.desc()),
+    "scopeType": (RoleAssignment.scope_type.asc(), RoleAssignment.scope_type.desc()),
+    "scopeId": (
+        tuple(nulls_last(RoleAssignment.scope_id.asc())),
+        tuple(nulls_last(RoleAssignment.scope_id.desc())),
+    ),
+}
+PRINCIPAL_ASSIGNMENT_DEFAULT_SORT = ["-createdAt"]
+PRINCIPAL_ASSIGNMENT_ID_FIELD = (RoleAssignment.id.asc(), RoleAssignment.id.desc())
+
 ROLE_DEFAULT_SORT = ["name"]
 
 
@@ -56,6 +97,16 @@ ASSIGNMENT_CURSOR_FIELDS: dict[str, CursorFieldSpec[UserRoleAssignment]] = {
     "scopeId": cursor_field_nulls_last(lambda item: item.workspace_id, parse_uuid),
 }
 
+PRINCIPAL_ASSIGNMENT_CURSOR_FIELDS: dict[str, CursorFieldSpec[PrincipalAssignmentRow]] = {
+    "id": cursor_field(lambda item: item.id, parse_uuid),
+    "createdAt": cursor_field(lambda item: item.created_at, parse_datetime),
+    "principalType": cursor_field(lambda item: item.principal_type.value, parse_str),
+    "principalId": cursor_field(lambda item: item.principal_id, parse_uuid),
+    "roleId": cursor_field(lambda item: item.role_id, parse_uuid),
+    "scopeType": cursor_field(lambda item: item.scope_type.value, parse_str),
+    "scopeId": cursor_field_nulls_last(lambda item: item.scope_id, parse_uuid),
+}
+
 ROLE_CURSOR_FIELDS: dict[str, CursorFieldSpec[Role]] = {
     "id": cursor_field(lambda role: role.id, parse_uuid),
     "name": cursor_field(lambda role: role.name.lower(), parse_str),
@@ -72,6 +123,11 @@ __all__ = [
     "ASSIGNMENT_ID_FIELD",
     "ASSIGNMENT_CURSOR_FIELDS",
     "ASSIGNMENT_SORT_FIELDS",
+    "PRINCIPAL_ASSIGNMENT_DEFAULT_SORT",
+    "PRINCIPAL_ASSIGNMENT_ID_FIELD",
+    "PRINCIPAL_ASSIGNMENT_CURSOR_FIELDS",
+    "PRINCIPAL_ASSIGNMENT_SORT_FIELDS",
+    "PrincipalAssignmentRow",
     "PERMISSION_DEFAULT_SORT",
     "PERMISSION_CURSOR_FIELDS",
     "PERMISSION_ID_FIELD",
