@@ -165,4 +165,41 @@ describe("useDocumentPreviewModel", () => {
       expect(result.current.columnLabels).toHaveLength(2);
     });
   });
+
+  it("derives visible column summary from preview width when labels are expanded", async () => {
+    vi.spyOn(documentsApi, "fetchDocumentSheets").mockResolvedValue([
+      { name: "Sheet A", index: 0, kind: "worksheet", is_active: true },
+    ]);
+    vi.spyOn(documentsApi, "fetchDocumentPreview").mockResolvedValue({
+      name: "Sheet A",
+      index: 0,
+      rows: [Array.from({ length: 50 }, (_, index) => `C${index + 1}`)],
+      totalRows: 1,
+      totalColumns: 102,
+      truncatedRows: false,
+      truncatedColumns: true,
+    });
+
+    const wrapper = createWrapper();
+
+    const { result } = renderHook(
+      () =>
+        useDocumentPreviewModel({
+          workspaceId: "ws-1",
+          document: createDocument(),
+          source: "original",
+          sheet: null,
+          onSheetChange: vi.fn(),
+          displayPreferences: buildPreferences(false),
+        }),
+      { wrapper },
+    );
+
+    await waitFor(() => {
+      expect(result.current.previewCountSummary?.columnsVisibleLabel).toBe(
+        "Showing 50 of 102 columns",
+      );
+      expect(result.current.columnLabels).toHaveLength(102);
+    });
+  });
 });

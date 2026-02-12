@@ -188,9 +188,9 @@ export function useDocumentPreviewModel({
       buildPreviewCountSummary({
         previewMeta,
         visibleRowCount: previewRows.length,
-        visibleColumnCount: columnLabels.length,
+        visibleColumnCount,
       }),
-    [columnLabels.length, previewMeta, previewRows.length],
+    [previewMeta, previewRows.length, visibleColumnCount],
   );
 
   return {
