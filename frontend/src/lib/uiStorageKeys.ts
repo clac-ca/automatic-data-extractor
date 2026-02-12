@@ -11,6 +11,8 @@ export const uiStorageKeys = {
     `${UI_STORAGE_PREFIX}.workspace.${workspaceId}.documents.table.columnSizing`,
   documentsPreviewPaneHeight: (workspaceId: string) =>
     `${UI_STORAGE_PREFIX}.workspace.${workspaceId}.documents.preview.height`,
+  documentsDetailPreviewDisplay: (workspaceId: string) =>
+    `${UI_STORAGE_PREFIX}.workspace.${workspaceId}.documents.detail.preview.display`,
   workbenchTabs: (workspaceId: string, configId: string) =>
     `${UI_STORAGE_PREFIX}.workspace.${workspaceId}.config.${configId}.workbench.tabs`,
   workbenchConsole: (workspaceId: string, configId: string) =>
