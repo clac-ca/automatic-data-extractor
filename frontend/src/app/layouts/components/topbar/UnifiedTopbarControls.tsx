@@ -4,7 +4,6 @@ import { useNavigate } from "react-router-dom";
 import { Laptop, Moon, Palette, Sun } from "lucide-react";
 
 import { useSession } from "@/providers/auth/SessionContext";
-import { useGlobalPermissions } from "@/hooks/auth/useGlobalPermissions";
 import { BUILTIN_THEMES, MODE_OPTIONS, WORKSPACE_THEME_MODE_ANCHOR, useTheme } from "@/providers/theme";
 import { MOTION_PROFILE } from "@/providers/theme/modeTransition";
 import { openReleaseNotes } from "@/config/release-notes";
@@ -61,7 +60,6 @@ function mediaQueryMatches(query: string): boolean {
 export function UnifiedTopbarControls() {
   const session = useSession();
   const navigate = useNavigate();
-  const { canAccessOrganizationSettings } = useGlobalPermissions();
   const [versionsOpen, setVersionsOpen] = useState(false);
   const displayName = session.user.display_name || session.user.email || "Signed in";
   const email = session.user.email ?? "";
@@ -78,9 +76,8 @@ export function UnifiedTopbarControls() {
         <ProfileMenu
           displayName={displayName}
           email={email}
-          canAccessOrganizationSettings={canAccessOrganizationSettings}
           onOpenAccountSettings={() => navigate("/account")}
-          onOpenOrganizationSettings={() => navigate("/organization")}
+          onOpenSettings={() => navigate("/settings")}
           onOpenVersions={() => setVersionsOpen(true)}
         />
       </div>
@@ -609,16 +606,14 @@ function ModeControl() {
 function ProfileMenu({
   displayName,
   email,
-  canAccessOrganizationSettings,
   onOpenAccountSettings,
-  onOpenOrganizationSettings,
+  onOpenSettings,
   onOpenVersions,
 }: {
   readonly displayName: string;
   readonly email: string;
-  readonly canAccessOrganizationSettings: boolean;
   readonly onOpenAccountSettings: () => void;
-  readonly onOpenOrganizationSettings: () => void;
+  readonly onOpenSettings: () => void;
   readonly onOpenVersions: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -669,14 +664,12 @@ function ProfileMenu({
             </span>
             <span>Account Settings</span>
           </DropdownMenuItem>
-          {canAccessOrganizationSettings ? (
-            <DropdownMenuItem onSelect={onOpenOrganizationSettings} className="gap-2">
-              <span className="inline-flex h-4 w-4 items-center justify-center rounded-sm bg-muted text-[0.6rem] font-semibold text-muted-foreground">
-                O
-              </span>
-              <span>Organization Settings</span>
-            </DropdownMenuItem>
-          ) : null}
+          <DropdownMenuItem onSelect={onOpenSettings} className="gap-2">
+            <span className="inline-flex h-4 w-4 items-center justify-center rounded-sm bg-muted text-[0.6rem] font-semibold text-muted-foreground">
+              S
+            </span>
+            <span>Settings</span>
+          </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => openReleaseNotes()} className="gap-2">
             <span className="inline-flex h-4 w-4 items-center justify-center rounded-sm bg-muted text-[0.6rem] font-semibold text-muted-foreground">
               R

@@ -62,11 +62,11 @@ function AuthenticatedLayoutInner() {
   const topbarConfig = useAuthenticatedTopbarConfig();
   const location = useLocation();
   const isAccountRoute = location.pathname === "/account" || location.pathname.startsWith("/account/");
-  const isOrganizationRoute =
-    location.pathname === "/organization" || location.pathname.startsWith("/organization/");
+  const isSettingsRoute =
+    location.pathname === "/settings" || location.pathname.startsWith("/settings/");
   const isWorkspacesIndexRoute =
     location.pathname === "/workspaces" || location.pathname === "/workspaces/new";
-  const shouldShowHomeAction = isAccountRoute || isOrganizationRoute || isWorkspacesIndexRoute;
+  const shouldShowHomeAction = isAccountRoute || isSettingsRoute || isWorkspacesIndexRoute;
   const shouldRenderTopbarStart = shouldShowHomeAction || Boolean(topbarConfig?.mobileAction);
 
   const topbar = (

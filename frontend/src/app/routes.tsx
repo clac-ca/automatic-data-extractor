@@ -13,7 +13,7 @@ const LogoutScreen = lazy(() => import("@/pages/Logout"));
 const NotFoundScreen = lazy(() => import("@/pages/NotFound"));
 const AccountCenterScreen = lazy(() => import("@/pages/Account"));
 const MfaSetupScreen = lazy(() => import("@/pages/MfaSetup"));
-const OrganizationSettingsScreen = lazy(() => import("@/pages/OrganizationSettings"));
+const SettingsConsoleScreen = lazy(() => import("@/pages/SettingsConsole"));
 const ResetPasswordScreen = lazy(() => import("@/pages/ResetPassword"));
 const SetupScreen = lazy(() => import("@/pages/Setup"));
 const WorkspaceScreen = lazy(() => import("@/pages/Workspace"));
@@ -53,7 +53,7 @@ export const appRoutes: RouteObject[] = [
               { index: true, element: withRouteSuspense(<HomeScreen />) },
               { path: "account/*", element: withRouteSuspense(<AccountCenterScreen />) },
               { path: "mfa/setup", element: withRouteSuspense(<MfaSetupScreen />) },
-              { path: "organization/*", element: withRouteSuspense(<OrganizationSettingsScreen />) },
+              { path: "settings/*", element: withRouteSuspense(<SettingsConsoleScreen />) },
               { path: "workspaces", element: withRouteSuspense(<WorkspacesScreen />) },
               { path: "workspaces/new", element: withRouteSuspense(<WorkspaceCreateScreen />) },
               { path: "*", element: withRouteSuspense(<NotFoundScreen />) },
