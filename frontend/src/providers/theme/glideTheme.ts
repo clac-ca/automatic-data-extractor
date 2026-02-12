@@ -64,15 +64,16 @@ export function useGlideDataEditorTheme(): Partial<Theme> {
 }
 
 function buildThemeFromCssTokens(): Partial<Theme> {
-  return GLIDE_THEME_TOKEN_MAP.reduce<Partial<Theme>>((acc, tokenMap) => {
-    acc[tokenMap.field] = resolveCssRgbaColor(tokenMap.variable, tokenMap.fallback);
-    return acc;
-  }, {});
+  return Object.fromEntries(
+    GLIDE_THEME_TOKEN_MAP.map((tokenMap) => [
+      tokenMap.field,
+      resolveCssRgbaColor(tokenMap.variable, tokenMap.fallback),
+    ]),
+  ) as Partial<Theme>;
 }
 
 function buildFallbackTheme(): Partial<Theme> {
-  return GLIDE_THEME_TOKEN_MAP.reduce<Partial<Theme>>((acc, tokenMap) => {
-    acc[tokenMap.field] = tokenMap.fallback;
-    return acc;
-  }, {});
+  return Object.fromEntries(
+    GLIDE_THEME_TOKEN_MAP.map((tokenMap) => [tokenMap.field, tokenMap.fallback]),
+  ) as Partial<Theme>;
 }
