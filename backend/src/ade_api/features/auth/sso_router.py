@@ -7,10 +7,9 @@ import hashlib
 import logging
 from typing import Annotated
 from urllib.parse import urlencode
-from uuid import UUID
 
 import httpx
-from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request, Response, status
+from fastapi import APIRouter, Depends, Query, Request, Response, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -23,7 +22,7 @@ from ade_api.common.urls import sanitize_return_to
 from ade_api.core.http.csrf import set_csrf_cookie
 from ade_api.core.http.session_cookie import set_session_cookie
 from ade_api.core.security import hash_password, mint_opaque_token
-from ade_api.db import get_db_read, get_db_write, get_session_factory_from_app
+from ade_api.db import get_db_read, get_db_write
 from ade_api.features.auth.sso_claims import (
     is_entra_issuer,
     resolve_email,
@@ -31,7 +30,6 @@ from ade_api.features.auth.sso_claims import (
     resolve_subject_key,
 )
 from ade_api.features.authn.service import AuthnService
-from ade_api.features.sso.group_sync import GroupSyncService
 from ade_api.features.sso.oidc import (
     OidcDiscoveryError,
     OidcJwksError,
@@ -157,59 +155,6 @@ def _entra_external_id_from_subject(*, subject: str) -> str | None:
         return None
     cleaned = object_id.strip()
     return cleaned or None
-
-
-def _hydrate_user_memberships_retry(
-    *,
-    request: Request,
-    settings: Settings,
-    user_id: UUID,
-    user_external_id: str,
-) -> None:
-    if not (
-        settings.auth_group_sync_tenant_id
-        and settings.auth_group_sync_client_id
-        and settings.auth_group_sync_client_secret
-    ):
-        logger.info(
-            "sso.group_sync.user_hydration.retry_skipped",
-            extra={"reason": "credentials_missing", "user_id": user_id},
-        )
-        return
-    try:
-        session_factory = get_session_factory_from_app(request.app)
-    except RuntimeError:
-        logger.warning(
-            "sso.group_sync.user_hydration.retry_skipped",
-            extra={"reason": "session_factory_missing", "user_id": user_id},
-        )
-        return
-    try:
-        with session_factory() as session:
-            with session.begin():
-                user = session.get(User, user_id)
-                if user is None or not user.is_active:
-                    return
-                stats = GroupSyncService(session=session).sync_user_memberships(
-                    settings=settings,
-                    user=user,
-                    user_external_id=user_external_id,
-                )
-        logger.info(
-            "sso.group_sync.user_hydration.retry_complete",
-            extra={
-                "user_id": user_id,
-                "known_users_linked": stats.known_users_linked,
-                "groups_upserted": stats.groups_upserted,
-                "memberships_added": stats.memberships_added,
-                "memberships_removed": stats.memberships_removed,
-            },
-        )
-    except Exception:
-        logger.exception(
-            "sso.group_sync.user_hydration.retry_failed",
-            extra={"user_id": user_id},
-        )
 
 
 def _load_provider_snapshot(session: Session, settings: Settings) -> tuple[SsoProvider, str]:
@@ -429,7 +374,6 @@ def authorize_sso(
 )
 def callback_sso(
     request: Request,
-    background_tasks: BackgroundTasks,
     settings: Annotated[Settings, Depends(get_settings)],
     db: Annotated[Session, Depends(get_db_write)],
 ) -> Response:
@@ -567,50 +511,6 @@ def callback_sso(
                 user.source = "idp"
                 user.external_id = user_external_id
                 user.last_synced_at = utc_now()
-
-        provisioning_mode = (
-            AuthnService(session=db, settings=settings).get_policy().idp_provisioning_mode
-        )
-        has_group_sync_credentials = bool(
-            settings.auth_group_sync_tenant_id
-            and settings.auth_group_sync_client_id
-            and settings.auth_group_sync_client_secret
-        )
-        if provisioning_mode == "jit" and user_external_id and has_group_sync_credentials:
-            try:
-                with db.begin_nested():
-                    stats = GroupSyncService(session=db).sync_user_memberships(
-                        settings=settings,
-                        user=user,
-                        user_external_id=user_external_id,
-                    )
-                logger.info(
-                    "sso.group_sync.user_hydration.complete",
-                    extra={
-                        "user_id": str(user.id),
-                        "known_users_linked": stats.known_users_linked,
-                        "groups_upserted": stats.groups_upserted,
-                        "memberships_added": stats.memberships_added,
-                        "memberships_removed": stats.memberships_removed,
-                    },
-                )
-            except Exception:
-                logger.exception(
-                    "sso.group_sync.user_hydration.failed",
-                    extra={"user_id": str(user.id)},
-                )
-                background_tasks.add_task(
-                    _hydrate_user_memberships_retry,
-                    request=request,
-                    settings=settings,
-                    user_id=user.id,
-                    user_external_id=user_external_id,
-                )
-        elif provisioning_mode == "jit" and user_external_id:
-            logger.info(
-                "sso.group_sync.user_hydration.skipped",
-                extra={"reason": "credentials_missing", "user_id": str(user.id)},
-            )
 
         logger.info(
             "sso.callback.success",
