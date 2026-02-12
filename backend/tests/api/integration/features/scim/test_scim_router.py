@@ -65,6 +65,48 @@ async def _create_scim_token(
     return payload["token"], UUID(payload["item"]["id"])
 
 
+async def _create_scim_user(
+    async_client: AsyncClient,
+    *,
+    scim_headers: dict[str, str],
+    user_name: str,
+    external_id: str,
+) -> UUID:
+    response = await async_client.post(
+        "/scim/v2/Users",
+        headers=scim_headers,
+        json={
+            "schemas": [_USER_SCHEMA, _ENTERPRISE_USER_SCHEMA],
+            "userName": user_name,
+            "externalId": external_id,
+            "active": True,
+        },
+    )
+    assert response.status_code == 201, response.text
+    return UUID(response.json()["id"])
+
+
+async def _create_scim_group(
+    async_client: AsyncClient,
+    *,
+    scim_headers: dict[str, str],
+    display_name: str,
+    external_id: str,
+    member_ids: list[UUID] | None = None,
+) -> UUID:
+    payload: dict[str, object] = {
+        "schemas": [_GROUP_SCHEMA],
+        "displayName": display_name,
+        "externalId": external_id,
+    }
+    if member_ids:
+        payload["members"] = [{"value": str(member_id)} for member_id in member_ids]
+
+    response = await async_client.post("/scim/v2/Groups", headers=scim_headers, json=payload)
+    assert response.status_code == 201, response.text
+    return UUID(response.json()["id"])
+
+
 async def test_scim_endpoints_are_gated_by_provisioning_mode(
     async_client: AsyncClient,
     seed_identity,
@@ -208,3 +250,168 @@ async def test_scim_user_and_group_provisioning_flow(
     error_payload = invalid_patch.json()
     assert error_payload["scimType"] == "invalidValue"
     assert "Unknown member ids" in error_payload["detail"]
+
+
+async def test_scim_user_update_conflicts_return_409(
+    async_client: AsyncClient,
+    seed_identity,
+) -> None:
+    headers = await _admin_headers(async_client, seed_identity)
+    await _set_provisioning_mode(async_client, admin_headers=headers, mode="scim")
+    token, _ = await _create_scim_token(async_client, admin_headers=headers)
+    scim_headers = {"Authorization": f"Bearer {token}"}
+
+    user_a = await _create_scim_user(
+        async_client,
+        scim_headers=scim_headers,
+        user_name="scim.user.a@example.com",
+        external_id="entra-user-a",
+    )
+    _user_b = await _create_scim_user(
+        async_client,
+        scim_headers=scim_headers,
+        user_name="scim.user.b@example.com",
+        external_id="entra-user-b",
+    )
+
+    replace_conflict = await async_client.put(
+        f"/scim/v2/Users/{user_a}",
+        headers=scim_headers,
+        json={
+            "schemas": [_USER_SCHEMA, _ENTERPRISE_USER_SCHEMA],
+            "userName": "scim.user.b@example.com",
+            "externalId": "entra-user-a",
+            "active": True,
+        },
+    )
+    assert replace_conflict.status_code == 409, replace_conflict.text
+    assert replace_conflict.headers.get("content-type", "").startswith("application/scim+json")
+
+    patch_conflict = await async_client.patch(
+        f"/scim/v2/Users/{user_a}",
+        headers=scim_headers,
+        json={
+            "schemas": ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+            "Operations": [
+                {
+                    "op": "replace",
+                    "path": "externalId",
+                    "value": "entra-user-b",
+                }
+            ],
+        },
+    )
+    assert patch_conflict.status_code == 409, patch_conflict.text
+    assert patch_conflict.headers.get("content-type", "").startswith("application/scim+json")
+
+
+async def test_scim_group_update_conflicts_return_409(
+    async_client: AsyncClient,
+    seed_identity,
+) -> None:
+    headers = await _admin_headers(async_client, seed_identity)
+    await _set_provisioning_mode(async_client, admin_headers=headers, mode="scim")
+    token, _ = await _create_scim_token(async_client, admin_headers=headers)
+    scim_headers = {"Authorization": f"Bearer {token}"}
+
+    group_a = await _create_scim_group(
+        async_client,
+        scim_headers=scim_headers,
+        display_name="SCIM Group A",
+        external_id="entra-group-a",
+    )
+    _group_b = await _create_scim_group(
+        async_client,
+        scim_headers=scim_headers,
+        display_name="SCIM Group B",
+        external_id="entra-group-b",
+    )
+
+    replace_conflict = await async_client.put(
+        f"/scim/v2/Groups/{group_a}",
+        headers=scim_headers,
+        json={
+            "schemas": [_GROUP_SCHEMA],
+            "displayName": "SCIM Group A",
+            "externalId": "entra-group-b",
+            "members": [],
+        },
+    )
+    assert replace_conflict.status_code == 409, replace_conflict.text
+    assert replace_conflict.headers.get("content-type", "").startswith("application/scim+json")
+
+    patch_conflict = await async_client.patch(
+        f"/scim/v2/Groups/{group_a}",
+        headers=scim_headers,
+        json={
+            "schemas": ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+            "Operations": [
+                {
+                    "op": "replace",
+                    "path": "externalId",
+                    "value": "entra-group-b",
+                }
+            ],
+        },
+    )
+    assert patch_conflict.status_code == 409, patch_conflict.text
+    assert patch_conflict.headers.get("content-type", "").startswith("application/scim+json")
+
+
+async def test_scim_group_patch_filtered_remove_only_removes_target_member(
+    async_client: AsyncClient,
+    seed_identity,
+) -> None:
+    headers = await _admin_headers(async_client, seed_identity)
+    await _set_provisioning_mode(async_client, admin_headers=headers, mode="scim")
+    token, _ = await _create_scim_token(async_client, admin_headers=headers)
+    scim_headers = {"Authorization": f"Bearer {token}"}
+
+    user_a = await _create_scim_user(
+        async_client,
+        scim_headers=scim_headers,
+        user_name="member.a@example.com",
+        external_id="member-a",
+    )
+    user_b = await _create_scim_user(
+        async_client,
+        scim_headers=scim_headers,
+        user_name="member.b@example.com",
+        external_id="member-b",
+    )
+    group_id = await _create_scim_group(
+        async_client,
+        scim_headers=scim_headers,
+        display_name="SCIM Filtered Remove Group",
+        external_id="group-filtered-remove",
+        member_ids=[user_a, user_b],
+    )
+
+    remove_one = await async_client.patch(
+        f"/scim/v2/Groups/{group_id}",
+        headers=scim_headers,
+        json={
+            "schemas": ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+            "Operations": [
+                {
+                    "op": "remove",
+                    "path": f'members[value eq "{user_a}"]',
+                }
+            ],
+        },
+    )
+    assert remove_one.status_code == 200, remove_one.text
+    remaining_ids = {UUID(member["value"]) for member in remove_one.json().get("members", [])}
+    assert remaining_ids == {user_b}
+
+    invalid_filter = await async_client.patch(
+        f"/scim/v2/Groups/{group_id}",
+        headers=scim_headers,
+        json={
+            "schemas": ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+            "Operations": [{"op": "remove", "path": 'members[id eq "not-supported"]'}],
+        },
+    )
+    assert invalid_filter.status_code == 400, invalid_filter.text
+    invalid_payload = invalid_filter.json()
+    assert invalid_payload["scimType"] == "invalidPath"
