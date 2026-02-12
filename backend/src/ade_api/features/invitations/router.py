@@ -21,6 +21,18 @@ InvitationPath = Annotated[
 ]
 
 
+def _workspace_id_from_metadata(metadata: dict[str, object]) -> tuple[UUID | None, bool]:
+    workspace_raw = metadata.get("workspaceId")
+    if workspace_raw is None:
+        return None, False
+    if not isinstance(workspace_raw, str):
+        return None, True
+    try:
+        return UUID(workspace_raw), False
+    except (TypeError, ValueError):
+        return None, True
+
+
 def _can_manage_invitation_scope(
     *,
     actor: User,
@@ -145,10 +157,13 @@ def get_invitation(
     service = InvitationsService(session=session)
     invitation = service.get_invitation(invitation_id=invitation_id)
     metadata = invitation.metadata_payload or {}
-    workspace_raw = metadata.get("workspaceId")
-    workspace_id = UUID(workspace_raw) if isinstance(workspace_raw, str) else None
+    workspace_id, invalid_workspace_scope = _workspace_id_from_metadata(metadata)
     rbac = RbacService(session=session)
-    if not _can_read_invitation_scope(actor=actor, rbac=rbac, workspace_id=workspace_id):
+    if invalid_workspace_scope or not _can_read_invitation_scope(
+        actor=actor,
+        rbac=rbac,
+        workspace_id=workspace_id,
+    ):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
     return service.get_invitation_out(invitation_id=invitation_id)
 
@@ -168,10 +183,13 @@ def resend_invitation(
     service = InvitationsService(session=session)
     invitation = service.get_invitation(invitation_id=invitation_id)
     metadata = invitation.metadata_payload or {}
-    workspace_raw = metadata.get("workspaceId")
-    workspace_id = UUID(workspace_raw) if isinstance(workspace_raw, str) else None
+    workspace_id, invalid_workspace_scope = _workspace_id_from_metadata(metadata)
     rbac = RbacService(session=session)
-    if not _can_manage_invitation_scope(actor=actor, rbac=rbac, workspace_id=workspace_id):
+    if invalid_workspace_scope or not _can_manage_invitation_scope(
+        actor=actor,
+        rbac=rbac,
+        workspace_id=workspace_id,
+    ):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
     return service.resend_invitation(invitation_id=invitation_id)
 
@@ -191,10 +209,13 @@ def cancel_invitation(
     service = InvitationsService(session=session)
     invitation = service.get_invitation(invitation_id=invitation_id)
     metadata = invitation.metadata_payload or {}
-    workspace_raw = metadata.get("workspaceId")
-    workspace_id = UUID(workspace_raw) if isinstance(workspace_raw, str) else None
+    workspace_id, invalid_workspace_scope = _workspace_id_from_metadata(metadata)
     rbac = RbacService(session=session)
-    if not _can_manage_invitation_scope(actor=actor, rbac=rbac, workspace_id=workspace_id):
+    if invalid_workspace_scope or not _can_manage_invitation_scope(
+        actor=actor,
+        rbac=rbac,
+        workspace_id=workspace_id,
+    ):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
     return service.cancel_invitation(invitation_id=invitation_id)
 

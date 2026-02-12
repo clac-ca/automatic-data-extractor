@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
+from sqlalchemy import func
+
 from ade_api.common.cursor_listing import (
     CursorFieldSpec,
     cursor_field,
@@ -78,6 +80,19 @@ PRINCIPAL_ASSIGNMENT_DEFAULT_SORT = ["-createdAt"]
 PRINCIPAL_ASSIGNMENT_ID_FIELD = (RoleAssignment.id.asc(), RoleAssignment.id.desc())
 
 ROLE_DEFAULT_SORT = ["name"]
+ROLE_SORT_FIELDS = {
+    "id": (Role.id.asc(), Role.id.desc()),
+    "name": (func.lower(Role.name).asc(), func.lower(Role.name).desc()),
+    "slug": (func.lower(Role.slug).asc(), func.lower(Role.slug).desc()),
+    "createdAt": (Role.created_at.asc(), Role.created_at.desc()),
+    "updatedAt": (
+        func.coalesce(Role.updated_at, Role.created_at).asc(),
+        func.coalesce(Role.updated_at, Role.created_at).desc(),
+    ),
+    "isSystem": (Role.is_system.asc(), Role.is_system.desc()),
+    "isEditable": (Role.is_editable.asc(), Role.is_editable.desc()),
+}
+ROLE_ID_FIELD = (Role.id.asc(), Role.id.desc())
 
 
 PERMISSION_CURSOR_FIELDS: dict[str, CursorFieldSpec[Permission]] = {
@@ -134,4 +149,6 @@ __all__ = [
     "PERMISSION_SORT_FIELDS",
     "ROLE_DEFAULT_SORT",
     "ROLE_CURSOR_FIELDS",
+    "ROLE_ID_FIELD",
+    "ROLE_SORT_FIELDS",
 ]

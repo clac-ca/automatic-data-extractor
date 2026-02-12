@@ -16,7 +16,6 @@ from ade_api.common.cursor_listing import (
     CursorPage,
     ResolvedCursorSort,
     paginate_query_cursor,
-    paginate_sequence_cursor,
 )
 from ade_api.common.list_filters import FilterItem, FilterJoinOperator
 from ade_api.core.rbac.policy import GLOBAL_IMPLICATIONS, WORKSPACE_IMPLICATIONS
@@ -47,8 +46,7 @@ from .filters import (
     apply_assignment_filters,
     apply_permission_filters,
     apply_principal_assignment_filters,
-    evaluate_role_filters,
-    parse_role_filters,
+    apply_role_filters,
 )
 from .sorting import PrincipalAssignmentRow
 
@@ -420,21 +418,15 @@ class RbacService:
         stmt = select(Role).options(
             selectinload(Role.permissions).selectinload(RolePermission.permission),
         )
-        result = self._session.execute(stmt)
-        roles = list(result.scalars().all())
-        parsed_filters = parse_role_filters(filters)
-        filtered = [
-            role
-            for role in roles
-            if evaluate_role_filters(
-                role,
-                parsed_filters,
-                join_operator=join_operator,
-                q=q,
-            )
-        ]
-        return paginate_sequence_cursor(
-            filtered,
+        stmt = apply_role_filters(
+            stmt=stmt,
+            filters=filters,
+            join_operator=join_operator,
+            q=q,
+        )
+        return paginate_query_cursor(
+            self._session,
+            stmt,
             resolved_sort=resolved_sort,
             limit=limit,
             cursor=cursor,

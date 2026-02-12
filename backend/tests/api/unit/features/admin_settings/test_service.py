@@ -38,7 +38,6 @@ def _clear_runtime_override_env(monkeypatch: pytest.MonkeyPatch) -> None:
         "ADE_AUTH_PASSWORD_LOCKOUT_MAX_ATTEMPTS",
         "ADE_AUTH_PASSWORD_LOCKOUT_DURATION_SECONDS",
         "ADE_AUTH_IDP_PROVISIONING_MODE",
-        "ADE_AUTH_IDP_JIT_PROVISIONING_ENABLED",
     ):
         monkeypatch.delenv(env_key, raising=False)
 

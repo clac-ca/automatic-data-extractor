@@ -11,7 +11,6 @@ from ade_api.common.cursor_listing import (
     CursorQueryParams,
     cursor_query_params,
     resolve_cursor_sort,
-    resolve_cursor_sort_sequence,
     strict_cursor_query_guard,
 )
 from ade_api.common.etag import build_etag_token, format_weak_etag
@@ -50,6 +49,8 @@ from ade_api.features.rbac.sorting import (
     PRINCIPAL_ASSIGNMENT_SORT_FIELDS,
     ROLE_CURSOR_FIELDS,
     ROLE_DEFAULT_SORT,
+    ROLE_ID_FIELD,
+    ROLE_SORT_FIELDS,
     PrincipalAssignmentRow,
 )
 from ade_db.models import AssignmentScopeType, Role, RoleAssignment, User
@@ -222,10 +223,12 @@ def list_roles(
         permission_key="roles.read_all",
     )
 
-    resolved_sort = resolve_cursor_sort_sequence(
+    resolved_sort = resolve_cursor_sort(
         list_query.sort,
+        allowed=ROLE_SORT_FIELDS,
         cursor_fields=ROLE_CURSOR_FIELDS,
         default=ROLE_DEFAULT_SORT,
+        id_field=ROLE_ID_FIELD,
     )
     role_page = service.list_roles(
         filters=list_query.filters,

@@ -65,11 +65,45 @@ export function chunkUserBatchRequests(
   return chunks;
 }
 
+function requestDependencies(request: BatchSubrequest): readonly string[] {
+  const raw = request.dependsOn;
+  return Array.isArray(raw) ? raw : [];
+}
+
+function assertNoCrossChunkDependencies(chunks: readonly BatchSubrequest[][]): void {
+  const chunkByRequestId = new Map<string, number>();
+  chunks.forEach((chunk, chunkIndex) => {
+    chunk.forEach((request) => {
+      chunkByRequestId.set(request.id, chunkIndex);
+    });
+  });
+
+  for (const chunk of chunks) {
+    for (const request of chunk) {
+      const requestChunkIndex = chunkByRequestId.get(request.id);
+      if (requestChunkIndex == null) {
+        continue;
+      }
+      for (const dependencyId of requestDependencies(request)) {
+        const dependencyChunkIndex = chunkByRequestId.get(dependencyId);
+        if (dependencyChunkIndex == null || dependencyChunkIndex === requestChunkIndex) {
+          continue;
+        }
+        throw new Error(
+          "Chunked batch execution does not support dependsOn relationships across chunks. " +
+            "Increase chunk size or submit dependent requests in a single batch.",
+        );
+      }
+    }
+  }
+}
+
 export async function executeUserBatchChunked(
   requests: readonly BatchSubrequest[],
   chunkSize = USER_BATCH_MAX_REQUESTS,
 ): Promise<BatchResponse> {
   const chunks = chunkUserBatchRequests(requests, chunkSize);
+  assertNoCrossChunkDependencies(chunks);
   const responses: BatchResponse["responses"] = [];
   for (const chunk of chunks) {
     const result = await executeUserBatch({ requests: chunk });

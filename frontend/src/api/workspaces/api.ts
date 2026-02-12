@@ -1,6 +1,7 @@
 import { buildListQuery, type FilterItem, type FilterJoinOperator } from "@/api/listing";
 import { clampPageSize, collectAllPages, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from "@/api/pagination";
 import { client } from "@/api/client";
+import { ApiError } from "@/api/errors";
 import type { paths, ScopeType } from "@/types";
 import type { PathsWithMethod } from "openapi-typescript-helpers";
 
@@ -62,6 +63,27 @@ export async function fetchWorkspaces(options: ListWorkspacesOptions = {}): Prom
   }
 
   return data;
+}
+
+export async function fetchWorkspace(
+  workspaceId: string,
+  options: { readonly signal?: AbortSignal } = {},
+): Promise<WorkspaceProfile | null> {
+  try {
+    const { data } = await client.GET("/api/v1/workspaces/{workspaceId}", {
+      params: { path: { workspaceId } },
+      signal: options.signal,
+    });
+    if (!data) {
+      throw new Error("Expected workspace payload.");
+    }
+    return data;
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) {
+      return null;
+    }
+    throw error;
+  }
 }
 
 export async function createWorkspace(payload: WorkspaceCreatePayload): Promise<WorkspaceProfile> {

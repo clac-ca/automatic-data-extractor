@@ -5,9 +5,11 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
+from uuid import UUID
 
 from ade_db.models import (
     AssignmentScopeType,
+    Invitation,
     PrincipalType,
     Role,
     RoleAssignment,
@@ -223,3 +225,54 @@ async def test_invitation_manage_actions_enforce_scope_permissions(
     )
     assert owner_cancel.status_code == 200, owner_cancel.text
     assert owner_cancel.json()["status"] == "cancelled"
+
+
+async def test_invitation_metadata_with_invalid_workspace_id_is_forbidden(
+    async_client: AsyncClient,
+    seed_identity,
+    db_session: Session,
+) -> None:
+    owner = seed_identity.workspace_owner
+    owner_token, _ = await login(async_client, email=owner.email, password=owner.password)
+    workspace_member_role_id = await anyio.to_thread.run_sync(
+        _workspace_member_role_id,
+        db_session,
+    )
+
+    create_response = await async_client.post(
+        "/api/v1/invitations",
+        json={
+            "invitedUserEmail": "invalid-workspace-metadata@example.com",
+            "workspaceContext": {
+                "workspaceId": str(seed_identity.workspace_id),
+                "roleAssignments": [{"roleId": workspace_member_role_id}],
+            },
+        },
+        headers={"X-API-Key": owner_token},
+    )
+    assert create_response.status_code == 201, create_response.text
+    invitation_id = create_response.json()["id"]
+    invitation_uuid = UUID(invitation_id)
+
+    invitation = db_session.get(Invitation, invitation_uuid)
+    assert invitation is not None
+    invitation.metadata_payload = {"workspaceId": "not-a-uuid"}
+    db_session.flush()
+
+    read_response = await async_client.get(
+        f"/api/v1/invitations/{invitation_id}",
+        headers={"X-API-Key": owner_token},
+    )
+    assert read_response.status_code == 403, read_response.text
+
+    resend_response = await async_client.post(
+        f"/api/v1/invitations/{invitation_id}/resend",
+        headers={"X-API-Key": owner_token},
+    )
+    assert resend_response.status_code == 403, resend_response.text
+
+    cancel_response = await async_client.post(
+        f"/api/v1/invitations/{invitation_id}/cancel",
+        headers={"X-API-Key": owner_token},
+    )
+    assert cancel_response.status_code == 403, cancel_response.text

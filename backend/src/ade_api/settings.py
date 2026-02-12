@@ -127,14 +127,9 @@ class Settings(
     auth_password_lockout_max_attempts: int = Field(5, ge=1, le=20)
     auth_password_lockout_duration_seconds: int = Field(300, ge=30, le=86_400)
     auth_idp_provisioning_mode: Literal["disabled", "jit", "scim"] = "jit"
-    # Backward-compatibility bridge for existing undeployed/local env files.
-    auth_idp_jit_provisioning_enabled: bool | None = None
     auth_sso_providers_json: str | None = None
     sso_encryption_key: SecretStr | None = None
-    auth_group_sync_enabled: bool = False
     auth_group_sync_provider: Literal["entra"] = "entra"
-    auth_group_sync_interval_seconds: int = Field(3600, ge=300, le=86_400)
-    auth_group_sync_dry_run: bool = True
     auth_group_sync_tenant_id: str | None = None
     auth_group_sync_client_id: str | None = None
     auth_group_sync_client_secret: SecretStr | None = None

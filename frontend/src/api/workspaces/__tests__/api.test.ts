@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { client } from "@/api/client";
+import { ApiError } from "@/api/errors";
 import { MAX_PAGE_SIZE } from "@/api/pagination";
 import {
+  fetchWorkspace,
   listPermissions,
   listWorkspaceMembers,
   listWorkspaceRoles,
@@ -25,6 +27,33 @@ describe("workspaces api", () => {
     expect(putSpy).toHaveBeenCalledWith("/api/v1/workspaces/{workspaceId}/default", {
       params: { path: { workspaceId: "ws-123" } },
     });
+  });
+
+  it("fetches workspace detail by id", async () => {
+    const getSpy = vi.spyOn(client, "GET").mockResolvedValue({
+      data: {
+        id: "ws-123",
+        slug: "workspace-123",
+        name: "Workspace 123",
+        is_default: false,
+        permissions: [],
+        created_at: "2026-01-01T00:00:00Z",
+      },
+    } as unknown as Awaited<ReturnType<typeof client.GET>>);
+
+    const workspace = await fetchWorkspace("ws-123");
+
+    expect(getSpy).toHaveBeenCalledWith("/api/v1/workspaces/{workspaceId}", {
+      params: { path: { workspaceId: "ws-123" } },
+      signal: undefined,
+    });
+    expect(workspace?.id).toBe("ws-123");
+  });
+
+  it("returns null when workspace detail endpoint returns 404", async () => {
+    vi.spyOn(client, "GET").mockRejectedValue(new ApiError("Not found", 404));
+
+    await expect(fetchWorkspace("missing-workspace")).resolves.toBeNull();
   });
 
   it("lists workspace principals from role assignments", async () => {

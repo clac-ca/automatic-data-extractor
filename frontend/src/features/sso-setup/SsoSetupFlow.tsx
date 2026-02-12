@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, CircleAlert, ShieldCheck } from "lucide-react";
 
 import { mapUiError } from "@/api/uiErrors";
+import { hasProblemCode } from "@/api/errors";
 import type {
   SsoProviderAdmin,
   SsoProviderCreateRequest,
@@ -22,7 +23,6 @@ import {
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { hasProblemCode } from "@/pages/OrganizationSettings/components/runtimeSettingsUtils";
 
 type WizardStep = "intro" | "basics" | "credentials" | "test" | "review";
 type ProviderStatus = SsoProviderAdmin["status"];

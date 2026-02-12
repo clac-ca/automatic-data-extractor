@@ -152,31 +152,14 @@ class GroupSyncService:
         if provider != "entra":
             raise RuntimeError(f"Unsupported group sync provider: {provider!r}")
 
-        self._link_user_to_idp(
-            user=user,
-            external_id=user_external_id,
-            display_name=user.display_name,
-        )
+        if not user.external_id or user.external_id == user_external_id:
+            user.source = "idp"
+            user.external_id = user_external_id
+            user.last_synced_at = utc_now()
 
         adapter = EntraGraphAdapter(settings=settings)
         provider_groups = adapter.fetch_groups_for_user(user_external_id=user_external_id)
         return self._reconcile_user_groups(user=user, provider_groups=provider_groups)
-
-    def _link_user_to_idp(
-        self,
-        *,
-        user: User,
-        external_id: str,
-        display_name: str | None,
-    ) -> bool:
-        if user.external_id and user.external_id != external_id:
-            return False
-        user.source = "idp"
-        user.external_id = external_id
-        user.last_synced_at = utc_now()
-        if display_name:
-            user.display_name = display_name
-        return True
 
     def _upsert_group(self, *, provider_group: ProviderGroup) -> Group:
         group = self._session.execute(
@@ -197,7 +180,11 @@ class GroupSyncService:
                 display_name=provider_group.display_name,
                 slug=slug,
                 description=provider_group.description,
-                membership_mode=GroupMembershipMode.DYNAMIC,
+                membership_mode=(
+                    GroupMembershipMode.DYNAMIC
+                    if provider_group.dynamic
+                    else GroupMembershipMode.ASSIGNED
+                ),
                 source=GroupSource.IDP,
                 external_id=provider_group.external_id,
                 is_active=True,

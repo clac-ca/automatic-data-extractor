@@ -464,6 +464,10 @@ export function WorkspacePrincipalDetailPage({ workspace }: { readonly workspace
   const saveChanges = async () => {
     setErrorMessage(null);
     setSuccessMessage(null);
+    if (selectedRoleIds.length === 0) {
+      setErrorMessage("Select at least one role.");
+      return;
+    }
     try {
       await updateMutation.mutateAsync({
         principalType: principal.principal_type,
@@ -551,8 +555,14 @@ export function WorkspacePrincipalDetailPage({ workspace }: { readonly workspace
 
       <SettingsStickyActionBar
         visible={hasUnsavedChanges}
-        canSave={canManage}
-        disabledReason={canManage ? undefined : "You do not have permission to update principal roles."}
+        canSave={canManage && selectedRoleIds.length > 0}
+        disabledReason={
+          !canManage
+            ? "You do not have permission to update principal roles."
+            : selectedRoleIds.length === 0
+              ? "Select at least one role."
+              : undefined
+        }
         isSaving={updateMutation.isPending}
         onSave={() => {
           void saveChanges();

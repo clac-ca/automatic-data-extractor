@@ -7,6 +7,7 @@ import {
   createWorkspaceRole,
   deleteWorkspace,
   deleteWorkspaceRole,
+  fetchWorkspace,
   fetchWorkspaces,
   listPermissions,
   listWorkspacePrincipals,
@@ -57,10 +58,8 @@ export function useSettingsWorkspacesListQuery() {
 export function useSettingsWorkspaceDetailQuery(workspaceId: string | null) {
   return useQuery<WorkspaceProfile | null, Error>({
     queryKey: settingsKeys.workspaceDetail(workspaceId ?? ""),
-    queryFn: async ({ signal }) => {
-      const page = await fetchWorkspaces({ limit: SETTINGS_PAGE_SIZE, includeTotal: true, signal });
-      return page.items.find((workspace) => workspace.id === workspaceId) ?? null;
-    },
+    queryFn: ({ signal }) =>
+      workspaceId ? fetchWorkspace(workspaceId, { signal }) : Promise.resolve(null),
     enabled: Boolean(workspaceId),
     staleTime: 15_000,
     placeholderData: (previous) => previous,
@@ -318,8 +317,8 @@ export function useGroupsLookupQuery(search: string, enabled = true) {
   const effectiveSearch = normalizeSearch(search);
   return useQuery<{ items: Group[] }, Error>({
     queryKey: settingsKeys.groupsLookup(effectiveSearch),
-    queryFn: ({ signal }) => listGroups({ q: effectiveSearch || undefined, signal }),
-    enabled,
+    queryFn: ({ signal }) => listGroups({ q: effectiveSearch, signal }),
+    enabled: enabled && effectiveSearch.length > 0,
     staleTime: 15_000,
     placeholderData: (previous) => previous,
   });

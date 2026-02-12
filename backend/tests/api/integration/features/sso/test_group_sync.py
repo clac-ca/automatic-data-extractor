@@ -78,7 +78,7 @@ def test_sync_user_memberships_upserts_groups_and_memberships(
     groups = list(session.execute(select(Group).order_by(Group.display_name.asc())).scalars())
     assert [group.display_name for group in groups] == ["Group A", "Group B"]
     assert groups[0].membership_mode == GroupMembershipMode.DYNAMIC
-    assert groups[1].membership_mode == GroupMembershipMode.DYNAMIC
+    assert groups[1].membership_mode == GroupMembershipMode.ASSIGNED
     assert all(group.source == GroupSource.IDP for group in groups)
 
     memberships = list(

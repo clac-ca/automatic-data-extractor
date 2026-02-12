@@ -144,4 +144,41 @@ describe("users api", () => {
     expect(merged.responses).toHaveLength(2);
     expect(merged.responses.map((item) => item.id)).toEqual(["req-1", "req-2"]);
   });
+
+  it("rejects chunking when dependsOn crosses chunk boundaries", async () => {
+    const postSpy = vi.spyOn(client, "POST");
+
+    await expect(
+      executeUserBatchChunked(
+        [
+          {
+            id: "req-1",
+            method: "POST",
+            url: "/users",
+            body: {
+              email: "one@example.com",
+              passwordProfile: {
+                mode: "explicit",
+                password: "notsecret1!Ab",
+                forceChangeOnNextSignIn: false,
+              },
+            },
+            dependsOn: [],
+          },
+          {
+            id: "req-2",
+            method: "PATCH",
+            url: "/users/00000000-0000-0000-0000-000000000002",
+            body: {
+              department: "Finance",
+            },
+            dependsOn: ["req-1"],
+          },
+        ],
+        1,
+      ),
+    ).rejects.toThrow(/dependsOn relationships across chunks/i);
+
+    expect(postSpy).not.toHaveBeenCalled();
+  });
 });
