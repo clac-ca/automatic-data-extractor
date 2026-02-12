@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import random
@@ -22,6 +23,7 @@ from .changes import DOCUMENT_CHANGES_CHANNEL
 DEFAULT_POLL_SECONDS = 1.0
 DEFAULT_QUEUE_SIZE = 200
 MAX_BACKOFF_SECONDS = 30.0
+RESYNC_REASON_QUEUE_OVERFLOW = "queue_overflow"
 
 logger = logging.getLogger(__name__)
 
@@ -93,6 +95,19 @@ class DocumentChangesHub:
                 "documents.changes.queue_full",
                 extra={"workspace_id": payload.get("workspaceId")},
             )
+            # Keep subscribers eventually consistent: replace oldest buffered item
+            # with a synthetic resync marker when a queue overflows.
+            with contextlib.suppress(asyncio.QueueEmpty):
+                queue.get_nowait()
+            with contextlib.suppress(asyncio.QueueFull):
+                queue.put_nowait(
+                    {
+                        "workspaceId": payload.get("workspaceId"),
+                        "resync": True,
+                        "reason": RESYNC_REASON_QUEUE_OVERFLOW,
+                        "id": payload.get("id"),
+                    }
+                )
 
     def _publish(self, workspace_id: str, payload: EventPayload) -> None:
         loop = self._loop
