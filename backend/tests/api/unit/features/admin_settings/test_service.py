@@ -37,7 +37,7 @@ def _clear_runtime_override_env(monkeypatch: pytest.MonkeyPatch) -> None:
         "ADE_AUTH_PASSWORD_REQUIRE_SYMBOL",
         "ADE_AUTH_PASSWORD_LOCKOUT_MAX_ATTEMPTS",
         "ADE_AUTH_PASSWORD_LOCKOUT_DURATION_SECONDS",
-        "ADE_AUTH_IDP_JIT_PROVISIONING_ENABLED",
+        "ADE_AUTH_IDP_PROVISIONING_MODE",
     ):
         monkeypatch.delenv(env_key, raising=False)
 
@@ -55,7 +55,7 @@ def test_resolve_runtime_settings_from_env_defaults_uses_defaults(monkeypatch) -
     assert resolved.auth.password.complexity.min_length == 12
     assert resolved.auth.password.lockout.max_attempts == 5
     assert resolved.auth.password.lockout.duration_seconds == 300
-    assert resolved.auth.identity_provider.jit_provisioning_enabled is True
+    assert resolved.auth.identity_provider.provisioning_mode == "jit"
 
 
 def test_resolve_runtime_settings_from_env_defaults_applies_env_overrides(monkeypatch) -> None:
@@ -72,7 +72,7 @@ def test_resolve_runtime_settings_from_env_defaults_applies_env_overrides(monkey
     monkeypatch.setenv("ADE_AUTH_PASSWORD_REQUIRE_SYMBOL", "true")
     monkeypatch.setenv("ADE_AUTH_PASSWORD_LOCKOUT_MAX_ATTEMPTS", "3")
     monkeypatch.setenv("ADE_AUTH_PASSWORD_LOCKOUT_DURATION_SECONDS", "900")
-    monkeypatch.setenv("ADE_AUTH_IDP_JIT_PROVISIONING_ENABLED", "false")
+    monkeypatch.setenv("ADE_AUTH_IDP_PROVISIONING_MODE", "scim")
 
     resolved = resolve_runtime_settings_from_env_defaults(_settings(safe_mode=True))
 
@@ -88,7 +88,7 @@ def test_resolve_runtime_settings_from_env_defaults_applies_env_overrides(monkey
     assert resolved.auth.password.complexity.require_symbol is True
     assert resolved.auth.password.lockout.max_attempts == 3
     assert resolved.auth.password.lockout.duration_seconds == 900
-    assert resolved.auth.identity_provider.jit_provisioning_enabled is False
+    assert resolved.auth.identity_provider.provisioning_mode == "scim"
 
 
 def test_resolve_runtime_settings_from_env_defaults_normalizes_blank_detail(monkeypatch) -> None:
@@ -118,7 +118,7 @@ def test_runtime_settings_model_rejects_unknown_fields() -> None:
                         "lockout": {"max_attempts": 5, "duration_seconds": 300},
                     },
                     "identity_provider": {
-                        "jit_provisioning_enabled": True,
+                        "provisioning_mode": "jit",
                     },
                 },
             }

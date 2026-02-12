@@ -23,6 +23,7 @@ from .schemas import (
     AdminSettingsPatchRequest,
     AdminSettingsReadResponse,
     AuthMode,
+    ProvisioningMode,
     RuntimeAuthMeta,
     RuntimeAuthValues,
     RuntimeIdentityProviderMeta,
@@ -68,8 +69,8 @@ _FIELD_ENV_VARS: dict[_FIELD_PATH, str] = {
     (
         "auth",
         "identity_provider",
-        "jit_provisioning_enabled",
-    ): "ADE_AUTH_IDP_JIT_PROVISIONING_ENABLED",
+        "provisioning_mode",
+    ): "ADE_AUTH_IDP_PROVISIONING_MODE",
 }
 
 _FIELD_API_PATHS: dict[_FIELD_PATH, str] = {
@@ -98,8 +99,8 @@ _FIELD_API_PATHS: dict[_FIELD_PATH, str] = {
     (
         "auth",
         "identity_provider",
-        "jit_provisioning_enabled",
-    ): "auth.identityProvider.jitProvisioningEnabled",
+        "provisioning_mode",
+    ): "auth.identityProvider.provisioningMode",
 }
 
 
@@ -147,7 +148,7 @@ class PasswordAuthSettingsModel(BaseModel):
 class IdentityProviderSettingsModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    jit_provisioning_enabled: bool = True
+    provisioning_mode: ProvisioningMode = "jit"
 
 
 class AuthPolicySettingsModel(BaseModel):
@@ -184,7 +185,7 @@ class RuntimeSettingsEnvOverrides(BaseSettings):
     auth_password_require_symbol: bool | None = None
     auth_password_lockout_max_attempts: int | None = Field(default=None, ge=1, le=20)
     auth_password_lockout_duration_seconds: int | None = Field(default=None, ge=30, le=86_400)
-    auth_idp_jit_provisioning_enabled: bool | None = None
+    auth_idp_provisioning_mode: ProvisioningMode | None = None
 
     @field_validator("safe_mode_detail")
     @classmethod
@@ -385,8 +386,8 @@ class RuntimeSettingsService:
             (
                 "auth",
                 "identity_provider",
-                "jit_provisioning_enabled",
-            ): env.auth_idp_jit_provisioning_enabled,
+                "provisioning_mode",
+            ): env.auth_idp_provisioning_mode,
         }
 
         field_meta: dict[_FIELD_PATH, RuntimeSettingFieldMeta] = {}
@@ -446,7 +447,7 @@ class RuntimeSettingsService:
                     ),
                 ),
                 identity_provider=RuntimeIdentityProviderValues(
-                    jit_provisioning_enabled=resolved.values.auth.identity_provider.jit_provisioning_enabled,
+                    provisioning_mode=resolved.values.auth.identity_provider.provisioning_mode,
                 ),
             ),
         )
@@ -487,8 +488,8 @@ class RuntimeSettingsService:
                     ),
                 ),
                 identity_provider=RuntimeIdentityProviderMeta(
-                    jit_provisioning_enabled=resolved.field_meta[
-                        ("auth", "identity_provider", "jit_provisioning_enabled")
+                    provisioning_mode=resolved.field_meta[
+                        ("auth", "identity_provider", "provisioning_mode")
                     ],
                 ),
             ),
@@ -586,7 +587,7 @@ def resolve_runtime_settings_from_env_defaults(settings: Settings) -> RuntimeSet
                 ),
             ),
             identity_provider=IdentityProviderSettingsModel(
-                jit_provisioning_enabled=bool(settings.auth_idp_jit_provisioning_enabled),
+                provisioning_mode=settings.auth_idp_provisioning_mode,
             ),
         ),
     )
@@ -623,15 +624,14 @@ def resolve_runtime_settings_from_env_defaults(settings: Settings) -> RuntimeSet
         (
             "auth",
             "identity_provider",
-            "jit_provisioning_enabled",
-        ): env.auth_idp_jit_provisioning_enabled,
+            "provisioning_mode",
+        ): env.auth_idp_provisioning_mode,
     }
     for path, env_value in env_map.items():
         if env_value is not None:
             _set_path(values, path, env_value)
 
     return values
-
 
 def _has_path(payload: dict[str, Any], path: _FIELD_PATH) -> bool:
     cursor: Any = payload

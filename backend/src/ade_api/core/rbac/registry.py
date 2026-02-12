@@ -91,6 +91,42 @@ PERMISSIONS: tuple[PermissionDef, ...] = (
         description="Update user profiles or activation state across the tenant.",
     ),
     _permission(
+        key="groups.read_all",
+        scope=ScopeType.GLOBAL,
+        label="Read groups",
+        description="Inspect group profiles across the tenant.",
+    ),
+    _permission(
+        key="groups.manage_all",
+        scope=ScopeType.GLOBAL,
+        label="Manage groups",
+        description="Create, update, and delete groups across the tenant.",
+    ),
+    _permission(
+        key="groups.members.read_all",
+        scope=ScopeType.GLOBAL,
+        label="Read group memberships",
+        description="Inspect members assigned to groups across the tenant.",
+    ),
+    _permission(
+        key="groups.members.manage_all",
+        scope=ScopeType.GLOBAL,
+        label="Manage group memberships",
+        description="Add or remove members from groups across the tenant.",
+    ),
+    _permission(
+        key="invitations.read_all",
+        scope=ScopeType.GLOBAL,
+        label="Read invitations",
+        description="Inspect invitation records across the tenant.",
+    ),
+    _permission(
+        key="invitations.manage_all",
+        scope=ScopeType.GLOBAL,
+        label="Manage invitations",
+        description="Create, resend, or cancel invitations across the tenant.",
+    ),
+    _permission(
         key="system.settings.read",
         scope=ScopeType.GLOBAL,
         label="Read system settings",
@@ -132,6 +168,18 @@ PERMISSIONS: tuple[PermissionDef, ...] = (
         scope=ScopeType.WORKSPACE,
         label="Manage workspace members",
         description="Add, remove, or change member roles within the workspace.",
+    ),
+    _permission(
+        key="workspace.invitations.read",
+        scope=ScopeType.WORKSPACE,
+        label="Read workspace invitations",
+        description="Inspect invitation records scoped to the workspace.",
+    ),
+    _permission(
+        key="workspace.invitations.manage",
+        scope=ScopeType.WORKSPACE,
+        label="Manage workspace invitations",
+        description="Create, resend, and cancel workspace invitation records.",
     ),
     _permission(
         key="workspace.documents.read",

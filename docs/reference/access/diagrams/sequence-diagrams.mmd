@@ -1,0 +1,88 @@
+%% Sequence 1: Workspace owner invites unknown user with workspace role assignment
+sequenceDiagram
+    autonumber
+    participant WO as Workspace Owner UI
+    participant API as ADE API
+    participant U as Users Store
+    participant I as Invitations Store
+    participant A as RoleAssignments Store
+
+    WO->>API: POST /api/v1/invitations (email, workspaceId, roleId)
+    API->>API: Check workspace.members.manage on workspaceId
+    API->>U: Lookup user by normalized email
+    alt user exists
+        U-->>API: userId
+        API->>A: Create workspace assignment (principal=user)
+        API->>I: Create invitation/audit record
+    else user not found
+        API->>U: Create invited user stub (source=internal)
+        U-->>API: new userId
+        API->>I: Create invitation (pending)
+        API->>A: Create workspace assignment (principal=user)
+    end
+    API-->>WO: 201 Created (invitation + assignment summary)
+
+%% Sequence 2: Workspace add existing group and role assignment
+sequenceDiagram
+    autonumber
+    participant Admin as Workspace Access UI
+    participant API as ADE API
+    participant G as Groups Store
+    participant A as RoleAssignments Store
+
+    Admin->>API: POST /api/v1/workspaces/{workspaceId}/roleAssignments (principalType=group)
+    API->>API: Check workspace.members.manage
+    API->>G: Verify group exists and active
+    API->>A: Create assignment (group -> workspace role)
+    API-->>Admin: 201 Created
+
+%% Sequence 3: JIT login with per-user membership hydration
+sequenceDiagram
+    autonumber
+    participant User as End User
+    participant SSO as OIDC Callback
+    participant API as ADE Auth Service
+    participant IdP as Provider API
+    participant G as Groups Store
+    participant M as GroupMemberships Store
+
+    User->>SSO: Complete OIDC sign-in
+    SSO->>API: Resolve or JIT-provision user (mode=jit)
+    API->>IdP: GET /users/{externalId}/memberOf
+    IdP-->>API: User group list
+    API->>G: Upsert provider groups (if missing)
+    API->>M: Reconcile this user's provider memberships
+    API-->>User: Login success (hydration best-effort)
+
+%% Sequence 4: SCIM provisioning and membership management
+sequenceDiagram
+    autonumber
+    participant IdP as IdP SCIM Client
+    participant SCIM as ADE SCIM API
+    participant U as Users Store
+    participant G as Groups Store
+    participant M as GroupMemberships Store
+
+    IdP->>SCIM: POST /scim/v2/Users
+    SCIM->>U: Upsert provisioned user
+    IdP->>SCIM: PATCH /scim/v2/Groups/{id}
+    SCIM->>G: Upsert group
+    SCIM->>M: Apply membership add/remove
+    SCIM-->>IdP: SCIM-compliant success response
+
+%% Sequence 5: Bulk user mutation via Graph-style batch envelope
+sequenceDiagram
+    autonumber
+    participant Admin as Admin UI/Client
+    participant API as ADE Batch API
+    participant Exec as Batch Executor
+    participant Users as Users Service
+
+    Admin->>API: POST /api/v1/$batch (requests[])
+    API->>Exec: Validate envelope + allowlisted subrequests
+    loop each subrequest
+        Exec->>Users: Dispatch (create/update/deactivate)
+        Users-->>Exec: Item result (status/body/error)
+    end
+    Exec-->>API: responses[] by subrequest id
+    API-->>Admin: 200 OK (partial success possible)

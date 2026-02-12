@@ -61,7 +61,7 @@ async def test_read_admin_settings_defaults(async_client: AsyncClient, seed_iden
     }
     assert payload["values"]["auth"]["mode"] == "password_only"
     assert payload["values"]["auth"]["password"]["resetEnabled"] is True
-    assert payload["values"]["auth"]["identityProvider"]["jitProvisioningEnabled"] is True
+    assert payload["values"]["auth"]["identityProvider"]["provisioningMode"] == "jit"
     assert payload["meta"]["auth"]["mode"]["restartRequired"] is False
 
 
@@ -231,7 +231,7 @@ async def test_patch_allows_idp_only_with_active_provider(
                 "auth": {
                     "mode": "idp_only",
                     "identityProvider": {
-                        "jitProvisioningEnabled": False,
+                        "provisioningMode": "disabled",
                     },
                 }
             },
@@ -241,7 +241,7 @@ async def test_patch_allows_idp_only_with_active_provider(
     assert response.status_code == 200, response.text
     payload = response.json()
     assert payload["values"]["auth"]["mode"] == "idp_only"
-    assert payload["values"]["auth"]["identityProvider"]["jitProvisioningEnabled"] is False
+    assert payload["values"]["auth"]["identityProvider"]["provisioningMode"] == "disabled"
 
 
 async def test_patch_rejects_locked_and_unlocked_changes_atomically(

@@ -4,22 +4,24 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
+from ade_api.features.admin_scim.router import router as admin_scim_router
 from ade_api.features.admin_settings.router import router as admin_settings_router
 from ade_api.features.api_keys.router import router as api_keys_router
 from ade_api.features.auth.router import create_auth_router
+from ade_api.features.batch.router import router as batch_router
 from ade_api.features.configs.router import router as configurations_router
 from ade_api.features.documents.router import router as documents_router
 from ade_api.features.documents.router import tags_router as document_tags_router
+from ade_api.features.groups.router import router as groups_router
 from ade_api.features.health.router import router as health_router
 from ade_api.features.info.router import router as info_router
+from ade_api.features.invitations.router import router as invitations_router
 from ade_api.features.me.router import router as me_router
 from ade_api.features.presence.router import router as presence_router
 from ade_api.features.rbac.router import router as rbac_router
-from ade_api.features.rbac.router import user_roles_router as rbac_user_roles_router
 from ade_api.features.runs.router import router as runs_router
 from ade_api.features.sso.router import router as sso_router
 from ade_api.features.users.router import router as users_router
-from ade_api.features.workspaces.members import router as workspace_members_router
 from ade_api.features.workspaces.router import router as workspaces_router
 from ade_api.meta.router import router as meta_router
 
@@ -32,11 +34,12 @@ def create_api_router() -> APIRouter:
     api_router.include_router(create_auth_router(), prefix="/auth")
     api_router.include_router(api_keys_router)
     api_router.include_router(users_router)
+    api_router.include_router(batch_router)
+    api_router.include_router(groups_router)
+    api_router.include_router(invitations_router)
     api_router.include_router(rbac_router)
-    api_router.include_router(rbac_user_roles_router)
     api_router.include_router(me_router)
     api_router.include_router(workspaces_router)
-    api_router.include_router(workspace_members_router)
     api_router.include_router(document_tags_router)
     api_router.include_router(documents_router)
     api_router.include_router(presence_router)
@@ -44,6 +47,7 @@ def create_api_router() -> APIRouter:
     api_router.include_router(runs_router)
     api_router.include_router(sso_router)
     api_router.include_router(admin_settings_router)
+    api_router.include_router(admin_scim_router)
     return api_router
 
 

@@ -1,0 +1,65 @@
+%% ADE Access UI flow maps (research artifact)
+
+flowchart TD
+    A[Organization Access: Users list] --> B[Open User Detail]
+    B --> C[Profile tab]
+    B --> D[Assignments tab]
+    B --> E[Groups tab]
+    E --> F[Add group membership]
+    E --> G[Remove group membership]
+    F --> H{Group managed internally?}
+    H -- Yes --> I[POST membership mutation]
+    H -- No --> J[Show read-only reason and IdP guidance]
+    I --> K[Refresh memberships and effective access]
+    G --> L{Confirm remove?}
+    L -- Yes --> M[DELETE membership mutation]
+    M --> K
+
+flowchart TD
+    N[Organization Access: Groups list] --> O[Open Group Detail]
+    O --> P[Members tab]
+    O --> Q[Owners tab]
+    O --> R[Properties tab]
+    P --> S[Add member]
+    P --> T[Remove member]
+    Q --> QA[Add owner]
+    Q --> QB[Remove owner]
+    S --> U{Group source/mode mutable?}
+    U -- Internal + assigned --> V[POST /groups/{id}/members/$ref]
+    U -- IdP or dynamic --> W[Read-only state: manage in provider/rule]
+    V --> X[Refresh member list]
+    T --> Y{Confirm remove?}
+    Y -- Yes --> Z[DELETE /groups/{id}/members/{memberId}/$ref]
+    Z --> X
+    QA --> QC{Group source/mode mutable?}
+    QC -- Internal + assigned --> QD[POST /groups/{id}/owners/$ref]
+    QC -- IdP or dynamic --> W
+    QD --> QE[Refresh owner list]
+    QB --> QF{Confirm remove?}
+    QF -- Yes --> QG[DELETE /groups/{id}/owners/{ownerId}/$ref]
+    QG --> QE
+
+flowchart TD
+    AA[Workspace Access: Principals list] --> AB[Add principal drawer]
+    AB --> AC[Choose principal type: user or group]
+    AC --> AD[Select principal]
+    AD --> AE[Select workspace role(s)]
+    AE --> AF[Submit assignment]
+    AF --> AG{Principal type}
+    AG -- User --> AH[POST workspace role assignment]
+    AG -- Group --> AI[POST workspace role assignment]
+    AH --> AJ[Refresh principals table]
+    AI --> AJ
+    AA --> AK[Manage principal drawer]
+    AK --> AL[Edit roles]
+    AK --> AM[Remove assignment]
+
+flowchart TD
+    AN[Action render decision] --> AO{Has read access?}
+    AO -- No --> AP[Hide surface and show blocked page]
+    AO -- Yes --> AQ{Has manage access?}
+    AQ -- Yes --> AR[Enabled action]
+    AQ -- No --> AS[Disabled action with permission reason]
+    AR --> AT{Object mutable?}
+    AT -- Yes --> AU[Perform mutation]
+    AT -- No --> AV[Disabled action with source/mode reason]

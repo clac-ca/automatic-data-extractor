@@ -54,7 +54,7 @@ Use this runbook when any of these conditions are true:
 1. Validate `/api/v1/admin/settings` and provider status.
 1. Re-apply expected auth policy fields:
    `auth.mode`, `auth.password.*`,
-   `auth.identityProvider.jitProvisioningEnabled`.
+   `auth.identityProvider.provisioningMode`.
 
 ## Verify
 

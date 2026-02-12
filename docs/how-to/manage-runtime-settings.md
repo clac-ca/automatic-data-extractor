@@ -55,7 +55,7 @@ Response includes:
 | `auth.password.complexity.requireSymbol` | boolean | `false` | `ADE_AUTH_PASSWORD_REQUIRE_SYMBOL` |
 | `auth.password.lockout.maxAttempts` | integer | `5` | `ADE_AUTH_PASSWORD_LOCKOUT_MAX_ATTEMPTS` |
 | `auth.password.lockout.durationSeconds` | integer | `300` | `ADE_AUTH_PASSWORD_LOCKOUT_DURATION_SECONDS` |
-| `auth.identityProvider.jitProvisioningEnabled` | boolean | `true` | `ADE_AUTH_IDP_JIT_PROVISIONING_ENABLED` |
+| `auth.identityProvider.provisioningMode` | enum (`disabled`, `jit`, `scim`) | `jit` | `ADE_AUTH_IDP_PROVISIONING_MODE` |
 
 `auth.mode` values:
 
@@ -88,7 +88,7 @@ curl -sS -X PATCH \
           "resetEnabled": true
         },
         "identityProvider": {
-          "jitProvisioningEnabled": true
+          "provisioningMode": "jit"
         }
       }
     }

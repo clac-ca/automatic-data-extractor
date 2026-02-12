@@ -81,7 +81,6 @@ def reset_settings(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         "ADE_AUTH_PASSWORD_REQUIRE_SYMBOL",
         "ADE_AUTH_PASSWORD_LOCKOUT_MAX_ATTEMPTS",
         "ADE_AUTH_PASSWORD_LOCKOUT_DURATION_SECONDS",
-        "ADE_AUTH_IDP_JIT_PROVISIONING_ENABLED",
         "ADE_SAFE_MODE_DETAIL",
         "ADE_SSO_ENCRYPTION_KEY",
     ):

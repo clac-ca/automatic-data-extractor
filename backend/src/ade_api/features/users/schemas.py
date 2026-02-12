@@ -4,12 +4,14 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Literal
+from uuid import UUID
 
 from pydantic import EmailStr, Field, SecretStr, field_validator, model_validator
 
 from ade_api.common.cursor_listing import CursorPage
 from ade_api.common.ids import UUIDStr
 from ade_api.common.schema import BaseSchema
+from ade_db.models import GroupMembershipMode, GroupSource
 
 
 class UserProfile(BaseSchema):
@@ -20,6 +22,22 @@ class UserProfile(BaseSchema):
     is_active: bool
     is_service_account: bool
     display_name: str | None = None
+    given_name: str | None = None
+    surname: str | None = None
+    job_title: str | None = None
+    department: str | None = None
+    office_location: str | None = None
+    mobile_phone: str | None = None
+    business_phones: str | None = None
+    employee_id: str | None = None
+    employee_type: str | None = None
+    preferred_language: str | None = None
+    city: str | None = None
+    state: str | None = None
+    country: str | None = None
+    source: str = "internal"
+    external_id: str | None = None
+    last_synced_at: datetime | None = None
     preferred_workspace_id: UUIDStr | None = Field(
         default=None,
     )
@@ -46,6 +64,21 @@ class UserUpdate(BaseSchema):
         default=None,
         description="Whether the account is active and allowed to authenticate.",
     )
+    given_name: str | None = Field(default=None, max_length=255)
+    surname: str | None = Field(default=None, max_length=255)
+    job_title: str | None = Field(default=None, max_length=255)
+    department: str | None = Field(default=None, max_length=255)
+    office_location: str | None = Field(default=None, max_length=255)
+    mobile_phone: str | None = Field(default=None, max_length=64)
+    business_phones: str | None = Field(default=None)
+    employee_id: str | None = Field(default=None, max_length=120)
+    employee_type: str | None = Field(default=None, max_length=120)
+    preferred_language: str | None = Field(default=None, max_length=32)
+    city: str | None = Field(default=None, max_length=120)
+    state: str | None = Field(default=None, max_length=120)
+    country: str | None = Field(default=None, max_length=120)
+    source: str | None = Field(default=None, max_length=20)
+    external_id: str | None = Field(default=None, max_length=255)
 
     @field_validator("display_name")
     @classmethod
@@ -98,6 +131,21 @@ class UserCreate(BaseSchema):
         max_length=255,
         alias="displayName",
     )
+    given_name: str | None = Field(default=None, max_length=255, alias="givenName")
+    surname: str | None = Field(default=None, max_length=255)
+    job_title: str | None = Field(default=None, max_length=255, alias="jobTitle")
+    department: str | None = Field(default=None, max_length=255)
+    office_location: str | None = Field(default=None, max_length=255, alias="officeLocation")
+    mobile_phone: str | None = Field(default=None, max_length=64, alias="mobilePhone")
+    business_phones: str | None = Field(default=None, alias="businessPhones")
+    employee_id: str | None = Field(default=None, max_length=120, alias="employeeId")
+    employee_type: str | None = Field(default=None, max_length=120, alias="employeeType")
+    preferred_language: str | None = Field(default=None, max_length=32, alias="preferredLanguage")
+    city: str | None = Field(default=None, max_length=120)
+    state: str | None = Field(default=None, max_length=120)
+    country: str | None = Field(default=None, max_length=120)
+    source: str | None = Field(default=None, max_length=20)
+    external_id: str | None = Field(default=None, max_length=255, alias="externalId")
     password_profile: UserPasswordProfile = Field(
         description="Password provisioning mode for the user account.",
         alias="passwordProfile",
@@ -131,9 +179,30 @@ class UserCreateResponse(BaseSchema):
     password_provisioning: UserPasswordProvisioning = Field(alias="passwordProvisioning")
 
 
+class UserMemberOfRefCreate(BaseSchema):
+    group_id: UUID = Field(alias="groupId")
+
+
+class UserMemberOfOut(BaseSchema):
+    group_id: UUID
+    display_name: str
+    slug: str
+    source: GroupSource
+    membership_mode: GroupMembershipMode
+    is_member: bool
+    is_owner: bool
+
+
+class UserMemberOfResponse(BaseSchema):
+    items: list[UserMemberOfOut]
+
+
 __all__ = [
     "UserCreate",
     "UserCreateResponse",
+    "UserMemberOfOut",
+    "UserMemberOfRefCreate",
+    "UserMemberOfResponse",
     "UserOut",
     "UserPage",
     "UserPasswordProfile",
