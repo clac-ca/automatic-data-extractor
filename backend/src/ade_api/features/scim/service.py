@@ -665,12 +665,19 @@ class ScimProvisioningService:
                     user.email = email
                     break
             return
-        if path in {"phoneNumbers", 'phoneNumbers[type eq "mobile"].value'}:
-            if isinstance(value, list):
+        if path == "phoneNumbers":
+            if value is None:
+                user.mobile_phone = None
+                user.business_phones = None
+            elif isinstance(value, list):
                 user.mobile_phone = self._extract_phone(
                     {"phoneNumbers": value}, phone_type="mobile"
                 )
                 user.business_phones = self._extract_business_phones({"phoneNumbers": value})
+            return
+        if path == 'phoneNumbers[type eq "mobile"].value':
+            if value is None:
+                user.mobile_phone = None
             elif isinstance(value, str):
                 user.mobile_phone = value.strip() or None
             return

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -56,8 +56,10 @@ class InvitationsService:
     ) -> InvitationListResponse:
         stmt = select(Invitation).order_by(Invitation.created_at.desc(), Invitation.id.desc())
         invitations = list(self._session.execute(stmt).scalars().all())
+        now = utc_now()
         filtered: list[Invitation] = []
         for invitation in invitations:
+            self._transition_to_expired_if_needed(invitation=invitation, now=now)
             metadata = invitation.metadata_payload or {}
             metadata_workspace = metadata.get("workspaceId")
             if workspace_id is not None and str(metadata_workspace or "") != str(workspace_id):
@@ -71,6 +73,7 @@ class InvitationsService:
         invitation = self._session.get(Invitation, invitation_id)
         if invitation is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Invitation not found")
+        self._transition_to_expired_if_needed(invitation=invitation)
         return invitation
 
     def get_invitation_out(self, *, invitation_id: UUID) -> InvitationOut:
@@ -143,8 +146,17 @@ class InvitationsService:
 
     def resend_invitation(self, *, invitation_id: UUID) -> InvitationOut:
         invitation = self.get_invitation(invitation_id=invitation_id)
-        if invitation.status != InvitationStatus.CANCELLED:
-            invitation.status = InvitationStatus.PENDING
+        if invitation.status == InvitationStatus.CANCELLED:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                detail="Cancelled invitations cannot be resent",
+            )
+        if invitation.status == InvitationStatus.ACCEPTED:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                detail="Accepted invitations cannot be resent",
+            )
+        invitation.status = InvitationStatus.PENDING
         invitation.expires_at = utc_now() + timedelta(days=7)
         self._session.flush([invitation])
         return self._serialize(invitation)
@@ -154,6 +166,22 @@ class InvitationsService:
         invitation.status = InvitationStatus.CANCELLED
         self._session.flush([invitation])
         return self._serialize(invitation)
+
+    @staticmethod
+    def _transition_to_expired_if_needed(
+        *,
+        invitation: Invitation,
+        now: datetime | None = None,
+    ) -> bool:
+        if invitation.status != InvitationStatus.PENDING:
+            return False
+        if invitation.expires_at is None:
+            return False
+        timestamp = now or utc_now()
+        if invitation.expires_at > timestamp:
+            return False
+        invitation.status = InvitationStatus.EXPIRED
+        return True
 
 
 __all__ = ["InvitationsService"]
