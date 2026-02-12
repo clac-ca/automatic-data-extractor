@@ -15,6 +15,8 @@ from .schemas import (
     GroupMembershipRefCreate,
     GroupMembersResponse,
     GroupOut,
+    GroupOwnerRefCreate,
+    GroupOwnersResponse,
     GroupUpdate,
 )
 from .service import GroupsService
@@ -28,6 +30,10 @@ GroupPath = Annotated[
 MemberPath = Annotated[
     UUID,
     Path(description="Member identifier", alias="memberId"),
+]
+OwnerPath = Annotated[
+    UUID,
+    Path(description="Owner identifier", alias="ownerId"),
 ]
 
 
@@ -157,6 +163,55 @@ def remove_group_member_ref(
 ) -> Response:
     service = GroupsService(session=session)
     service.remove_member_ref(group_id=group_id, member_id=member_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get(
+    "/groups/{groupId}/owners",
+    response_model=GroupOwnersResponse,
+    response_model_exclude_none=True,
+    summary="List group owners",
+)
+def list_group_owners(
+    _: Annotated[User, Security(require_global("groups.members.read_all"))],
+    group_id: GroupPath,
+    session: ReadSessionDep,
+) -> GroupOwnersResponse:
+    service = GroupsService(session=session)
+    return service.list_owners(group_id=group_id)
+
+
+@router.post(
+    "/groups/{groupId}/owners/$ref",
+    dependencies=[Security(require_csrf)],
+    response_model=GroupOwnersResponse,
+    response_model_exclude_none=True,
+    summary="Add group owner by reference",
+)
+def add_group_owner_ref(
+    _: Annotated[User, Security(require_global("groups.manage_all"))],
+    group_id: GroupPath,
+    payload: GroupOwnerRefCreate,
+    session: WriteSessionDep,
+) -> GroupOwnersResponse:
+    service = GroupsService(session=session)
+    return service.add_owner_ref(group_id=group_id, payload=payload)
+
+
+@router.delete(
+    "/groups/{groupId}/owners/{ownerId}/$ref",
+    dependencies=[Security(require_csrf)],
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Remove group owner by reference",
+)
+def remove_group_owner_ref(
+    _: Annotated[User, Security(require_global("groups.manage_all"))],
+    group_id: GroupPath,
+    owner_id: OwnerPath,
+    session: WriteSessionDep,
+) -> Response:
+    service = GroupsService(session=session)
+    service.remove_owner_ref(group_id=group_id, owner_id=owner_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

@@ -71,13 +71,8 @@ function normalizeSectionSegments(
   search: string,
   hash: string,
 ) {
-  const aliases = new Map<string, string>([
-    ["access/members", "access/principals"],
-  ]);
-  const incoming = sectionSegments.join("/");
-  const aliasedPath = aliases.get(incoming);
   const initialSegments =
-    sectionSegments.length > 0 ? (aliasedPath ? aliasedPath.split("/") : [...sectionSegments]) : defaultSettingsSection.path.split("/");
+    sectionSegments.length > 0 ? [...sectionSegments] : defaultSettingsSection.path.split("/");
   const effectiveSegments = initialSegments;
   const joined = effectiveSegments.join("/");
   const needsDefaultRedirect = sectionSegments.length === 0;
@@ -89,6 +84,6 @@ function normalizeSectionSegments(
 
   return {
     effectiveSegments: isKnownPath ? effectiveSegments : defaultSettingsSection.path.split("/"),
-    redirectTo: needsDefaultRedirect || !isKnownPath || Boolean(aliasedPath) ? fallback : null,
+    redirectTo: needsDefaultRedirect || !isKnownPath ? fallback : null,
   };
 }

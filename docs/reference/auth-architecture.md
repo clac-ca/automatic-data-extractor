@@ -1,93 +1,82 @@
 # Auth Architecture
 
-This page is the one-page reference for ADE authentication and authorization behavior.
+One-page reference for ADE authentication, authorization, provisioning policy, and
+IdP/SCIM behavior.
 
 ## Auth Model
 
-ADE uses two runtime auth mechanisms:
+ADE supports two runtime auth channels:
 
-- Browser auth: cookie-backed session + CSRF token.
-- Machine auth: API key in `X-API-Key` header.
+1. browser auth: session cookie + CSRF token
+2. machine auth: `X-API-Key`
 
-JWT bearer login is not part of the active auth model.
+SCIM provisioning uses dedicated SCIM bearer tokens managed by
+`/api/v1/admin/scim/tokens*`.
 
 ## Browser Session Flow
 
-1. User submits credentials to `POST /api/v1/auth/login`.
-2. On success, API sets:
-   - session cookie (`HttpOnly`, scoped by session settings)
-   - CSRF cookie for mutating requests
-3. Client includes `X-CSRF-Token` for mutating cookie-authenticated operations.
-4. `POST /api/v1/auth/logout` revokes active sessions and clears auth cookies.
+1. user signs in via `POST /api/v1/auth/login` or SSO callback flow
+2. API sets session and CSRF cookies
+3. mutating browser requests must include `X-CSRF-Token`
+4. `POST /api/v1/auth/logout` ends session
 
-## MFA (TOTP + Recovery)
+## MFA and Password Flows
 
-- TOTP enrollment:
-  - `POST /api/v1/auth/mfa/totp/enroll/start`
-  - `POST /api/v1/auth/mfa/totp/enroll/confirm`
-- Challenge completion:
-  - `POST /api/v1/auth/mfa/challenge/verify`
-- Recovery codes:
-  - accepted in both `XXXX-XXXX` and `XXXXXXXX` format
-  - single-use semantics enforced server-side
+- TOTP enrollment/challenge and recovery code flows are available for password-authenticated sessions.
+- Password reset depends on runtime policy and mode.
+- Forced-password-change users can only access onboarding-safe routes until password update succeeds.
 
-## Password Reset
+## Provisioning Policy Model
 
-- Forgot flow: when enabled, `POST /api/v1/auth/password/forgot` returns uniform `202` for known/unknown emails.
-- Reset flow: `POST /api/v1/auth/password/reset` consumes one-time token.
-- Authenticated change flow: `POST /api/v1/auth/password/change`.
-- Reset tokens are stored as hashes, not plaintext.
-- Reset is available only when both are true:
-  - `auth.password.resetEnabled=true`
-  - `auth.mode != idp_only`
+Provisioning policy is controlled via admin settings:
 
-## User Provisioning
+- `auth.identityProvider.provisioningMode`
+  - `disabled`
+  - `jit`
+  - `scim`
 
-`POST /api/v1/users` requires an explicit password provisioning profile:
+Mode behavior:
 
-- `passwordProfile.mode=explicit`: caller sends password.
-- `passwordProfile.mode=auto_generate`: API returns a one-time generated password.
-- `passwordProfile.forceChangeOnNextSignIn=true`: user is gated until password change.
+1. `disabled`: unknown SSO users are denied until invited/admin-provisioned.
+2. `jit`: unknown users can be created/linked at successful SSO sign-in per policy checks.
+3. `scim`: unknown SSO users are denied; SCIM/invitation paths provide provisioning.
 
-## Forced Password Change Gate
+## IdP Group Membership Behavior
 
-- Login responses include `passwordChangeRequired`.
-- When `users.must_change_password=true`, protected routes return `403 password_change_required`.
-- Allowed routes during this state include:
-  - `/api/v1/me/bootstrap`
-  - `/api/v1/auth/password/change`
-  - `/api/v1/auth/logout`
-  - MFA enrollment/challenge endpoints
+1. JIT membership hydration runs for the signed-in user after successful SSO identity resolution.
+2. Hydration is best-effort and must not block login on transient failures.
+3. Provider-managed groups can be auto-upserted as metadata containers.
+4. Manual membership mutations are blocked for provider-managed groups.
 
-## Authentication Modes and SSO
+## SCIM Provisioning Model
 
-- Admin policy surface: `GET/PATCH /api/v1/admin/settings`.
-- External provider management: `/api/v1/admin/sso/providers*`.
-- Runtime settings precedence: env override, then DB value, then code default.
-- Sign-in policy is mode-driven:
-  - `password_only`: password sign-in only
-  - `password_and_idp`: both password and IdP sign-in
-  - `idp_only`: members use IdP sign-in; global admins retain password + MFA break-glass access
-- IdP JIT provisioning is controlled by `auth.identityProvider.jitProvisioningEnabled`.
-
-## IdP Group Sync Behavior
-
-- Background group sync is entitlement sync, not user provisioning.
-- Group sync creates/updates IdP-managed groups and reconciles memberships for existing ADE users.
-- Unknown directory members are skipped until they have an ADE identity.
-- On successful SSO sign-in, ADE performs best-effort membership hydration for that user and retries asynchronously on transient failures.
+1. SCIM endpoints live at `/scim/v2/*`.
+2. SCIM routes are active only when provisioning mode is `scim`.
+3. SCIM `/Bulk` is not enabled in current scope.
+4. Deprovisioning is handled via `active=false` semantics.
 
 ## Authorization (RBAC)
 
-- Authorization is role/permission based.
-- No `is_superuser` bypass path is used in runtime permission evaluation.
+Authorization uses principal-aware role assignments:
+
+1. principal types: `user`, `group`
+2. scope types: `organization`, `workspace`
+3. effective permissions are union of direct and group-derived grants
+4. inactive users are denied regardless of assignment state
 
 ## Credential Transport Rules
 
-- API keys: `X-API-Key` only.
-- `Authorization: Bearer ...` is not an API key channel.
+1. API key transport: `X-API-Key` only
+2. `Authorization: Bearer` is not an API-key channel
 
 ## Non-Production Mode
 
-- `ADE_AUTH_DISABLED=true` is for local/non-production only.
-- Auth-disabled mode should remain deterministic and isolated from production configs.
+`ADE_AUTH_DISABLED=true` is local/non-production only and must not be enabled in
+production.
+
+## Related
+
+- [Authentication API Reference](api/authentication.md)
+- [Access Management API Reference](api/access-management.md)
+- [Access Reference](access/README.md)
+- [Auth Operations](../how-to/auth-operations.md)

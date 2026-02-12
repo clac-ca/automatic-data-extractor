@@ -13,8 +13,11 @@ import type {
 import { useGlobalPermissions } from "@/hooks/auth/useGlobalPermissions";
 import {
   useAdminSettingsQuery,
+  useCreateScimTokenMutation,
   useCreateSsoProviderMutation,
   usePatchAdminSettingsMutation,
+  useRevokeScimTokenMutation,
+  useScimTokensQuery,
   useSsoProvidersQuery,
   useUpdateSsoProviderMutation,
   useValidateSsoProviderMutation,
@@ -32,12 +35,17 @@ import { ResponsiveAdminTable } from "../components/ResponsiveAdminTable";
 import { SettingsFieldRow } from "../components/SettingsFieldRow";
 import { SettingsSaveBar } from "../components/SettingsSaveBar";
 import { SettingsTechnicalDetails } from "../components/SettingsTechnicalDetails";
-import { findRuntimeSettingFieldError, hasProblemCode } from "../components/runtimeSettingsUtils";
+import {
+  findRuntimeSettingFieldError,
+  formatRuntimeSettingsTimestamp,
+  hasProblemCode,
+} from "../components/runtimeSettingsUtils";
 
 type FeedbackTone = "success" | "danger";
 type FeedbackMessage = { tone: FeedbackTone; message: string };
 type ProviderStatusAction = "enable" | "disable";
 type AuthMode = "password_only" | "idp_only" | "password_and_idp";
+type ProvisioningMode = "disabled" | "jit" | "scim";
 
 export function SystemSsoSettingsPage() {
   const { hasPermission } = useGlobalPermissions();
@@ -51,6 +59,8 @@ export function SystemSsoSettingsPage() {
   const updateProvider = useUpdateSsoProviderMutation();
   const validateProvider = useValidateSsoProviderMutation();
   const patchSettings = usePatchAdminSettingsMutation();
+  const createScimToken = useCreateScimTokenMutation();
+  const revokeScimToken = useRevokeScimTokenMutation();
 
   const [feedback, setFeedback] = useState<FeedbackMessage | null>(null);
   const [settingsFieldErrors, setSettingsFieldErrors] = useState<ProblemDetailsErrorMap>({});
@@ -66,7 +76,9 @@ export function SystemSsoSettingsPage() {
   const [passwordRequireSymbol, setPasswordRequireSymbol] = useState(false);
   const [passwordLockoutMaxAttempts, setPasswordLockoutMaxAttempts] = useState("5");
   const [passwordLockoutDurationSeconds, setPasswordLockoutDurationSeconds] = useState("300");
-  const [idpJitProvisioningEnabled, setIdpJitProvisioningEnabled] = useState(true);
+  const [provisioningMode, setProvisioningMode] = useState<ProvisioningMode>("jit");
+  const [scimTokenName, setScimTokenName] = useState("");
+  const [issuedScimToken, setIssuedScimToken] = useState<string | null>(null);
 
   const [setupFlowOpen, setSetupFlowOpen] = useState(false);
   const [setupFlowMode, setSetupFlowMode] = useState<"create" | "edit">("create");
@@ -97,6 +109,9 @@ export function SystemSsoSettingsPage() {
     () => sortedProviders.filter((provider) => provider.status === "active").length,
     [sortedProviders],
   );
+  const scimTokensQuery = useScimTokensQuery({
+    enabled: canRead && provisioningMode === "scim",
+  });
 
   const hasUnsavedAuthSetting = useMemo(() => {
     if (!settingsQuery.data) {
@@ -114,11 +129,10 @@ export function SystemSsoSettingsPage() {
       passwordRequireSymbol !== saved.password.complexity.requireSymbol ||
       Number(passwordLockoutMaxAttempts) !== saved.password.lockout.maxAttempts ||
       Number(passwordLockoutDurationSeconds) !== saved.password.lockout.durationSeconds ||
-      idpJitProvisioningEnabled !== saved.identityProvider.jitProvisioningEnabled
+      provisioningMode !== saved.identityProvider.provisioningMode
     );
   }, [
     authMode,
-    idpJitProvisioningEnabled,
     passwordLockoutDurationSeconds,
     passwordLockoutMaxAttempts,
     passwordMfaRequired,
@@ -128,6 +142,7 @@ export function SystemSsoSettingsPage() {
     passwordRequireSymbol,
     passwordRequireUppercase,
     passwordResetEnabled,
+    provisioningMode,
     settingsQuery.data,
   ]);
 
@@ -153,7 +168,7 @@ export function SystemSsoSettingsPage() {
     setPasswordRequireSymbol(saved.password.complexity.requireSymbol);
     setPasswordLockoutMaxAttempts(String(saved.password.lockout.maxAttempts));
     setPasswordLockoutDurationSeconds(String(saved.password.lockout.durationSeconds));
-    setIdpJitProvisioningEnabled(saved.identityProvider.jitProvisioningEnabled);
+    setProvisioningMode(saved.identityProvider.provisioningMode);
     setSettingsFieldErrors({});
     setSyncedRevision(settingsQuery.data.revision);
   }, [hasUnsavedAuthSetting, settingsQuery.data, syncedRevision]);
@@ -175,7 +190,7 @@ export function SystemSsoSettingsPage() {
   const requireSymbolLocked = Boolean(authMeta?.password.complexity.requireSymbol.lockedByEnv);
   const lockoutAttemptsLocked = Boolean(authMeta?.password.lockout.maxAttempts.lockedByEnv);
   const lockoutDurationLocked = Boolean(authMeta?.password.lockout.durationSeconds.lockedByEnv);
-  const idpJitLocked = Boolean(authMeta?.identityProvider.jitProvisioningEnabled.lockedByEnv);
+  const provisioningModeLocked = Boolean(authMeta?.identityProvider.provisioningMode.lockedByEnv);
 
   const modeError = findRuntimeSettingFieldError(settingsFieldErrors, "auth.mode");
   const passwordResetError = findRuntimeSettingFieldError(settingsFieldErrors, "auth.password.resetEnabled");
@@ -205,9 +220,9 @@ export function SystemSsoSettingsPage() {
     settingsFieldErrors,
     "auth.password.lockout.durationSeconds",
   );
-  const idpJitError = findRuntimeSettingFieldError(
+  const provisioningModeError = findRuntimeSettingFieldError(
     settingsFieldErrors,
-    "auth.identityProvider.jitProvisioningEnabled",
+    "auth.identityProvider.provisioningMode",
   );
 
   const hasEditableAuthSettingChanges = useMemo(() => {
@@ -229,13 +244,10 @@ export function SystemSsoSettingsPage() {
       (!lockoutAttemptsLocked && Number(passwordLockoutMaxAttempts) !== saved.password.lockout.maxAttempts) ||
       (!lockoutDurationLocked &&
         Number(passwordLockoutDurationSeconds) !== saved.password.lockout.durationSeconds) ||
-      (!idpJitLocked &&
-        idpJitProvisioningEnabled !== saved.identityProvider.jitProvisioningEnabled)
+      (!provisioningModeLocked && provisioningMode !== saved.identityProvider.provisioningMode)
     );
   }, [
     authMode,
-    idpJitLocked,
-    idpJitProvisioningEnabled,
     lockoutAttemptsLocked,
     lockoutDurationLocked,
     minLengthLocked,
@@ -251,6 +263,8 @@ export function SystemSsoSettingsPage() {
     passwordRequireUppercase,
     passwordResetEnabled,
     passwordResetLocked,
+    provisioningMode,
+    provisioningModeLocked,
     requireLowercaseLocked,
     requireNumberLocked,
     requireSymbolLocked,
@@ -273,7 +287,7 @@ export function SystemSsoSettingsPage() {
     setPasswordRequireSymbol(saved.password.complexity.requireSymbol);
     setPasswordLockoutMaxAttempts(String(saved.password.lockout.maxAttempts));
     setPasswordLockoutDurationSeconds(String(saved.password.lockout.durationSeconds));
-    setIdpJitProvisioningEnabled(saved.identityProvider.jitProvisioningEnabled);
+    setProvisioningMode(saved.identityProvider.provisioningMode);
     setSettingsFieldErrors({});
     setSyncedRevision(settingsQuery.data.revision);
     setFeedback(null);
@@ -343,13 +357,10 @@ export function SystemSsoSettingsPage() {
     ) {
       lockoutChanges.durationSeconds = Number(passwordLockoutDurationSeconds);
     }
-    if (
-      !idpJitLocked &&
-      idpJitProvisioningEnabled !== saved.identityProvider.jitProvisioningEnabled
-    ) {
+    if (!provisioningModeLocked && provisioningMode !== saved.identityProvider.provisioningMode) {
       authChanges.identityProvider = {
         ...(authChanges.identityProvider ?? {}),
-        jitProvisioningEnabled: idpJitProvisioningEnabled,
+        provisioningMode,
       };
     }
 
@@ -451,9 +462,42 @@ export function SystemSsoSettingsPage() {
     }
   };
 
+  const handleCreateScimToken = async () => {
+    const name = scimTokenName.trim();
+    if (!name) {
+      return;
+    }
+    try {
+      const created = await createScimToken.mutateAsync({ name });
+      setScimTokenName("");
+      setIssuedScimToken(created.token);
+      setFeedback({ tone: "success", message: "SCIM token created." });
+    } catch (error) {
+      const mapped = mapUiError(error, {
+        fallback: "Unable to create SCIM token.",
+      });
+      setFeedback({ tone: "danger", message: mapped.message });
+    }
+  };
+
+  const handleRevokeScimToken = async (tokenId: string) => {
+    try {
+      await revokeScimToken.mutateAsync(tokenId);
+      setFeedback({ tone: "success", message: "SCIM token revoked." });
+    } catch (error) {
+      const mapped = mapUiError(error, {
+        fallback: "Unable to revoke SCIM token.",
+      });
+      setFeedback({ tone: "danger", message: mapped.message });
+    }
+  };
+
   const isSavingSettings = patchSettings.isPending;
   const isMutatingProviders = createProvider.isPending || updateProvider.isPending;
+  const isMutatingScimTokens = createScimToken.isPending || revokeScimToken.isPending;
   const canSaveSettings = hasEditableAuthSettingChanges && !modeConstraintError;
+  const scimBaseUrl = `${window.location.origin}/scim/v2`;
+  const scimTokens = scimTokensQuery.data?.items ?? [];
 
   const hasEnvLocks =
     modeLocked ||
@@ -466,7 +510,7 @@ export function SystemSsoSettingsPage() {
     requireSymbolLocked ||
     lockoutAttemptsLocked ||
     lockoutDurationLocked ||
-    idpJitLocked;
+    provisioningModeLocked;
 
   const passwordControlsApplicable = authMode !== "idp_only";
   const idpControlsApplicable = authMode !== "password_only";
@@ -847,28 +891,150 @@ export function SystemSsoSettingsPage() {
           )}
 
           <SettingsFieldRow
-            label="JIT provisioning"
-            description="Create user records automatically when a valid identity signs in."
+            label="Provisioning mode"
+            description="Choose how users and groups are provisioned for identity-provider sign-in."
             hint={
               idpControlsApplicable
                 ? undefined
                 : "Identity provider settings don't apply while password-only mode is selected."
             }
-            meta={authMeta?.identityProvider.jitProvisioningEnabled}
-            error={idpJitError}
+            meta={authMeta?.identityProvider.provisioningMode}
+            error={provisioningModeError}
           >
-            <ToggleControl
-              checked={idpJitProvisioningEnabled}
+            <fieldset
+              className="space-y-2"
               disabled={
                 !canManage ||
                 isSavingSettings ||
                 settingsQuery.isLoading ||
-                idpJitLocked ||
+                provisioningModeLocked ||
                 !idpControlsApplicable
               }
-              onChange={setIdpJitProvisioningEnabled}
-            />
+            >
+              <RadioOption
+                name="provisioning-mode"
+                value="disabled"
+                checked={provisioningMode === "disabled"}
+                label="Disabled"
+                description="Do not auto-provision unknown identities. Users must be invited or pre-provisioned."
+                onChange={() => setProvisioningMode("disabled")}
+              />
+              <RadioOption
+                name="provisioning-mode"
+                value="jit"
+                checked={provisioningMode === "jit"}
+                label="JIT on sign-in"
+                description="Create users on first sign-in and hydrate group memberships for that user."
+                onChange={() => setProvisioningMode("jit")}
+              />
+              <RadioOption
+                name="provisioning-mode"
+                value="scim"
+                checked={provisioningMode === "scim"}
+                label="SCIM"
+                description="Provision users and groups through SCIM. Unknown sign-ins are blocked."
+                onChange={() => setProvisioningMode("scim")}
+              />
+            </fieldset>
           </SettingsFieldRow>
+
+          {provisioningMode === "scim" ? (
+            <div className="space-y-3 rounded-xl border border-border p-4">
+              <p className="text-sm text-muted-foreground">
+                SCIM base URL: <code className="font-mono text-foreground">{scimBaseUrl}</code>
+              </p>
+              {issuedScimToken ? (
+                <Alert tone="warning">
+                  New token (shown once): <code className="font-mono">{issuedScimToken}</code>
+                </Alert>
+              ) : null}
+              {scimTokensQuery.isError ? (
+                <Alert tone="danger">
+                  {mapUiError(scimTokensQuery.error, { fallback: "Unable to load SCIM tokens." }).message}
+                </Alert>
+              ) : null}
+
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                <div className="w-full sm:max-w-sm">
+                  <label
+                    htmlFor="scim-token-name"
+                    className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+                  >
+                    Token name
+                  </label>
+                  <Input
+                    id="scim-token-name"
+                    value={scimTokenName}
+                    onChange={(event) => setScimTokenName(event.target.value)}
+                    placeholder="Entra provisioning"
+                    disabled={!canManage || isMutatingScimTokens}
+                  />
+                </div>
+                <Button
+                  type="button"
+                  onClick={() => {
+                    void handleCreateScimToken();
+                  }}
+                  disabled={!canManage || isMutatingScimTokens || scimTokenName.trim().length === 0}
+                >
+                  Create token
+                </Button>
+              </div>
+
+              <div className="overflow-hidden rounded-xl border border-border">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      <TableHead className="px-4">Name</TableHead>
+                      <TableHead className="px-4">Prefix</TableHead>
+                      <TableHead className="px-4">Last used</TableHead>
+                      <TableHead className="px-4">Status</TableHead>
+                      <TableHead className="px-4 text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {scimTokens.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="px-4 py-3 text-sm text-muted-foreground">
+                          No SCIM tokens yet.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      scimTokens.map((token) => (
+                        <TableRow key={token.id} className="text-sm text-foreground">
+                          <TableCell className="px-4 py-3">{token.name}</TableCell>
+                          <TableCell className="px-4 py-3">
+                            <code className="font-mono text-xs">{token.prefix}</code>
+                          </TableCell>
+                          <TableCell className="px-4 py-3 text-xs text-muted-foreground">
+                            {token.lastUsedAt ? formatRuntimeSettingsTimestamp(token.lastUsedAt) : "Never"}
+                          </TableCell>
+                          <TableCell className="px-4 py-3">
+                            <Badge variant={token.revokedAt ? "outline" : "secondary"}>
+                              {token.revokedAt ? "revoked" : "active"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="px-4 py-3 text-right">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              disabled={!canManage || Boolean(token.revokedAt) || isMutatingScimTokens}
+                              onClick={() => {
+                                void handleRevokeScimToken(token.id);
+                              }}
+                            >
+                              Revoke
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          ) : null}
         </section>
       </SettingsSection>
 

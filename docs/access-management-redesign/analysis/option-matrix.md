@@ -26,7 +26,7 @@ Decision: `A3`
 |---|---:|---:|---:|---:|---:|---|
 | B1. No groups in first cut | 2 | 3 | 1 | 3 | 5 | Defers core scaling requirement |
 | B2. Assigned groups only | 4 | 4 | 3 | 4 | 4 | Good start, but weak IdP readiness |
-| B3. Assigned + dynamic, dynamic read-only (recommended) | 5 | 5 | 5 | 5 | 4 | Matches Entra model without building rule engine |
+| B3. Assigned + provider-managed groups (recommended) | 5 | 5 | 5 | 5 | 4 | Matches Entra/SCIM model without internal rule engine |
 | B4. Full internal dynamic rules engine now | 3 | 3 | 4 | 2 | 1 | Too complex for hard cutover |
 
 Decision: `B3`
@@ -47,7 +47,7 @@ Decision: `C3`
 |---|---:|---:|---:|---:|---:|---|
 | D1. Keep mixed legacy routes | 2 | 3 | 2 | 1 | 5 | Lowest immediate risk, highest long-term cost |
 | D2. Partial normalization | 3 | 4 | 3 | 3 | 3 | Leaves conceptual seams |
-| D3. Full normalized cutover (recommended) | 5 | 5 | 5 | 5 | 3 | Requires migration discipline, best long-term outcome |
+| D3. Full normalized cutover with SCIM add-on (recommended) | 5 | 5 | 5 | 5 | 3 | Highest long-term coherence |
 
 Decision: `D3`
 
@@ -61,9 +61,18 @@ Decision: `D3`
 
 Decision: `E2`
 
+## Decision F: Provisioning mode and group update strategy
+
+| Option | UX | Policy | Standards | Maintainability | Cutover Risk | Notes |
+|---|---:|---:|---:|---:|---:|---|
+| F1. JIT + full background tenant sync | 3 | 3 | 3 | 2 | 4 | Functional but ambiguous ownership |
+| F2. SCIM-only (remove JIT) | 3 | 5 | 5 | 4 | 2 | Strong enterprise fit, excludes smaller teams |
+| F3. Explicit `disabled|jit|scim` with JIT sign-in hydration only (recommended) | 5 | 5 | 5 | 5 | 4 | Clear model, simple runtime, broad deployability |
+
+Decision: `F3`
+
 ## Final Decision Bundle
 
-- `A3 + B3 + C3 + D3 + E2`
+- `A3 + B3 + C3 + D3 + E2 + F3`
 
-This bundle is the only option set that satisfies all three outcomes while remaining feasible in a hard-cutover release.
-
+This bundle satisfies all three outcomes while keeping the architecture standards-aligned and simpler to reason about.

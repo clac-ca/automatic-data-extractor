@@ -166,6 +166,16 @@ def _hydrate_user_memberships_retry(
     user_id: UUID,
     user_external_id: str,
 ) -> None:
+    if not (
+        settings.auth_group_sync_tenant_id
+        and settings.auth_group_sync_client_id
+        and settings.auth_group_sync_client_secret
+    ):
+        logger.info(
+            "sso.group_sync.user_hydration.retry_skipped",
+            extra={"reason": "credentials_missing", "user_id": user_id},
+        )
+        return
     try:
         session_factory = get_session_factory_from_app(request.app)
     except RuntimeError:
@@ -279,7 +289,7 @@ def _resolve_user(
         return user
 
     authn = AuthnService(session=session, settings=settings)
-    if not authn.get_policy().idp_jit_provisioning_enabled:
+    if authn.get_policy().idp_provisioning_mode != "jit":
         raise ProvisioningError("AUTO_PROVISION_DISABLED")
 
     domain = _extract_domain(canonical_email)
@@ -558,7 +568,15 @@ def callback_sso(
                 user.external_id = user_external_id
                 user.last_synced_at = utc_now()
 
-        if settings.auth_group_sync_enabled and user_external_id:
+        provisioning_mode = (
+            AuthnService(session=db, settings=settings).get_policy().idp_provisioning_mode
+        )
+        has_group_sync_credentials = bool(
+            settings.auth_group_sync_tenant_id
+            and settings.auth_group_sync_client_id
+            and settings.auth_group_sync_client_secret
+        )
+        if provisioning_mode == "jit" and user_external_id and has_group_sync_credentials:
             try:
                 with db.begin_nested():
                     stats = GroupSyncService(session=db).sync_user_memberships(
@@ -588,6 +606,11 @@ def callback_sso(
                     user_id=user.id,
                     user_external_id=user_external_id,
                 )
+        elif provisioning_mode == "jit" and user_external_id:
+            logger.info(
+                "sso.group_sync.user_hydration.skipped",
+                extra={"reason": "credentials_missing", "user_id": str(user.id)},
+            )
 
         logger.info(
             "sso.callback.success",

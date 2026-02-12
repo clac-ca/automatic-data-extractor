@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from ade_db.models import Group, GroupMembership, GroupMembershipMode, GroupSource, User
+from ade_db.models import Group, GroupMembership, GroupMembershipMode, GroupOwner, GroupSource, User
 
 from .schemas import (
     GroupCreate,
@@ -17,6 +17,9 @@ from .schemas import (
     GroupMembershipRefCreate,
     GroupMembersResponse,
     GroupOut,
+    GroupOwnerOut,
+    GroupOwnerRefCreate,
+    GroupOwnersResponse,
     GroupUpdate,
 )
 
@@ -92,6 +95,14 @@ class GroupsService:
     def get_group_out(self, *, group_id: UUID) -> GroupOut:
         return self._serialize_group(self.get_group(group_id=group_id))
 
+    @staticmethod
+    def ensure_group_membership_mutable(group: Group) -> None:
+        if group.membership_mode == GroupMembershipMode.DYNAMIC or group.source == GroupSource.IDP:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                detail="Provider-managed group memberships are read-only",
+            )
+
     def update_group(self, *, group_id: UUID, payload: GroupUpdate) -> GroupOut:
         group = self.get_group(group_id=group_id)
         updates = payload.model_dump(exclude_unset=True)
@@ -146,11 +157,7 @@ class GroupsService:
         payload: GroupMembershipRefCreate,
     ) -> GroupMembersResponse:
         group = self.get_group(group_id=group_id)
-        if group.membership_mode == GroupMembershipMode.DYNAMIC or group.source == GroupSource.IDP:
-            raise HTTPException(
-                status.HTTP_409_CONFLICT,
-                detail="Provider-managed group memberships are read-only",
-            )
+        self.ensure_group_membership_mutable(group)
         user = self._session.get(User, payload.member_id)
         if user is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail="User not found")
@@ -172,11 +179,7 @@ class GroupsService:
 
     def remove_member_ref(self, *, group_id: UUID, member_id: UUID) -> None:
         group = self.get_group(group_id=group_id)
-        if group.membership_mode == GroupMembershipMode.DYNAMIC or group.source == GroupSource.IDP:
-            raise HTTPException(
-                status.HTTP_409_CONFLICT,
-                detail="Provider-managed group memberships are read-only",
-            )
+        self.ensure_group_membership_mutable(group)
         stmt = select(GroupMembership).where(
             GroupMembership.group_id == group_id,
             GroupMembership.user_id == member_id,
@@ -185,6 +188,66 @@ class GroupsService:
         if membership is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Group membership not found")
         self._session.delete(membership)
+        self._session.flush()
+
+    def list_owners(self, *, group_id: UUID) -> GroupOwnersResponse:
+        self.get_group(group_id=group_id)
+        stmt = (
+            select(User)
+            .join(GroupOwner, GroupOwner.user_id == User.id)
+            .where(GroupOwner.group_id == group_id)
+            .order_by(User.display_name.asc().nulls_last(), User.email.asc())
+        )
+        users = list(self._session.execute(stmt).scalars().all())
+        return GroupOwnersResponse(
+            items=[
+                GroupOwnerOut(
+                    user_id=user.id,
+                    email=user.email,
+                    display_name=user.display_name,
+                )
+                for user in users
+            ]
+        )
+
+    def add_owner_ref(
+        self,
+        *,
+        group_id: UUID,
+        payload: GroupOwnerRefCreate,
+    ) -> GroupOwnersResponse:
+        group = self.get_group(group_id=group_id)
+        self.ensure_group_membership_mutable(group)
+        user = self._session.get(User, payload.owner_id)
+        if user is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="User not found")
+
+        existing_stmt = select(GroupOwner).where(
+            GroupOwner.group_id == group_id,
+            GroupOwner.user_id == payload.owner_id,
+        )
+        if self._session.execute(existing_stmt).scalar_one_or_none() is None:
+            self._session.add(
+                GroupOwner(
+                    group_id=group_id,
+                    user_id=payload.owner_id,
+                    ownership_source="internal",
+                )
+            )
+            self._session.flush()
+        return self.list_owners(group_id=group_id)
+
+    def remove_owner_ref(self, *, group_id: UUID, owner_id: UUID) -> None:
+        group = self.get_group(group_id=group_id)
+        self.ensure_group_membership_mutable(group)
+        stmt = select(GroupOwner).where(
+            GroupOwner.group_id == group_id,
+            GroupOwner.user_id == owner_id,
+        )
+        owner = self._session.execute(stmt).scalar_one_or_none()
+        if owner is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Group owner not found")
+        self._session.delete(owner)
         self._session.flush()
 
 

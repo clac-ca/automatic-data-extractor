@@ -188,6 +188,46 @@ def upgrade() -> None:
     )
 
     op.create_table(
+        "group_owners",
+        sa.Column("group_id", sa.UUID(), nullable=False),
+        sa.Column("user_id", sa.UUID(), nullable=False),
+        sa.Column(
+            "ownership_source",
+            sa.String(length=20),
+            nullable=False,
+            server_default="internal",
+        ),
+        sa.Column(
+            "id",
+            sa.UUID(),
+            server_default=sa.text("uuidv7()"),
+            nullable=False,
+        ),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+        sa.ForeignKeyConstraint(["group_id"], ["groups.id"], ondelete="NO ACTION"),
+        sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="NO ACTION"),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_group_owners")),
+        sa.UniqueConstraint(
+            "group_id",
+            "user_id",
+            name="uq_group_owners_group_user",
+        ),
+    )
+    op.create_index(
+        "ix_group_owners_group_id",
+        "group_owners",
+        ["group_id"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_group_owners_user_id",
+        "group_owners",
+        ["user_id"],
+        unique=False,
+    )
+
+    op.create_table(
         "role_assignments",
         sa.Column("principal_type", principal_type, nullable=False),
         sa.Column("principal_id", sa.UUID(), nullable=False),
@@ -307,6 +347,50 @@ def upgrade() -> None:
         "ix_invitations_invited_by_user_id",
         "invitations",
         ["invited_by_user_id"],
+        unique=False,
+    )
+
+    op.create_table(
+        "scim_tokens",
+        sa.Column("name", sa.String(length=120), nullable=False),
+        sa.Column("prefix", sa.String(length=32), nullable=False),
+        sa.Column("hashed_secret", sa.String(length=128), nullable=False),
+        sa.Column("created_by_user_id", sa.UUID(), nullable=False),
+        sa.Column("last_used_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("revoked_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column(
+            "id",
+            sa.UUID(),
+            server_default=sa.text("uuidv7()"),
+            nullable=False,
+        ),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+        sa.ForeignKeyConstraint(
+            ["created_by_user_id"],
+            ["users.id"],
+            ondelete="NO ACTION",
+        ),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_scim_tokens")),
+        sa.UniqueConstraint("prefix", name=op.f("uq_scim_tokens_prefix")),
+        sa.UniqueConstraint("hashed_secret", name=op.f("uq_scim_tokens_hashed_secret")),
+    )
+    op.create_index(
+        "ix_scim_tokens_created_by_user_id",
+        "scim_tokens",
+        ["created_by_user_id"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_scim_tokens_revoked_at",
+        "scim_tokens",
+        ["revoked_at"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_scim_tokens_last_used_at",
+        "scim_tokens",
+        ["last_used_at"],
         unique=False,
     )
 

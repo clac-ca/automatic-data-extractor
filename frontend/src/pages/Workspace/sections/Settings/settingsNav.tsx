@@ -3,7 +3,7 @@ import type { ReactElement } from "react";
 import { DangerSettingsPage } from "./pages/DangerSettingsPage";
 import { GeneralSettingsPage } from "./pages/GeneralSettingsPage";
 import { InvitationsSettingsPage } from "./pages/InvitationsSettingsPage";
-import { MembersSettingsPage } from "./pages/MembersSettingsPage";
+import { PrincipalsSettingsPage } from "./pages/PrincipalsSettingsPage";
 import { ProcessingSettingsPage } from "./pages/ProcessingSettingsPage";
 import { RolesSettingsPage } from "./pages/RolesSettingsPage";
 
@@ -74,7 +74,7 @@ export const workspaceSettingsSections: SettingsSection[] = [
     description: "Manage user and group access.",
     path: "access/principals",
     required: { view: ["workspace.members.read"], edit: ["workspace.members.manage"] },
-    element: <MembersSettingsPage />,
+    element: <PrincipalsSettingsPage />,
   },
   {
     id: "access.roles",

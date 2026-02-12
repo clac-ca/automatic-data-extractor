@@ -173,6 +173,7 @@ def _clear_runtime_settings_override_env(monkeypatch: pytest.MonkeyPatch) -> Non
         "ADE_SAFE_MODE",
         "ADE_SAFE_MODE_DETAIL",
         "ADE_AUTH_MODE",
+        "ADE_AUTH_IDP_PROVISIONING_MODE",
         "ADE_AUTH_IDP_JIT_PROVISIONING_ENABLED",
         "ADE_AUTH_PASSWORD_RESET_ENABLED",
         "ADE_AUTH_PASSWORD_MFA_REQUIRED",

@@ -4,27 +4,8 @@ import pytest
 from sqlalchemy import select
 
 from ade_api.core.security.hashing import hash_password
-from ade_api.features.sso.group_sync import (
-    GroupSyncService,
-    ProviderGroup,
-    ProviderUser,
-)
-from ade_api.features.sso.service import SsoService
-from ade_db.models import Group, GroupMembership, SsoIdentity, SsoProviderStatus, User
-
-
-def _create_active_provider(*, session, settings, domains: list[str]) -> str:
-    provider = SsoService(session=session, settings=settings).create_provider(
-        provider_id="entra",
-        label="Microsoft Entra ID",
-        issuer="https://login.microsoftonline.com/test-tenant/v2.0",
-        client_id="entra-client-id",
-        client_secret="entra-client-secret",
-        status_value=SsoProviderStatus.ACTIVE,
-        domains=domains,
-    )
-    session.flush()
-    return provider.id
+from ade_api.features.sso.group_sync import GroupSyncService, ProviderGroup
+from ade_db.models import Group, GroupMembership, GroupMembershipMode, GroupSource, User
 
 
 def _new_user(*, email: str, source: str = "internal", external_id: str | None = None) -> User:
@@ -40,43 +21,21 @@ def _new_user(*, email: str, source: str = "internal", external_id: str | None =
     )
 
 
-def test_run_once_links_known_users_and_skips_unknown_members(
+def test_sync_user_memberships_upserts_groups_and_memberships(
     session,
     settings,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    settings.auth_group_sync_dry_run = False
-    _create_active_provider(session=session, settings=settings, domains=["example.com"])
-
-    user_a = _new_user(email="user_a@example.com", source="idp", external_id="entra-a")
-    user_b = _new_user(email="user_b@example.com")
-    session.add_all([user_a, user_b])
+    user = _new_user(email="user_a@example.com")
+    session.add(user)
     session.flush()
 
     class _FakeAdapter:
         def __init__(self, *, settings):
             del settings
 
-        def fetch_users(self) -> list[ProviderUser]:
-            return [
-                ProviderUser(
-                    external_id="entra-a",
-                    email="user_a@example.com",
-                    display_name="User A",
-                ),
-                ProviderUser(
-                    external_id="entra-b",
-                    email="user_b@example.com",
-                    display_name="User B",
-                ),
-                ProviderUser(
-                    external_id="entra-c",
-                    email="user_c@example.com",
-                    display_name="User C",
-                ),
-            ]
-
-        def fetch_groups(self) -> list[ProviderGroup]:
+        def fetch_groups_for_user(self, *, user_external_id: str) -> list[ProviderGroup]:
+            assert user_external_id == "entra-a"
             return [
                 ProviderGroup(
                     external_id="group-a",
@@ -84,115 +43,84 @@ def test_run_once_links_known_users_and_skips_unknown_members(
                     description="Synced from Entra",
                     slug_hint="group-a",
                     dynamic=True,
-                    member_external_ids=("entra-a", "entra-b", "entra-c"),
-                )
-            ]
-
-    monkeypatch.setattr("ade_api.features.sso.group_sync.EntraGraphAdapter", _FakeAdapter)
-
-    stats = GroupSyncService(session=session).run_once(settings=settings)
-    session.flush()
-
-    assert stats.known_users_linked == 2
-    assert stats.users_created == 0
-    assert stats.groups_upserted == 1
-    assert stats.memberships_added == 2
-    assert stats.unknown_members_skipped == 1
-
-    missing_user = session.execute(
-        select(User).where(User.email_normalized == "user_c@example.com")
-    ).scalar_one_or_none()
-    assert missing_user is None
-
-    session.refresh(user_b)
-    assert user_b.source == "idp"
-    assert user_b.external_id == "entra-b"
-
-    group = session.execute(select(Group).where(Group.external_id == "group-a")).scalar_one()
-    member_ids = {
-        member.user_id
-        for member in session.execute(
-            select(GroupMembership).where(GroupMembership.group_id == group.id)
-        ).scalars()
-    }
-    assert member_ids == {user_a.id, user_b.id}
-
-
-def test_run_once_does_not_link_email_outside_allowed_domains(
-    session,
-    settings,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    settings.auth_group_sync_dry_run = False
-    _create_active_provider(session=session, settings=settings, domains=["allowed.example.com"])
-
-    blocked_user = _new_user(email="blocked@outside.example.com")
-    session.add(blocked_user)
-    session.flush()
-
-    class _FakeAdapter:
-        def __init__(self, *, settings):
-            del settings
-
-        def fetch_users(self) -> list[ProviderUser]:
-            return [
-                ProviderUser(
-                    external_id="entra-blocked",
-                    email="blocked@outside.example.com",
-                    display_name="Blocked User",
-                )
-            ]
-
-        def fetch_groups(self) -> list[ProviderGroup]:
-            return [
+                    member_external_ids=("entra-a",),
+                ),
                 ProviderGroup(
-                    external_id="group-blocked",
-                    display_name="Blocked Group",
+                    external_id="group-b",
+                    display_name="Group B",
                     description=None,
-                    slug_hint="blocked-group",
-                    dynamic=True,
-                    member_external_ids=("entra-blocked",),
+                    slug_hint="group-b",
+                    dynamic=False,
+                    member_external_ids=("entra-a",),
                 )
             ]
 
     monkeypatch.setattr("ade_api.features.sso.group_sync.EntraGraphAdapter", _FakeAdapter)
 
-    stats = GroupSyncService(session=session).run_once(settings=settings)
-    session.flush()
-
-    assert stats.known_users_linked == 0
-    assert stats.users_created == 0
-    assert stats.memberships_added == 0
-    assert stats.unknown_members_skipped == 1
-
-    session.refresh(blocked_user)
-    assert blocked_user.source == "internal"
-    assert blocked_user.external_id is None
-
-
-def test_run_once_links_user_via_sso_subject_even_when_email_mismatch(
-    session,
-    settings,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    settings.auth_group_sync_dry_run = False
-    provider_id = _create_active_provider(
-        session=session,
+    stats = GroupSyncService(session=session).sync_user_memberships(
         settings=settings,
-        domains=["allowed.example.com"],
+        user=user,
+        user_external_id="entra-a",
     )
-
-    linked_user = _new_user(email="legacy@outside.example.com")
-    session.add(linked_user)
     session.flush()
-    session.add(
-        SsoIdentity(
-            provider_id=provider_id,
-            subject="tenant-id:entra-linked",
-            user_id=linked_user.id,
-            email=linked_user.email_normalized,
-            email_verified=True,
-        )
+
+    assert stats.known_users_linked == 1
+    assert stats.users_created == 0
+    assert stats.groups_upserted == 2
+    assert stats.memberships_added == 2
+    assert stats.memberships_removed == 0
+    assert stats.unknown_members_skipped == 0
+
+    session.refresh(user)
+    assert user.source == "idp"
+    assert user.external_id == "entra-a"
+
+    groups = list(session.execute(select(Group).order_by(Group.display_name.asc())).scalars())
+    assert [group.display_name for group in groups] == ["Group A", "Group B"]
+    assert groups[0].membership_mode == GroupMembershipMode.DYNAMIC
+    assert groups[1].membership_mode == GroupMembershipMode.DYNAMIC
+    assert all(group.source == GroupSource.IDP for group in groups)
+
+    memberships = list(
+        session.execute(
+            select(GroupMembership).where(GroupMembership.user_id == user.id)
+        ).scalars()
+    )
+    assert len(memberships) == 2
+    assert all(membership.membership_source == "idp" for membership in memberships)
+
+
+def test_sync_user_memberships_removes_stale_group_memberships(
+    session,
+    settings,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user = _new_user(email="user_a@example.com", source="idp", external_id="entra-a")
+    stale_group = Group(
+        display_name="Stale Group",
+        slug="stale-group",
+        description=None,
+        membership_mode=GroupMembershipMode.DYNAMIC,
+        source=GroupSource.IDP,
+        external_id="stale-group",
+        is_active=True,
+    )
+    kept_group = Group(
+        display_name="Kept Group",
+        slug="kept-group",
+        description=None,
+        membership_mode=GroupMembershipMode.DYNAMIC,
+        source=GroupSource.IDP,
+        external_id="kept-group",
+        is_active=True,
+    )
+    session.add_all([user, stale_group, kept_group])
+    session.flush()
+    session.add_all(
+        [
+            GroupMembership(group_id=stale_group.id, user_id=user.id, membership_source="idp"),
+            GroupMembership(group_id=kept_group.id, user_id=user.id, membership_source="idp"),
+        ]
     )
     session.flush()
 
@@ -200,37 +128,52 @@ def test_run_once_links_user_via_sso_subject_even_when_email_mismatch(
         def __init__(self, *, settings):
             del settings
 
-        def fetch_users(self) -> list[ProviderUser]:
-            return [
-                ProviderUser(
-                    external_id="entra-linked",
-                    email="new-email@outside.example.com",
-                    display_name="Renamed User",
-                )
-            ]
-
-        def fetch_groups(self) -> list[ProviderGroup]:
+        def fetch_groups_for_user(self, *, user_external_id: str) -> list[ProviderGroup]:
+            assert user_external_id == "entra-a"
             return [
                 ProviderGroup(
-                    external_id="group-linked",
-                    display_name="Linked Group",
+                    external_id="kept-group",
+                    display_name="Kept Group",
                     description=None,
-                    slug_hint="linked-group",
+                    slug_hint="kept-group",
                     dynamic=True,
-                    member_external_ids=("entra-linked",),
+                    member_external_ids=("entra-a",),
                 )
             ]
 
     monkeypatch.setattr("ade_api.features.sso.group_sync.EntraGraphAdapter", _FakeAdapter)
 
-    stats = GroupSyncService(session=session).run_once(settings=settings)
+    stats = GroupSyncService(session=session).sync_user_memberships(
+        settings=settings,
+        user=user,
+        user_external_id="entra-a",
+    )
     session.flush()
 
     assert stats.known_users_linked == 1
     assert stats.users_created == 0
     assert stats.unknown_members_skipped == 0
+    assert stats.memberships_added == 0
+    assert stats.memberships_removed == 1
 
-    session.refresh(linked_user)
-    assert linked_user.source == "idp"
-    assert linked_user.external_id == "entra-linked"
-    assert linked_user.display_name == "Renamed User"
+    membership_groups = {
+        membership.group_id
+        for membership in session.execute(
+            select(GroupMembership).where(GroupMembership.user_id == user.id)
+        ).scalars()
+    }
+    assert membership_groups == {kept_group.id}
+
+
+def test_sync_user_memberships_rejects_unsupported_provider(session, settings) -> None:
+    settings.auth_group_sync_provider = "unsupported"  # type: ignore[assignment]
+    user = _new_user(email="user_a@example.com")
+    session.add(user)
+    session.flush()
+
+    with pytest.raises(RuntimeError, match="Unsupported group sync provider"):
+        GroupSyncService(session=session).sync_user_memberships(
+            settings=settings,
+            user=user,
+            user_external_id="entra-a",
+        )

@@ -11,6 +11,9 @@ const mockUseCreateSsoProviderMutation = vi.fn();
 const mockUseUpdateSsoProviderMutation = vi.fn();
 const mockUseValidateSsoProviderMutation = vi.fn();
 const mockUsePatchAdminSettingsMutation = vi.fn();
+const mockUseScimTokensQuery = vi.fn();
+const mockUseCreateScimTokenMutation = vi.fn();
+const mockUseRevokeScimTokenMutation = vi.fn();
 const mockUseUnsavedChangesGuard = vi.fn();
 
 vi.mock("@/hooks/auth/useGlobalPermissions", () => ({
@@ -24,6 +27,9 @@ vi.mock("@/hooks/admin", () => ({
   useUpdateSsoProviderMutation: () => mockUseUpdateSsoProviderMutation(),
   useValidateSsoProviderMutation: () => mockUseValidateSsoProviderMutation(),
   usePatchAdminSettingsMutation: () => mockUsePatchAdminSettingsMutation(),
+  useScimTokensQuery: () => mockUseScimTokensQuery(),
+  useCreateScimTokenMutation: () => mockUseCreateScimTokenMutation(),
+  useRevokeScimTokenMutation: () => mockUseRevokeScimTokenMutation(),
 }));
 
 vi.mock("@/features/sso-setup", () => ({
@@ -60,7 +66,7 @@ function buildSettings(overrides: Partial<Record<string, unknown>> = {}) {
           },
         },
         identityProvider: {
-          jitProvisioningEnabled: true,
+          provisioningMode: "jit",
         },
       },
       safeMode: {
@@ -137,10 +143,10 @@ function buildSettings(overrides: Partial<Record<string, unknown>> = {}) {
           },
         },
         identityProvider: {
-          jitProvisioningEnabled: {
+          provisioningMode: {
             source: "db",
             lockedByEnv: false,
-            envVar: "ADE_AUTH_IDP_JIT_PROVISIONING_ENABLED",
+            envVar: "ADE_AUTH_IDP_PROVISIONING_MODE",
             restartRequired: false,
           },
         },
@@ -212,6 +218,14 @@ describe("SystemSsoSettingsPage", () => {
     mockUseUpdateSsoProviderMutation.mockReturnValue(getMutationStub());
     mockUseValidateSsoProviderMutation.mockReturnValue(getMutationStub());
     mockUsePatchAdminSettingsMutation.mockReturnValue(getMutationStub());
+    mockUseScimTokensQuery.mockReturnValue({
+      data: { items: [] },
+      isLoading: false,
+      isError: false,
+      error: null,
+    });
+    mockUseCreateScimTokenMutation.mockReturnValue(getMutationStub());
+    mockUseRevokeScimTokenMutation.mockReturnValue(getMutationStub());
   });
 
   it("shows provider lifecycle actions as disable/enable without deleted UI state", () => {

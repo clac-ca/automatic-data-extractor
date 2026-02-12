@@ -492,7 +492,7 @@ async def test_sso_enforcement_blocks_non_admin_and_preserves_global_admin_local
             "changes": {
                 "auth": {
                     "mode": "idp_only",
-                    "identityProvider": {"jitProvisioningEnabled": True},
+                    "identityProvider": {"provisioningMode": "jit"},
                 }
             },
         },

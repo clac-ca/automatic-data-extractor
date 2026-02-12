@@ -47,7 +47,11 @@ def _create_auth_state(session: Session, settings: Settings, provider_id: str) -
     return state
 
 
-def _set_runtime_auth_mode_password_and_idp(session: Session) -> None:
+def _set_runtime_auth_mode_password_and_idp(
+    session: Session,
+    *,
+    provisioning_mode: str = "jit",
+) -> None:
     payload = {
         "safe_mode": {
             "enabled": False,
@@ -71,7 +75,7 @@ def _set_runtime_auth_mode_password_and_idp(session: Session) -> None:
                 },
             },
             "identity_provider": {
-                "jit_provisioning_enabled": True,
+                "provisioning_mode": provisioning_mode,
             },
         },
     }
@@ -225,6 +229,43 @@ async def test_callback_sso_returns_email_missing_when_no_email_claim_candidates
     assert payload["error"] == "EMAIL_MISSING"
 
 
+@pytest.mark.parametrize("provisioning_mode", ["disabled", "scim"])
+async def test_callback_sso_blocks_unknown_user_when_auto_provision_is_disabled(
+    async_client: AsyncClient,
+    session: Session,
+    settings: Settings,
+    monkeypatch: pytest.MonkeyPatch,
+    provisioning_mode: str,
+) -> None:
+    _set_runtime_auth_mode_password_and_idp(session, provisioning_mode=provisioning_mode)
+    provider_id = _configure_provider(session, settings)
+    state = _create_auth_state(session, settings, provider_id)
+
+    _mock_oidc_callback(
+        monkeypatch,
+        claims={
+            "sub": "legacy-subject-mode",
+            "tid": "tenant-id",
+            "oid": "object-id-mode",
+            "email": "new.user@example.com",
+        },
+    )
+
+    response = await async_client.get(
+        f"/api/v1/auth/sso/callback?code=abc123&state={state}",
+        headers={"accept": "application/json"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is False
+    assert payload["error"] == "AUTO_PROVISION_DISABLED"
+    assert (
+        session.execute(select(User).where(User.email_normalized == "new.user@example.com")).scalar_one_or_none()
+        is None
+    )
+
+
 async def test_callback_sso_blocks_unverified_email_link_to_existing_user(
     async_client: AsyncClient,
     session: Session,
@@ -273,8 +314,9 @@ async def test_callback_sso_hydrates_group_memberships_and_sets_external_id(
     settings: Settings,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    settings.auth_group_sync_enabled = True
-    settings.auth_group_sync_dry_run = False
+    settings.auth_group_sync_tenant_id = "tenant-id"
+    settings.auth_group_sync_client_id = "client-id"
+    settings.auth_group_sync_client_secret = "client-secret"  # type: ignore[assignment]
     _set_runtime_auth_mode_password_and_idp(session)
     provider_id = _configure_provider(session, settings)
     state = _create_auth_state(session, settings, provider_id)
@@ -340,8 +382,9 @@ async def test_callback_sso_allows_login_when_membership_hydration_fails(
     settings: Settings,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    settings.auth_group_sync_enabled = True
-    settings.auth_group_sync_dry_run = False
+    settings.auth_group_sync_tenant_id = "tenant-id"
+    settings.auth_group_sync_client_id = "client-id"
+    settings.auth_group_sync_client_secret = "client-secret"  # type: ignore[assignment]
     _set_runtime_auth_mode_password_and_idp(session)
     provider_id = _configure_provider(session, settings)
     state = _create_auth_state(session, settings, provider_id)

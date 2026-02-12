@@ -14,6 +14,8 @@
 - `roles.manage_all`
 - `invitations.read_all`
 - `invitations.manage_all`
+- `identity.provisioning.read`
+- `identity.provisioning.manage`
 
 ### Workspace scope
 
@@ -31,7 +33,9 @@
 |---|---|---|---|---|
 | View organization users | Yes | No | No | No |
 | Create/update org users | Yes | No | No | No |
+| Run bulk user mutations (`POST /$batch`) | Yes | No | No | No |
 | View/manage groups (org) | Yes | No | No | No |
+| Manage provisioning mode (`disabled/jit/scim`) | Yes | No | No | No |
 | Create org role assignments | Yes | No | No | No |
 | View workspace principals | Yes | If member and has read role | Yes | If granted |
 | Invite user into workspace | Yes | No | Yes | No |
@@ -44,16 +48,18 @@
 1. `workspace.members.manage` allows workspace-scoped invitation and role assignment only.
 2. `users.manage_all` is required for global user lifecycle operations.
 3. `groups.members.manage_all` does not imply workspace role assignment permission.
-4. `roles.manage_all` does not imply unrestricted workspace membership edits unless paired with workspace authority (or explicit global override policy).
+4. `groups.manage_all` controls group owner mutation endpoints (`/groups/{groupId}/owners/*`).
+5. `identity.provisioning.manage` controls provisioning-mode changes and SCIM configuration.
+6. In `scim` mode, SCIM service credentials can mutate provisioned users/groups without interactive RBAC user context.
+7. Batch endpoint authorization is evaluated per subrequest; no aggregate privilege escalation is allowed.
 
 ## Group-Derived Access Rules
 
 1. Effective permissions are union of direct principal grants and group grants.
 2. User deactivation suppresses all effective permissions.
-3. Dynamic group memberships are read-only from ADE mutation endpoints.
+3. Provider-managed/dynamic group memberships and owners are read-only from ADE mutation endpoints.
 
 ## Special Policy Hooks (Recommended)
 
 1. Optional approval policy for assigning sensitive roles (for example `workspace-owner`).
 2. Optional invite-approval mode for high-regulation organizations.
-

@@ -4,6 +4,7 @@ import type { components } from "@/types";
 export type Group = components["schemas"]["GroupOut"];
 export type GroupList = components["schemas"]["GroupListResponse"];
 export type GroupMembers = components["schemas"]["GroupMembersResponse"];
+export type GroupOwners = components["schemas"]["GroupOwnersResponse"];
 export type GroupCreateRequest = components["schemas"]["GroupCreate"];
 export type GroupUpdateRequest = components["schemas"]["GroupUpdate"];
 
@@ -67,5 +68,32 @@ export async function addGroupMember(groupId: string, memberId: string): Promise
 export async function removeGroupMember(groupId: string, memberId: string): Promise<void> {
   await client.DELETE("/api/v1/groups/{groupId}/members/{memberId}/$ref", {
     params: { path: { groupId, memberId } },
+  });
+}
+
+export async function listGroupOwners(groupId: string): Promise<GroupOwners> {
+  const { data } = await client.GET("/api/v1/groups/{groupId}/owners", {
+    params: { path: { groupId } },
+  });
+  if (!data) {
+    throw new Error("Expected group owners payload.");
+  }
+  return data as GroupOwners;
+}
+
+export async function addGroupOwner(groupId: string, ownerId: string): Promise<GroupOwners> {
+  const { data } = await client.POST("/api/v1/groups/{groupId}/owners/$ref", {
+    params: { path: { groupId } },
+    body: { ownerId },
+  });
+  if (!data) {
+    throw new Error("Expected group owners payload.");
+  }
+  return data as GroupOwners;
+}
+
+export async function removeGroupOwner(groupId: string, ownerId: string): Promise<void> {
+  await client.DELETE("/api/v1/groups/{groupId}/owners/{ownerId}/$ref", {
+    params: { path: { groupId, ownerId } },
   });
 }

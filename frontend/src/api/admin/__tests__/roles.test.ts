@@ -97,8 +97,10 @@ describe("admin roles api", () => {
 
     await removeAdminUserRole("u1", "r1", { ifMatch: "*" });
     expect(client.DELETE).toHaveBeenCalledWith("/api/v1/roleAssignments/{assignmentId}", {
-      params: { path: { assignmentId: expect.any(String) } },
-      headers: { "If-Match": "*" },
+      params: {
+        path: { assignmentId: expect.any(String) },
+        header: { "If-Match": "*" },
+      },
     });
   });
 });

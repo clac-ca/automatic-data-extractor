@@ -9,6 +9,9 @@ import type {
   RoleCreatePayload,
   RoleListPage,
   RoleUpdatePayload,
+  WorkspacePrincipal,
+  WorkspacePrincipalPage,
+  WorkspacePrincipalType,
   WorkspaceCreatePayload,
   WorkspaceListPage,
   WorkspaceProfile,
@@ -92,7 +95,7 @@ export async function deleteWorkspace(workspaceId: string): Promise<void> {
   });
 }
 
-export interface ListWorkspaceMembersOptions {
+export interface ListWorkspacePrincipalsOptions {
   readonly limit?: number;
   readonly cursor?: string | null;
   readonly sort?: string;
@@ -124,60 +127,57 @@ export async function listWorkspaceRoleAssignmentsRaw(
   return (data as RoleAssignmentPage).items;
 }
 
-function toWorkspaceMemberPage(assignments: RoleAssignmentOut[]): WorkspaceMemberPage {
-  const byUser = new Map<
-    string,
-    {
-      role_ids: string[];
-      role_slugs: string[];
-      created_at: string;
-      display_name: string | null;
-      email: string | null;
-    }
-  >();
+function toWorkspacePrincipalPage(assignments: RoleAssignmentOut[]): WorkspacePrincipalPage {
+  const byPrincipal = new Map<string, WorkspacePrincipal>();
+
+  const keyFor = (principalType: WorkspacePrincipalType, principalId: string) =>
+    `${principalType}:${principalId}`;
 
   for (const assignment of assignments) {
-    if (assignment.principal_type !== "user") {
-      continue;
-    }
-    const userId = assignment.principal_id;
-    const existing = byUser.get(userId);
+    const principalType = assignment.principal_type as WorkspacePrincipalType;
+    const key = keyFor(principalType, assignment.principal_id);
+    const existing = byPrincipal.get(key);
     if (!existing) {
-      byUser.set(userId, {
+      byPrincipal.set(key, {
+        principal_type: principalType,
+        principal_id: assignment.principal_id,
         role_ids: [assignment.role_id],
         role_slugs: [assignment.role_slug],
         created_at: assignment.created_at,
-        display_name: assignment.principal_display_name ?? null,
-        email: assignment.principal_email ?? null,
+        principal_display_name: assignment.principal_display_name ?? null,
+        principal_email: assignment.principal_email ?? null,
+        principal_slug: assignment.principal_slug ?? null,
       });
       continue;
     }
-    if (!existing.role_ids.includes(assignment.role_id)) {
-      existing.role_ids.push(assignment.role_id);
-    }
-    if (!existing.role_slugs.includes(assignment.role_slug)) {
-      existing.role_slugs.push(assignment.role_slug);
-    }
-    if (assignment.created_at < existing.created_at) {
-      existing.created_at = assignment.created_at;
-    }
-    existing.display_name = existing.display_name ?? assignment.principal_display_name ?? null;
-    existing.email = existing.email ?? assignment.principal_email ?? null;
+    const roleIds = existing.role_ids.includes(assignment.role_id)
+      ? existing.role_ids
+      : [...existing.role_ids, assignment.role_id];
+    const roleSlugs = existing.role_slugs.includes(assignment.role_slug)
+      ? existing.role_slugs
+      : [...existing.role_slugs, assignment.role_slug];
+    byPrincipal.set(key, {
+      ...existing,
+      role_ids: roleIds,
+      role_slugs: roleSlugs,
+      created_at:
+        assignment.created_at < existing.created_at ? assignment.created_at : existing.created_at,
+      principal_display_name: existing.principal_display_name ?? assignment.principal_display_name ?? null,
+      principal_email: existing.principal_email ?? assignment.principal_email ?? null,
+      principal_slug: existing.principal_slug ?? assignment.principal_slug ?? null,
+    });
   }
 
-  const items: WorkspaceMember[] = Array.from(byUser.entries()).map(([userId, value]) => ({
-    user_id: userId,
-    role_ids: value.role_ids,
-    role_slugs: value.role_slugs,
-    created_at: value.created_at,
-    user: value.email
-      ? ({
-          id: userId,
-          email: value.email,
-          display_name: value.display_name,
-        } as WorkspaceMember["user"])
-      : undefined,
-  }));
+  const items = Array.from(byPrincipal.values()).sort((left, right) => {
+    const leftLabel =
+      left.principal_display_name ?? left.principal_email ?? left.principal_slug ?? left.principal_id;
+    const rightLabel =
+      right.principal_display_name ??
+      right.principal_email ??
+      right.principal_slug ??
+      right.principal_id;
+    return leftLabel.localeCompare(rightLabel);
+  });
 
   return {
     items,
@@ -193,60 +193,90 @@ function toWorkspaceMemberPage(assignments: RoleAssignmentOut[]): WorkspaceMembe
   };
 }
 
-async function findWorkspaceMemberByUserId(
+async function findWorkspacePrincipal(
   workspaceId: string,
-  userId: string,
-): Promise<WorkspaceMember | null> {
+  principalType: WorkspacePrincipalType,
+  principalId: string,
+): Promise<WorkspacePrincipal | null> {
   const assignments = await listWorkspaceRoleAssignmentsRaw(workspaceId);
-  const page = toWorkspaceMemberPage(assignments);
-  return page.items.find((item) => item.user_id === userId) ?? null;
+  const page = toWorkspacePrincipalPage(assignments);
+  return (
+    page.items.find(
+      (item) => item.principal_type === principalType && item.principal_id === principalId,
+    ) ?? null
+  );
 }
 
-export async function listWorkspaceMembers(
+export async function listWorkspacePrincipals(
   workspaceId: string,
-  options: ListWorkspaceMembersOptions = {},
-): Promise<WorkspaceMemberPage> {
+  options: ListWorkspacePrincipalsOptions = {},
+): Promise<WorkspacePrincipalPage> {
   void options;
   const assignments = await listWorkspaceRoleAssignmentsRaw(workspaceId, { signal: options.signal });
-  return toWorkspaceMemberPage(assignments);
+  return toWorkspacePrincipalPage(assignments);
 }
 
-export async function addWorkspaceMember(
+export async function createWorkspaceRoleAssignment(
   workspaceId: string,
-  payload: WorkspaceMemberCreatePayload,
-): Promise<WorkspaceMember> {
+  payload: {
+    readonly principal_type: WorkspacePrincipalType;
+    readonly principal_id: string;
+    readonly role_id: string;
+  },
+) {
+  const { data } = await client.POST("/api/v1/workspaces/{workspaceId}/roleAssignments", {
+    params: { path: { workspaceId } },
+    body: payload,
+  });
+  if (!data) {
+    throw new Error("Expected workspace role assignment payload.");
+  }
+  return data as RoleAssignmentOut;
+}
+
+export async function addWorkspacePrincipalRoles(
+  workspaceId: string,
+  payload: {
+    readonly principal_type: WorkspacePrincipalType;
+    readonly principal_id: string;
+    readonly role_ids: readonly string[];
+  },
+): Promise<WorkspacePrincipal> {
   if (payload.role_ids.length === 0) {
-    throw new Error("Select at least one role for this member.");
+    throw new Error("Select at least one role for this principal.");
   }
 
   await Promise.all(
-    payload.role_ids.map(async (roleId) => {
-      await client.POST("/api/v1/workspaces/{workspaceId}/roleAssignments", {
-        params: { path: { workspaceId } },
-        body: {
-          principal_type: "user",
-          principal_id: payload.user_id,
-          role_id: roleId,
-        },
-      });
-    }),
+    payload.role_ids.map((roleId) =>
+      createWorkspaceRoleAssignment(workspaceId, {
+        principal_type: payload.principal_type,
+        principal_id: payload.principal_id,
+        role_id: roleId,
+      }),
+    ),
   );
 
-  const member = await findWorkspaceMemberByUserId(workspaceId, payload.user_id);
-  if (!member) {
-    throw new Error("Expected workspace member payload.");
+  const principal = await findWorkspacePrincipal(
+    workspaceId,
+    payload.principal_type,
+    payload.principal_id,
+  );
+  if (!principal) {
+    throw new Error("Expected workspace principal payload.");
   }
-  return member;
+  return principal;
 }
 
-export async function updateWorkspaceMemberRoles(
+export async function updateWorkspacePrincipalRoles(
   workspaceId: string,
-  userId: string,
-  payload: WorkspaceMemberRolesUpdatePayload,
-): Promise<WorkspaceMember> {
+  principalType: WorkspacePrincipalType,
+  principalId: string,
+  payload: { readonly role_ids: readonly string[] },
+): Promise<WorkspacePrincipal | null> {
   const assignments = await listWorkspaceRoleAssignmentsRaw(workspaceId);
   const current = assignments.filter(
-    (assignment) => assignment.principal_type === "user" && assignment.principal_id === userId,
+    (assignment) =>
+      assignment.principal_type === principalType && assignment.principal_id === principalId,
   );
   const desiredRoleIds = new Set(payload.role_ids);
   const toDelete = current.filter((assignment) => !desiredRoleIds.has(assignment.role_id));
@@ -254,53 +284,139 @@ export async function updateWorkspaceMemberRoles(
   const toAdd = payload.role_ids.filter((roleId) => !existingRoleIds.has(roleId));
 
   await Promise.all(
-    toAdd.map(async (roleId) => {
-      await client.POST("/api/v1/workspaces/{workspaceId}/roleAssignments", {
-        params: { path: { workspaceId } },
-        body: {
-          principal_type: "user",
-          principal_id: userId,
-          role_id: roleId,
-        },
-      });
-    }),
+    toAdd.map((roleId) =>
+      createWorkspaceRoleAssignment(workspaceId, {
+        principal_type: principalType,
+        principal_id: principalId,
+        role_id: roleId,
+      }),
+    ),
   );
 
   await Promise.all(
-    toDelete.map(async (assignment) => {
-      await client.DELETE("/api/v1/roleAssignments/{assignmentId}", {
-        params: { path: { assignmentId: assignment.id } },
-      });
-    }),
+    toDelete.map((assignment) =>
+      client.DELETE("/api/v1/roleAssignments/{assignmentId}", {
+        params: {
+          path: { assignmentId: assignment.id },
+          header: { "If-Match": "*" },
+        },
+      }),
+    ),
   );
 
-  const member = await findWorkspaceMemberByUserId(workspaceId, userId);
-  if (!member) {
-    if (payload.role_ids.length === 0) {
-      return {
-        user_id: userId,
-        role_ids: [],
-        role_slugs: [],
-        created_at: new Date().toISOString(),
-      };
-    }
-    throw new Error("Expected workspace member payload.");
+  return findWorkspacePrincipal(workspaceId, principalType, principalId);
+}
+
+export async function removeWorkspacePrincipal(
+  workspaceId: string,
+  principalType: WorkspacePrincipalType,
+  principalId: string,
+) {
+  const assignments = await listWorkspaceRoleAssignmentsRaw(workspaceId);
+  const principalAssignments = assignments.filter(
+    (assignment) =>
+      assignment.principal_type === principalType && assignment.principal_id === principalId,
+  );
+  await Promise.all(
+    principalAssignments.map((assignment) =>
+      client.DELETE("/api/v1/roleAssignments/{assignmentId}", {
+        params: {
+          path: { assignmentId: assignment.id },
+          header: { "If-Match": "*" },
+        },
+      }),
+    ),
+  );
+}
+
+export type ListWorkspaceMembersOptions = ListWorkspacePrincipalsOptions;
+
+export async function listWorkspaceMembers(
+  workspaceId: string,
+  options: ListWorkspaceMembersOptions = {},
+): Promise<WorkspaceMemberPage> {
+  const principalPage = await listWorkspacePrincipals(workspaceId, options);
+  const items: WorkspaceMember[] = principalPage.items
+    .filter((principal) => principal.principal_type === "user")
+    .map((principal) => ({
+      user_id: principal.principal_id,
+      role_ids: principal.role_ids,
+      role_slugs: principal.role_slugs,
+      created_at: principal.created_at,
+      user: principal.principal_email
+        ? ({
+            id: principal.principal_id,
+            email: principal.principal_email,
+            display_name: principal.principal_display_name ?? null,
+          } as WorkspaceMember["user"])
+        : undefined,
+    }));
+
+  return {
+    items,
+    meta: {
+      ...principalPage.meta,
+      totalCount: items.length,
+    },
+    facets: principalPage.facets,
+  };
+}
+
+export async function addWorkspaceMember(
+  workspaceId: string,
+  payload: WorkspaceMemberCreatePayload,
+): Promise<WorkspaceMember> {
+  const principal = await addWorkspacePrincipalRoles(workspaceId, {
+    principal_type: "user",
+    principal_id: payload.user_id,
+    role_ids: payload.role_ids,
+  });
+  return {
+    user_id: principal.principal_id,
+    role_ids: principal.role_ids,
+    role_slugs: principal.role_slugs,
+    created_at: principal.created_at,
+    user: principal.principal_email
+      ? ({
+          id: principal.principal_id,
+          email: principal.principal_email,
+          display_name: principal.principal_display_name ?? null,
+        } as WorkspaceMember["user"])
+      : undefined,
+  };
+}
+
+export async function updateWorkspaceMemberRoles(
+  workspaceId: string,
+  userId: string,
+  payload: WorkspaceMemberRolesUpdatePayload,
+): Promise<WorkspaceMember> {
+  const principal = await updateWorkspacePrincipalRoles(workspaceId, "user", userId, payload);
+  if (!principal) {
+    return {
+      user_id: userId,
+      role_ids: [],
+      role_slugs: [],
+      created_at: new Date().toISOString(),
+    };
   }
-  return member;
+  return {
+    user_id: principal.principal_id,
+    role_ids: principal.role_ids,
+    role_slugs: principal.role_slugs,
+    created_at: principal.created_at,
+    user: principal.principal_email
+      ? ({
+          id: principal.principal_id,
+          email: principal.principal_email,
+          display_name: principal.principal_display_name ?? null,
+        } as WorkspaceMember["user"])
+      : undefined,
+  };
 }
 
 export async function removeWorkspaceMember(workspaceId: string, userId: string) {
-  const assignments = await listWorkspaceRoleAssignmentsRaw(workspaceId);
-  const userAssignments = assignments.filter(
-    (assignment) => assignment.principal_type === "user" && assignment.principal_id === userId,
-  );
-  await Promise.all(
-    userAssignments.map(async (assignment) => {
-      await client.DELETE("/api/v1/roleAssignments/{assignmentId}", {
-        params: { path: { assignmentId: assignment.id } },
-      });
-    }),
-  );
+  await removeWorkspacePrincipal(workspaceId, "user", userId);
 }
 
 export interface ListWorkspaceRolesOptions {
@@ -353,9 +469,11 @@ export async function updateWorkspaceRole(
   options: { ifMatch?: string | null } = {},
 ) {
   const { data } = await client.PATCH("/api/v1/roles/{roleId}", {
-    params: { path: { roleId } },
+    params: {
+      path: { roleId },
+      header: { "If-Match": options.ifMatch ?? "*" },
+    },
     body: payload,
-    headers: options.ifMatch ? { "If-Match": options.ifMatch } : undefined,
   });
 
   if (!data) {
@@ -371,8 +489,10 @@ export async function deleteWorkspaceRole(
   options: { ifMatch?: string | null } = {},
 ) {
   await client.DELETE("/api/v1/roles/{roleId}", {
-    params: { path: { roleId } },
-    headers: options.ifMatch ? { "If-Match": options.ifMatch } : undefined,
+    params: {
+      path: { roleId },
+      header: { "If-Match": options.ifMatch ?? "*" },
+    },
   });
 }
 

@@ -16,6 +16,25 @@ import type {
 export type WorkspaceProfile = WorkspaceOut;
 export type WorkspaceListPage = WorkspacePage;
 
+export type WorkspacePrincipalType = "user" | "group";
+
+export interface WorkspacePrincipal {
+  readonly principal_type: WorkspacePrincipalType;
+  readonly principal_id: string;
+  readonly role_ids: string[];
+  readonly role_slugs: string[];
+  readonly created_at: string;
+  readonly principal_display_name?: string | null;
+  readonly principal_email?: string | null;
+  readonly principal_slug?: string | null;
+}
+
+export interface WorkspacePrincipalPage {
+  readonly items: WorkspacePrincipal[];
+  readonly meta: components["schemas"]["CursorMeta"];
+  readonly facets?: Record<string, unknown> | null;
+}
+
 export interface WorkspaceMember {
   readonly user_id: string;
   readonly role_ids: string[];

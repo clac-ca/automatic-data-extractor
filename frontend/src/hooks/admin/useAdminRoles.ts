@@ -63,7 +63,7 @@ export function useAdminUserRolesQuery(userId: string | null | undefined) {
     queryFn: ({ signal }) => listAdminUserRoles(userId ?? "", { signal }),
     enabled: Boolean(userId),
     staleTime: 15_000,
-    placeholderData: (previous) => previous,
+    placeholderData: (previous: AdminUserRoles | undefined) => previous,
   });
 }
 

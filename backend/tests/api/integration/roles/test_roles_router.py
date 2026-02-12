@@ -6,9 +6,10 @@ from uuid import UUID
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ade_db.models import GroupMembership
+from ade_db.models import GroupMembership, GroupOwner, Role
 from tests.api.utils import login
 
 pytestmark = pytest.mark.asyncio
@@ -18,6 +19,13 @@ def _items(payload: Any) -> list[dict[str, Any]]:
     if isinstance(payload, list):
         return payload
     return payload["items"]
+
+
+def _role_id_by_slug(db_session: Session, slug: str) -> str:
+    stmt = select(Role.id).where(Role.slug == slug).limit(1)
+    role_id = db_session.execute(stmt).scalar_one_or_none()
+    assert role_id is not None
+    return str(role_id)
 
 
 async def test_permission_catalog_requires_global_permission(
@@ -162,6 +170,45 @@ async def test_workspace_role_assignment_listing_admin(
         and item["principal_type"] == "user"
         for item in assignments
     )
+
+
+async def test_workspace_owner_can_manage_workspace_assignments_but_not_org_assignments(
+    async_client: AsyncClient,
+    seed_identity,
+    db_session: Session,
+) -> None:
+    owner = seed_identity.workspace_owner
+    owner_token, _ = await login(async_client, email=owner.email, password=owner.password)
+    workspace_member_role_id = _role_id_by_slug(db_session, "workspace-member")
+    global_user_role_id = _role_id_by_slug(db_session, "global-user")
+
+    workspace_list = await async_client.get(
+        f"/api/v1/workspaces/{seed_identity.workspace_id}/roleAssignments",
+        headers={"X-API-Key": owner_token},
+    )
+    assert workspace_list.status_code == 200, workspace_list.text
+
+    workspace_create = await async_client.post(
+        f"/api/v1/workspaces/{seed_identity.workspace_id}/roleAssignments",
+        json={
+            "principal_type": "user",
+            "principal_id": str(seed_identity.orphan.id),
+            "role_id": workspace_member_role_id,
+        },
+        headers={"X-API-Key": owner_token},
+    )
+    assert workspace_create.status_code == 201, workspace_create.text
+
+    org_create = await async_client.post(
+        "/api/v1/roleAssignments",
+        json={
+            "principal_type": "user",
+            "principal_id": str(seed_identity.orphan.id),
+            "role_id": global_user_role_id,
+        },
+        headers={"X-API-Key": owner_token},
+    )
+    assert org_create.status_code == 403
 
 
 async def test_assign_workspace_principal_roles(
@@ -346,3 +393,151 @@ async def test_provider_managed_group_memberships_are_read_only(
         remove_member_response.json()["detail"]
         == "Provider-managed group memberships are read-only"
     )
+
+
+async def test_group_owners_crud_for_internal_group(
+    async_client: AsyncClient,
+    seed_identity,
+) -> None:
+    admin = seed_identity.admin
+    admin_token, _ = await login(async_client, email=admin.email, password=admin.password)
+    orphan = seed_identity.orphan
+
+    create_group_response = await async_client.post(
+        "/api/v1/groups",
+        json={
+            "display_name": "Operations Admins",
+            "slug": "operations-admins",
+            "membership_mode": "assigned",
+            "source": "internal",
+        },
+        headers={"X-API-Key": admin_token},
+    )
+    assert create_group_response.status_code == 201, create_group_response.text
+    group_id = create_group_response.json()["id"]
+
+    add_owner_response = await async_client.post(
+        f"/api/v1/groups/{group_id}/owners/$ref",
+        json={"ownerId": str(orphan.id)},
+        headers={"X-API-Key": admin_token},
+    )
+    assert add_owner_response.status_code == 200, add_owner_response.text
+    owner_ids = {item["user_id"] for item in add_owner_response.json()["items"]}
+    assert str(orphan.id) in owner_ids
+
+    list_owners_response = await async_client.get(
+        f"/api/v1/groups/{group_id}/owners",
+        headers={"X-API-Key": admin_token},
+    )
+    assert list_owners_response.status_code == 200, list_owners_response.text
+    listed_owner_ids = {item["user_id"] for item in list_owners_response.json()["items"]}
+    assert str(orphan.id) in listed_owner_ids
+
+    remove_owner_response = await async_client.delete(
+        f"/api/v1/groups/{group_id}/owners/{orphan.id}/$ref",
+        headers={"X-API-Key": admin_token},
+    )
+    assert remove_owner_response.status_code == 204, remove_owner_response.text
+
+    list_after_remove = await async_client.get(
+        f"/api/v1/groups/{group_id}/owners",
+        headers={"X-API-Key": admin_token},
+    )
+    assert list_after_remove.status_code == 200, list_after_remove.text
+    assert list_after_remove.json()["items"] == []
+
+
+async def test_provider_managed_group_owners_are_read_only(
+    async_client: AsyncClient,
+    seed_identity,
+    db_session: Session,
+) -> None:
+    admin = seed_identity.admin
+    admin_token, _ = await login(async_client, email=admin.email, password=admin.password)
+    orphan = seed_identity.orphan
+
+    create_group_response = await async_client.post(
+        "/api/v1/groups",
+        json={
+            "display_name": "Synced Owner Group",
+            "slug": "synced-owner-group",
+            "membership_mode": "assigned",
+            "source": "idp",
+            "external_id": "entra-owner-group-1",
+        },
+        headers={"X-API-Key": admin_token},
+    )
+    assert create_group_response.status_code == 201, create_group_response.text
+    group_id = create_group_response.json()["id"]
+
+    add_owner_response = await async_client.post(
+        f"/api/v1/groups/{group_id}/owners/$ref",
+        json={"ownerId": str(orphan.id)},
+        headers={"X-API-Key": admin_token},
+    )
+    assert add_owner_response.status_code == 409, add_owner_response.text
+    assert (
+        add_owner_response.json()["detail"]
+        == "Provider-managed group memberships are read-only"
+    )
+
+    db_session.add(
+        GroupOwner(
+            group_id=group_id,
+            user_id=orphan.id,
+            ownership_source="idp",
+        )
+    )
+    db_session.flush()
+
+    remove_owner_response = await async_client.delete(
+        f"/api/v1/groups/{group_id}/owners/{orphan.id}/$ref",
+        headers={"X-API-Key": admin_token},
+    )
+    assert remove_owner_response.status_code == 409, remove_owner_response.text
+    assert (
+        remove_owner_response.json()["detail"]
+        == "Provider-managed group memberships are read-only"
+    )
+
+
+async def test_group_owner_routes_require_permissions(
+    async_client: AsyncClient,
+    seed_identity,
+) -> None:
+    admin = seed_identity.admin
+    admin_token, _ = await login(async_client, email=admin.email, password=admin.password)
+    member = seed_identity.member
+    member_token, _ = await login(async_client, email=member.email, password=member.password)
+
+    create_group_response = await async_client.post(
+        "/api/v1/groups",
+        json={
+            "display_name": "Permission Check Group",
+            "slug": "permission-check-group",
+            "membership_mode": "assigned",
+            "source": "internal",
+        },
+        headers={"X-API-Key": admin_token},
+    )
+    assert create_group_response.status_code == 201, create_group_response.text
+    group_id = create_group_response.json()["id"]
+
+    list_owners_response = await async_client.get(
+        f"/api/v1/groups/{group_id}/owners",
+        headers={"X-API-Key": member_token},
+    )
+    assert list_owners_response.status_code == 403, list_owners_response.text
+
+    add_owner_response = await async_client.post(
+        f"/api/v1/groups/{group_id}/owners/$ref",
+        json={"ownerId": str(seed_identity.orphan.id)},
+        headers={"X-API-Key": member_token},
+    )
+    assert add_owner_response.status_code == 403, add_owner_response.text
+
+    remove_owner_response = await async_client.delete(
+        f"/api/v1/groups/{group_id}/owners/{seed_identity.orphan.id}/$ref",
+        headers={"X-API-Key": member_token},
+    )
+    assert remove_owner_response.status_code == 403, remove_owner_response.text

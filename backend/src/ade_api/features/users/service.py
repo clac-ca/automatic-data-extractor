@@ -23,14 +23,18 @@ from ade_api.core.security.password_policy import (
 )
 from ade_api.features.admin_settings.service import RuntimeSettingsService
 from ade_api.features.api_keys.service import ApiKeyService
+from ade_api.features.groups.service import GroupsService
 from ade_api.features.rbac import RbacService
 from ade_api.settings import Settings
-from ade_db.models import User
+from ade_db.models import Group, GroupMembership, GroupOwner, User
 
 from .filters import apply_user_filters
 from .repository import UsersRepository
 from .schemas import (
     UserCreateResponse,
+    UserMemberOfOut,
+    UserMemberOfRefCreate,
+    UserMemberOfResponse,
     UserOut,
     UserPage,
     UserPasswordProfile,
@@ -386,6 +390,106 @@ class UsersService:
 
         self._apply_deactivation(user=user, actor=actor)
         return self._serialize_user(user)
+
+    def list_member_of(self, *, user_id: str | UUID) -> UserMemberOfResponse:
+        user = self._repo.get_by_id_basic(user_id)
+        if user is None:
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND,
+                detail="User not found.",
+            )
+
+        member_rows = self._session.execute(
+            select(GroupMembership.group_id).where(GroupMembership.user_id == user.id)
+        ).scalars()
+        owner_rows = self._session.execute(
+            select(GroupOwner.group_id).where(GroupOwner.user_id == user.id)
+        ).scalars()
+        member_group_ids = set(member_rows)
+        owner_group_ids = set(owner_rows)
+        all_group_ids = member_group_ids | owner_group_ids
+
+        if not all_group_ids:
+            return UserMemberOfResponse(items=[])
+
+        groups = list(
+            self._session.execute(
+                select(Group)
+                .where(Group.id.in_(all_group_ids))
+                .order_by(Group.display_name.asc(), Group.id.asc())
+            ).scalars()
+        )
+
+        return UserMemberOfResponse(
+            items=[
+                UserMemberOfOut(
+                    group_id=group.id,
+                    display_name=group.display_name,
+                    slug=group.slug,
+                    source=group.source,
+                    membership_mode=group.membership_mode,
+                    is_member=group.id in member_group_ids,
+                    is_owner=group.id in owner_group_ids,
+                )
+                for group in groups
+            ]
+        )
+
+    def add_member_of_ref(
+        self,
+        *,
+        user_id: str | UUID,
+        payload: UserMemberOfRefCreate,
+    ) -> UserMemberOfResponse:
+        user = self._repo.get_by_id_basic(user_id)
+        if user is None:
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND,
+                detail="User not found.",
+            )
+
+        group = self._session.get(Group, payload.group_id)
+        if group is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Group not found")
+        GroupsService.ensure_group_membership_mutable(group)
+
+        existing_stmt = select(GroupMembership).where(
+            GroupMembership.group_id == payload.group_id,
+            GroupMembership.user_id == user.id,
+        )
+        if self._session.execute(existing_stmt).scalar_one_or_none() is None:
+            self._session.add(
+                GroupMembership(
+                    group_id=payload.group_id,
+                    user_id=user.id,
+                    membership_source="internal",
+                )
+            )
+            self._session.flush()
+        return self.list_member_of(user_id=user.id)
+
+    def remove_member_of_ref(self, *, user_id: str | UUID, group_id: UUID) -> None:
+        user = self._repo.get_by_id_basic(user_id)
+        if user is None:
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND,
+                detail="User not found.",
+            )
+
+        group = self._session.get(Group, group_id)
+        if group is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Group not found")
+        GroupsService.ensure_group_membership_mutable(group)
+
+        stmt = select(GroupMembership).where(
+            GroupMembership.group_id == group_id,
+            GroupMembership.user_id == user.id,
+        )
+        membership = self._session.execute(stmt).scalar_one_or_none()
+        if membership is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Group membership not found")
+        self._session.delete(membership)
+        self._session.flush()
 
     def _build_profile(self, user: User) -> UserProfile:
         logger.debug(

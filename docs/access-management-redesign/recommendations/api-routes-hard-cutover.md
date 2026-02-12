@@ -1,14 +1,15 @@
-# API Routes (Hard Cutover, Graph-Aligned)
+# API Routes (Hard Cutover, Graph + SCIM Aligned)
 
 ## Design Principles
 
 1. No `/v2` parallel family.
-2. Resource-first endpoints.
-3. Consistent assignment resource for both org and workspace scopes.
-4. Graph-like group membership reference operations.
-5. Invitation as first-class resource.
+2. Resource-first endpoints for application APIs (`/api/v1`).
+3. Standards-shaped SCIM endpoints for enterprise provisioning (`/scim/v2`).
+4. Consistent assignment resource for both org and workspace scopes.
+5. Graph-like group membership reference operations.
+6. Invitation as first-class resource.
 
-## Canonical Route Set
+## Canonical ADE API Route Set
 
 Base: `/api/v1`
 
@@ -22,8 +23,23 @@ Base: `/api/v1`
 
 Notes:
 
-- `POST /users` remains for organization admins and system provisioning use-cases.
-- Workspace-owner provisioning uses invitations (not direct global user create).
+- `POST /users` is for organization admins and system paths.
+- Workspace-owner provisioning uses invitations.
+
+### Batch (Graph-style envelope)
+
+- `POST /$batch`
+
+Notes:
+
+1. Phase 1 supports user lifecycle operations only:
+   - `POST /users`
+   - `PATCH /users/{userId}`
+   - `POST /users/{userId}/deactivate` (delete-equivalent in ADE policy)
+2. Max 20 subrequests per batch.
+3. Partial success is expected; each subrequest returns its own status/body.
+4. Per-subrequest authorization uses existing permission rules.
+5. Optional `dependsOn` enables dependency sequencing; failed dependency returns item-level `424`.
 
 ### Groups
 
@@ -60,6 +76,42 @@ Notes:
 - `POST /invitations/{invitationId}/resend`
 - `POST /invitations/{invitationId}/cancel`
 
+## SCIM Provisioning Route Set
+
+Base: `/scim/v2`
+
+### Discovery
+
+- `GET /ServiceProviderConfig`
+- `GET /Schemas`
+- `GET /ResourceTypes`
+
+### Users
+
+- `GET /Users`
+- `POST /Users`
+- `GET /Users/{id}`
+- `PATCH /Users/{id}`
+- `PUT /Users/{id}`
+
+### Groups
+
+- `GET /Groups`
+- `POST /Groups`
+- `GET /Groups/{id}`
+- `PATCH /Groups/{id}`
+- `PUT /Groups/{id}`
+
+### Explicitly deferred
+
+- `POST /Bulk`
+
+## Provisioning Mode Interaction
+
+1. `disabled`: SCIM routes disabled; SSO login cannot auto-provision.
+2. `jit`: SCIM routes disabled; SSO login can JIT-provision and hydrates current user memberships.
+3. `scim`: SCIM routes enabled; SSO login does not JIT-create unknown users.
+
 ## Workspace-Owner Invite Payload (Recommended)
 
 `POST /api/v1/invitations`
@@ -89,25 +141,17 @@ Behavior:
 | Current | New | Action |
 |---|---|---|
 | `GET/POST /workspaces/{workspaceId}/members` | `GET/POST /workspaces/{workspaceId}/roleAssignments` | Replace members-as-assignment API |
-| `PUT/DELETE /workspaces/{workspaceId}/members/{userId}` | `DELETE /roleAssignments/{assignmentId}` + update through assignment create/delete | Normalize to assignment resource semantics |
+| `PUT/DELETE /workspaces/{workspaceId}/members/{userId}` | `DELETE /roleAssignments/{assignmentId}` + create/delete assignments | Normalize to assignment resource semantics |
 | `GET /users/{userId}/roles` and `PUT/DELETE /users/{userId}/roles/{roleId}` | `GET/POST/DELETE /roleAssignments...` | Remove user-specific special-case routes |
 | `GET /roleassignments` | `GET /roleAssignments` | Rename and standardize casing |
-
-## Query and Filtering Conventions
-
-- Continue ADE cursor pagination baseline.
-- Add consistent filter keys across resources (`scopeType`, `scopeId`, `principalType`, `principalId`, `status`).
-- Support deterministic sorting on stable keys.
-- Keep optional Graph-like aliases for query compatibility where useful.
 
 ## Error Contract Expectations
 
 1. `403` for permission boundary violations.
 2. `404` for unknown resource IDs.
-3. `409` for uniqueness conflicts (duplicate assignment, duplicate group slug, etc.).
+3. `409` for uniqueness/read-only conflicts.
 4. `422` for scope mismatches and invalid payload combinations.
 
 ## Compatibility Note
 
-Because this is a hard cutover, frontend and backend route changes ship in the same release with no compatibility shim.
-
+Because this is hard cutover, frontend and backend route changes ship in the same release with no compatibility shim.

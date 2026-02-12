@@ -9,3 +9,4 @@ Back to [Docs Home](../README.md).
 - [System Architecture](system-architecture.md)
 - [Reliability and Failure Model](reliability-and-failure-model.md)
 - [Security and Authentication](security-and-authentication.md)
+- [Access Management Model](access-management-model.md)

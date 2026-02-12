@@ -57,12 +57,29 @@ class GroupMembersResponse(BaseSchema):
     items: list[GroupMemberOut]
 
 
+class GroupOwnerRefCreate(BaseSchema):
+    owner_id: UUID = Field(alias="ownerId")
+
+
+class GroupOwnerOut(BaseSchema):
+    user_id: UUID
+    email: str
+    display_name: str | None
+
+
+class GroupOwnersResponse(BaseSchema):
+    items: list[GroupOwnerOut]
+
+
 __all__ = [
     "GroupCreate",
     "GroupListResponse",
     "GroupMemberOut",
     "GroupMembershipRefCreate",
     "GroupMembersResponse",
+    "GroupOwnerOut",
+    "GroupOwnerRefCreate",
+    "GroupOwnersResponse",
     "GroupOut",
     "GroupUpdate",
 ]

@@ -17,6 +17,10 @@ OPENAPI_INFO_DESCRIPTION = (
 )
 
 OPENAPI_TAG_METADATA: list[dict[str, str]] = [
+    {
+        "name": "admin-scim",
+        "description": "SCIM provisioning token management endpoints.",
+    },
     {"name": "admin-settings", "description": "Tenant-wide runtime settings and policy controls."},
     {
         "name": "api-keys",
@@ -44,6 +48,7 @@ OPENAPI_TAG_METADATA: list[dict[str, str]] = [
     {"name": "rbac", "description": "Role and permission management endpoints."},
     {"name": "runs", "description": "Run creation, orchestration, output, and events."},
     {"name": "sso", "description": "Administrative SSO provider management endpoints."},
+    {"name": "scim", "description": "SCIM 2.0 provisioning endpoints."},
     {"name": "users", "description": "User administration endpoints."},
     {
         "name": "workspaces",

@@ -5,6 +5,7 @@ from .access import (
     Group,
     GroupMembership,
     GroupMembershipMode,
+    GroupOwner,
     GroupSource,
     Invitation,
     InvitationStatus,
@@ -42,6 +43,7 @@ from .run import Run, RunOperation, RunStatus
 from .run_field import RunField
 from .run_metrics import RunMetrics
 from .run_table_column import RunTableColumn
+from .scim import ScimToken
 from .sso import (
     SsoAuthState,
     SsoIdentity,
@@ -85,6 +87,7 @@ __all__ = [
     "RunOperation",
     "RunStatus",
     "RunTableColumn",
+    "ScimToken",
     "ScopeType",
     "SsoAuthState",
     "SsoIdentity",
@@ -104,6 +107,7 @@ __all__ = [
     "WorkspaceMembership",
     "Group",
     "GroupMembership",
+    "GroupOwner",
     "GroupMembershipMode",
     "GroupSource",
     "Invitation",

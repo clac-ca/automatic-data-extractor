@@ -1,6 +1,6 @@
 # Codebase Current State (Source of Truth)
 
-This document captures current behavior from the ADE codebase and highlights constraints relevant to the access-management redesign.
+This document captures current behavior from the ADE codebase and highlights constraints relevant to the access-management redesign and SCIM/provisioning-mode decisions.
 
 ## Backend: Current Access and Role Shape
 
@@ -61,13 +61,30 @@ This document captures current behavior from the ADE codebase and highlights con
   - `frontend/src/pages/Workspace/sections/Settings/settingsNav.tsx:83`
 - Consequence: avoidable UI gating drift risk.
 
-### 6. User data model is minimal for profile attributes
+### 6. User data model is now partially enterprise-ready
 
-- User entity includes core auth fields and `display_name`, but no common AD profile fields (job title, department, office, phones, employee id).
-  - `backend/src/ade_db/models/user.py:46`
-  - `backend/src/ade_db/models/user.py:49`
-- SSO identity linkage exists (`sso_identities`) but no group sync model.
-  - `backend/src/ade_db/models/sso.py:144`
+- Migration `0002_access_model_hard_cutover` already introduces AD-like user profile fields and `source/external_id/last_synced_at`.
+  - `backend/src/ade_db/migrations/versions/0002_access_model_hard_cutover.py:58`
+- `groups`, `group_memberships`, `role_assignments`, and `invitations` tables are defined in the same migration.
+  - `backend/src/ade_db/migrations/versions/0002_access_model_hard_cutover.py:96`
+
+### 7. Current auth policy exposes JIT toggle, not full provisioning mode
+
+- Runtime settings support `auth.identityProvider.jitProvisioningEnabled` only.
+  - `backend/src/ade_api/features/admin_settings/schemas.py:42`
+  - `backend/src/ade_api/features/admin_settings/service.py:150`
+- No `disabled|jit|scim` enum exists yet.
+
+### 8. Current group sync implementation has two paths
+
+- Scheduled full sync path exists in `GroupSyncService.run_once(...)` and pulls provider users/groups.
+  - `backend/src/ade_api/features/sso/group_sync.py:251`
+- Sign-in per-user hydration exists in SSO callback (`sync_user_memberships`).
+  - `backend/src/ade_api/features/auth/sso_router.py:561`
+  - `backend/src/ade_api/features/sso/group_sync.py:292`
+- Current implementation already links known users and skips unknown provider members in background reconciliation.
+  - `backend/src/ade_api/features/sso/group_sync.py:347`
+  - `backend/src/ade_api/features/sso/group_sync.py:481`
 
 ## Frontend: Current Route and UX Shape
 
@@ -88,22 +105,18 @@ This document captures current behavior from the ADE codebase and highlights con
   - `frontend/src/api/users/api.ts:25`
 - Since `/api/v1/users` is globally permissioned, workspace owner flows are coupled to org-level user read permission.
 
-### 3. Workspace member rows can degrade to UUID-only identity rendering
+### 3. Org auth settings page currently models only JIT toggle for provisioning strategy
 
-- Workspace member schema only includes user and role ids/slugs, no guaranteed embedded user profile.
-  - `backend/src/ade_api/features/workspaces/schemas.py:66`
-- UI falls back to `user_id` when profile is absent.
-  - `frontend/src/pages/Workspace/sections/Settings/pages/MembersSettingsPage.tsx:65`
-  - `frontend/src/pages/Workspace/sections/Settings/pages/MembersSettingsPage.tsx:180`
+- UI state and save payload include `idpJitProvisioningEnabled`, but no explicit provisioning mode selector.
+  - `frontend/src/pages/OrganizationSettings/pages/SystemSsoSettingsPage.tsx:73`
+  - `frontend/src/pages/OrganizationSettings/pages/SystemSsoSettingsPage.tsx:118`
 
 ## Current Constraints Summary
 
-1. No first-class principal abstraction (user/group).
-2. No group entities or membership sync semantics.
-3. Workspace-owner invite/provision path is blocked by global user permission boundaries.
-4. API and route information architecture is inconsistent between org and workspace access.
+1. Access routes and UI IA are still split between org and workspace mental models.
+2. Provisioning policy lacks an explicit `disabled|jit|scim` mode selector.
+3. Scheduled group sync plus login-time hydration creates conceptual overlap.
+4. API naming remains partly legacy and inconsistent.
 5. Frontend permission keys are not fully aligned with backend registry.
-6. User profile schema is insufficient for AD/Entra-aligned identity attributes.
 
-These constraints require a normalized hard cutover rather than incremental UI tweaks.
-
+These constraints justify a standards-aligned simplification: explicit provisioning modes plus clear separation of provisioning and access assignment semantics.

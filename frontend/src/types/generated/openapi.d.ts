@@ -511,6 +511,74 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/users/{userId}/memberOf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List group memberships for a user */
+        get: operations["list_user_member_of_api_v1_users__userId__memberOf_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/{userId}/memberOf/$ref": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add user membership in a group by reference */
+        post: operations["add_user_member_of_ref_api_v1_users__userId__memberOf__ref_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/{userId}/memberOf/{groupId}/$ref": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove user membership in a group by reference */
+        delete: operations["remove_user_member_of_ref_api_v1_users__userId__memberOf__groupId___ref_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/$batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Execute user lifecycle mutations in batch */
+        post: operations["execute_user_batch_api_v1__batch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/groups": {
         parameters: {
             query?: never;
@@ -594,6 +662,57 @@ export type paths = {
         post?: never;
         /** Remove group member by reference */
         delete: operations["remove_group_member_ref_api_v1_groups__groupId__members__memberId___ref_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/groups/{groupId}/owners": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List group owners */
+        get: operations["list_group_owners_api_v1_groups__groupId__owners_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/groups/{groupId}/owners/$ref": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add group owner by reference */
+        post: operations["add_group_owner_ref_api_v1_groups__groupId__owners__ref_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/groups/{groupId}/owners/{ownerId}/$ref": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove group owner by reference */
+        delete: operations["remove_group_owner_ref_api_v1_groups__groupId__owners__ownerId___ref_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2027,6 +2146,166 @@ export type paths = {
         patch: operations["patch_admin_settings_api_v1_admin_settings_patch"];
         trace?: never;
     };
+    "/api/v1/admin/scim/tokens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List SCIM provisioning tokens */
+        get: operations["list_scim_tokens_api_v1_admin_scim_tokens_get"];
+        put?: never;
+        /** Create SCIM provisioning token */
+        post: operations["create_scim_token_api_v1_admin_scim_tokens_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/scim/tokens/{tokenId}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke SCIM provisioning token */
+        post: operations["revoke_scim_token_api_v1_admin_scim_tokens__tokenId__revoke_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/scim/v2/ServiceProviderConfig": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** SCIM service provider configuration */
+        get: operations["get_service_provider_config_scim_v2_ServiceProviderConfig_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/scim/v2/Schemas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** SCIM schema list */
+        get: operations["list_schemas_scim_v2_Schemas_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/scim/v2/ResourceTypes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** SCIM resource type list */
+        get: operations["list_resource_types_scim_v2_ResourceTypes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/scim/v2/Users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List SCIM users */
+        get: operations["list_users_scim_v2_Users_get"];
+        put?: never;
+        /** Create SCIM user */
+        post: operations["create_user_scim_v2_Users_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/scim/v2/Users/{userId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get SCIM user */
+        get: operations["get_user_scim_v2_Users__userId__get"];
+        /** Replace SCIM user */
+        put: operations["replace_user_scim_v2_Users__userId__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Patch SCIM user */
+        patch: operations["patch_user_scim_v2_Users__userId__patch"];
+        trace?: never;
+    };
+    "/scim/v2/Groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List SCIM groups */
+        get: operations["list_groups_scim_v2_Groups_get"];
+        put?: never;
+        /** Create SCIM group */
+        post: operations["create_group_scim_v2_Groups_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/scim/v2/Groups/{groupId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get SCIM group */
+        get: operations["get_group_scim_v2_Groups__groupId__get"];
+        /** Replace SCIM group */
+        put: operations["replace_group_scim_v2_Groups__groupId__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Patch SCIM group */
+        patch: operations["patch_group_scim_v2_Groups__groupId__patch"];
+        trace?: never;
+    };
 };
 export type webhooks = Record<string, never>;
 export type components = {
@@ -2395,6 +2674,62 @@ export type components = {
             oidc_configured: boolean;
             /** Providers */
             providers: components["schemas"]["AuthProvider"][];
+        };
+        /**
+         * BatchRequest
+         * @description Graph-style batch request envelope.
+         */
+        BatchRequest: {
+            /** Requests */
+            requests: components["schemas"]["BatchSubrequest"][];
+        };
+        /**
+         * BatchResponse
+         * @description Batch response envelope keyed by subrequest id.
+         */
+        BatchResponse: {
+            /** Responses */
+            responses: components["schemas"]["BatchSubresponse"][];
+        };
+        /**
+         * BatchSubrequest
+         * @description Single operation within a batch request envelope.
+         */
+        BatchSubrequest: {
+            /** Id */
+            id: string;
+            /** Method */
+            method: string;
+            /** Url */
+            url: string;
+            /** Headers */
+            headers?: {
+                [key: string]: string;
+            } | null;
+            /** Body */
+            body?: {
+                [key: string]: unknown;
+            } | null;
+            /** Dependson */
+            dependsOn?: string[];
+        };
+        /**
+         * BatchSubresponse
+         * @description Single operation result returned by the batch executor.
+         */
+        BatchSubresponse: {
+            /** Id */
+            id: string;
+            /** Status */
+            status: number;
+            /** Headers */
+            headers?: {
+                [key: string]: string;
+            } | null;
+            /** Body */
+            body?: {
+                [key: string]: unknown;
+            } | unknown[] | string | null;
         };
         /** Body_import_configuration_api_v1_workspaces__workspaceId__configurations_import_post */
         Body_import_configuration_api_v1_workspaces__workspaceId__configurations_import_post: {
@@ -3571,6 +3906,31 @@ export type components = {
             /** Updated At */
             updated_at: string | null;
         };
+        /** GroupOwnerOut */
+        GroupOwnerOut: {
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+            /** Email */
+            email: string;
+            /** Display Name */
+            display_name: string | null;
+        };
+        /** GroupOwnerRefCreate */
+        GroupOwnerRefCreate: {
+            /**
+             * Ownerid
+             * Format: uuid
+             */
+            ownerId: string;
+        };
+        /** GroupOwnersResponse */
+        GroupOwnersResponse: {
+            /** Items */
+            items: components["schemas"]["GroupOwnerOut"][];
+        };
         /**
          * GroupSource
          * @description Source of truth for group lifecycle.
@@ -4497,17 +4857,20 @@ export type components = {
         };
         /** RuntimeIdentityProviderMeta */
         RuntimeIdentityProviderMeta: {
-            jitProvisioningEnabled: components["schemas"]["RuntimeSettingFieldMeta"];
+            provisioningMode: components["schemas"]["RuntimeSettingFieldMeta"];
         };
         /** RuntimeIdentityProviderPatch */
         RuntimeIdentityProviderPatch: {
-            /** Jitprovisioningenabled */
-            jitProvisioningEnabled?: boolean | null;
+            /** Provisioningmode */
+            provisioningMode?: ("disabled" | "jit" | "scim") | null;
         };
         /** RuntimeIdentityProviderValues */
         RuntimeIdentityProviderValues: {
-            /** Jitprovisioningenabled */
-            jitProvisioningEnabled: boolean;
+            /**
+             * Provisioningmode
+             * @enum {string}
+             */
+            provisioningMode: "disabled" | "jit" | "scim";
         };
         /** RuntimePasswordComplexityMeta */
         RuntimePasswordComplexityMeta: {
@@ -4637,6 +5000,53 @@ export type components = {
         RuntimeSettingsValues: {
             safeMode: components["schemas"]["RuntimeSafeModeValues"];
             auth: components["schemas"]["RuntimeAuthValues"];
+        };
+        /** ScimTokenCreateRequest */
+        ScimTokenCreateRequest: {
+            /** Name */
+            name: string;
+        };
+        /** ScimTokenCreateResponse */
+        ScimTokenCreateResponse: {
+            /** Token */
+            token: string;
+            item: components["schemas"]["ScimTokenOut"];
+        };
+        /** ScimTokenListResponse */
+        ScimTokenListResponse: {
+            /** Items */
+            items: components["schemas"]["ScimTokenOut"][];
+        };
+        /** ScimTokenOut */
+        ScimTokenOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Prefix */
+            prefix: string;
+            /**
+             * Createdbyuserid
+             * Format: uuid
+             */
+            createdByUserId: string;
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /**
+             * Updatedat
+             * Format: date-time
+             */
+            updatedAt: string;
+            /** Lastusedat */
+            lastUsedAt?: string | null;
+            /** Revokedat */
+            revokedAt?: string | null;
         };
         /**
          * ScopeType
@@ -4851,6 +5261,37 @@ export type components = {
         UserCreateResponse: {
             user: components["schemas"]["UserOut"];
             passwordProvisioning: components["schemas"]["UserPasswordProvisioning"];
+        };
+        /** UserMemberOfOut */
+        UserMemberOfOut: {
+            /**
+             * Group Id
+             * Format: uuid
+             */
+            group_id: string;
+            /** Display Name */
+            display_name: string;
+            /** Slug */
+            slug: string;
+            source: components["schemas"]["GroupSource"];
+            membership_mode: components["schemas"]["GroupMembershipMode"];
+            /** Is Member */
+            is_member: boolean;
+            /** Is Owner */
+            is_owner: boolean;
+        };
+        /** UserMemberOfRefCreate */
+        UserMemberOfRefCreate: {
+            /**
+             * Groupid
+             * Format: uuid
+             */
+            groupId: string;
+        };
+        /** UserMemberOfResponse */
+        UserMemberOfResponse: {
+            /** Items */
+            items: components["schemas"]["UserMemberOfOut"][];
         };
         /**
          * UserOut
@@ -6675,6 +7116,157 @@ export interface operations {
             default: components["responses"]["ProblemDetails"];
         };
     };
+    list_user_member_of_api_v1_users__userId__memberOf_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description User identifier. */
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserMemberOfResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    add_user_member_of_ref_api_v1_users__userId__memberOf__ref_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description User identifier. */
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserMemberOfRefCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserMemberOfResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    remove_user_member_of_ref_api_v1_users__userId__memberOf__groupId___ref_delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description User identifier. */
+                userId: string;
+                /** @description Group identifier. */
+                groupId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    execute_user_batch_api_v1__batch_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BatchResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
     list_groups_api_v1_groups_get: {
         parameters: {
             query?: {
@@ -6945,6 +7537,119 @@ export interface operations {
                 groupId: string;
                 /** @description Member identifier */
                 memberId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    list_group_owners_api_v1_groups__groupId__owners_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Group identifier */
+                groupId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupOwnersResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    add_group_owner_ref_api_v1_groups__groupId__owners__ref_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Group identifier */
+                groupId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GroupOwnerRefCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupOwnersResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    remove_group_owner_ref_api_v1_groups__groupId__owners__ownerId___ref_delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Group identifier */
+                groupId: string;
+                /** @description Owner identifier */
+                ownerId: string;
             };
             cookie?: never;
         };
@@ -11751,6 +12456,607 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminSettingsReadResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    list_scim_tokens_api_v1_admin_scim_tokens_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScimTokenListResponse"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    create_scim_token_api_v1_admin_scim_tokens_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScimTokenCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScimTokenCreateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    revoke_scim_token_api_v1_admin_scim_tokens__tokenId__revoke_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description SCIM token identifier */
+                tokenId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScimTokenOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    get_service_provider_config_scim_v2_ServiceProviderConfig_get: {
+        parameters: {
+            query?: never;
+            header: {
+                Authorization: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    list_schemas_scim_v2_Schemas_get: {
+        parameters: {
+            query?: never;
+            header: {
+                Authorization: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    list_resource_types_scim_v2_ResourceTypes_get: {
+        parameters: {
+            query?: never;
+            header: {
+                Authorization: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    list_users_scim_v2_Users_get: {
+        parameters: {
+            query?: {
+                filter?: string | null;
+                startIndex?: number;
+                count?: number;
+            };
+            header: {
+                Authorization: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    create_user_scim_v2_Users_post: {
+        parameters: {
+            query?: never;
+            header: {
+                Authorization: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    get_user_scim_v2_Users__userId__get: {
+        parameters: {
+            query?: never;
+            header: {
+                Authorization: string | null;
+            };
+            path: {
+                /** @description SCIM user identifier */
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    replace_user_scim_v2_Users__userId__put: {
+        parameters: {
+            query?: never;
+            header: {
+                Authorization: string | null;
+            };
+            path: {
+                /** @description SCIM user identifier */
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    patch_user_scim_v2_Users__userId__patch: {
+        parameters: {
+            query?: never;
+            header: {
+                Authorization: string | null;
+            };
+            path: {
+                /** @description SCIM user identifier */
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    list_groups_scim_v2_Groups_get: {
+        parameters: {
+            query?: {
+                filter?: string | null;
+                startIndex?: number;
+                count?: number;
+            };
+            header: {
+                Authorization: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    create_group_scim_v2_Groups_post: {
+        parameters: {
+            query?: never;
+            header: {
+                Authorization: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    get_group_scim_v2_Groups__groupId__get: {
+        parameters: {
+            query?: never;
+            header: {
+                Authorization: string | null;
+            };
+            path: {
+                /** @description SCIM group identifier */
+                groupId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    replace_group_scim_v2_Groups__groupId__put: {
+        parameters: {
+            query?: never;
+            header: {
+                Authorization: string | null;
+            };
+            path: {
+                /** @description SCIM group identifier */
+                groupId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    patch_group_scim_v2_Groups__groupId__patch: {
+        parameters: {
+            query?: never;
+            header: {
+                Authorization: string | null;
+            };
+            path: {
+                /** @description SCIM group identifier */
+                groupId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

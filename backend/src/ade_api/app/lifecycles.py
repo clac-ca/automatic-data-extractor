@@ -30,7 +30,6 @@ from ade_api.features.documents.changes import purge_document_changes
 from ade_api.features.documents.events import DocumentChangesHub
 from ade_api.features.rbac import RbacService
 from ade_api.features.sso.env_sync import sync_sso_providers_from_env
-from ade_api.features.sso.group_sync import GroupSyncService
 from ade_api.settings import Settings, get_settings
 from ade_db.models import User
 from ade_storage import (
@@ -98,15 +97,6 @@ async def _document_changes_maintenance_loop(maintain_fn: Callable[[], int]) -> 
         except Exception:
             logger.exception("documents.changes.maintenance_failed")
         await asyncio.sleep(MAINTENANCE_INTERVAL_SECONDS)
-
-
-async def _group_sync_loop(*, sync_fn: Callable[[], None], interval_seconds: int) -> None:
-    while True:
-        try:
-            await asyncio.to_thread(sync_fn)
-        except Exception:
-            logger.exception("sso.group_sync.loop_failed")
-        await asyncio.sleep(interval_seconds)
 
 
 def ensure_runtime_dirs(settings: Settings | None = None) -> None:
@@ -236,24 +226,6 @@ def create_application_lifespan(
                 with session.begin():
                     sync_sso_providers_from_env(session=session, settings=settings)
 
-        def _sync_idp_groups() -> None:
-            if not settings.auth_group_sync_enabled:
-                return
-            with session_factory() as session:
-                with session.begin():
-                    stats = GroupSyncService(session=session).run_once(settings=settings)
-            logger.info(
-                "sso.group_sync.complete",
-                extra={
-                    "known_users_linked": stats.known_users_linked,
-                    "users_created": stats.users_created,
-                    "groups_upserted": stats.groups_upserted,
-                    "memberships_added": stats.memberships_added,
-                    "memberships_removed": stats.memberships_removed,
-                    "unknown_members_skipped": stats.unknown_members_skipped,
-                },
-            )
-
         def _assert_runtime_settings_schema() -> None:
             with session_factory() as session:
                 with session.begin():
@@ -321,9 +293,6 @@ def create_application_lifespan(
                 raise RuntimeError(str(exc)) from exc
             await asyncio.to_thread(_sync_sso_env_providers)
             await asyncio.to_thread(_maintain_document_changes)
-            if settings.auth_group_sync_enabled:
-                await asyncio.to_thread(_sync_idp_groups)
-
             events_hub = DocumentChangesHub(settings=settings)
             events_hub.start(loop=asyncio.get_running_loop())
             app.state.document_changes_hub = events_hub
@@ -331,15 +300,6 @@ def create_application_lifespan(
                 _document_changes_maintenance_loop(_maintain_document_changes)
             )
             app.state.document_changes_maintenance_task = maintenance_task
-            group_sync_task: asyncio.Task[None] | None = None
-            if settings.auth_group_sync_enabled:
-                group_sync_task = asyncio.create_task(
-                    _group_sync_loop(
-                        sync_fn=_sync_idp_groups,
-                        interval_seconds=int(settings.auth_group_sync_interval_seconds),
-                    )
-                )
-            app.state.group_sync_task = group_sync_task
 
             try:
                 yield
@@ -347,14 +307,9 @@ def create_application_lifespan(
                 maintenance_task.cancel()
                 with suppress(asyncio.CancelledError):
                     await maintenance_task
-                if group_sync_task is not None:
-                    group_sync_task.cancel()
-                    with suppress(asyncio.CancelledError):
-                        await group_sync_task
                 events_hub.stop()
                 app.state.document_changes_hub = None
                 app.state.document_changes_maintenance_task = None
-                app.state.group_sync_task = None
         finally:
             shutdown_storage(app)
             shutdown_db(app)

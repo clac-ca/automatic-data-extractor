@@ -1,9 +1,19 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 
 import { useLocation, useNavigate } from "react-router-dom";
+import { useMutation, useQuery } from "@tanstack/react-query";
 
 import { buildWeakEtag } from "@/api/etag";
 import { mapUiError } from "@/api/uiErrors";
+import { collectAllPages, MAX_PAGE_SIZE } from "@/api/pagination";
+import { executeUserBatchChunked, type BatchSubrequest } from "@/api/users/api";
+import {
+  addAdminUserMemberOf,
+  listAdminUserMemberOf,
+  removeAdminUserMemberOf,
+} from "@/api/admin/users";
+import { listGroups, type Group } from "@/api/groups/api";
+import { createWorkspaceRoleAssignment, listWorkspaceRoles } from "@/api/workspaces/api";
 import { useGlobalPermissions } from "@/hooks/auth/useGlobalPermissions";
 import {
   useAdminRolesQuery,
@@ -18,16 +28,35 @@ import {
   useRevokeAdminUserApiKeyMutation,
   useUpdateAdminUserMutation,
 } from "@/hooks/admin";
+import { useWorkspacesQuery } from "@/hooks/workspaces";
 import { useSession } from "@/providers/auth/SessionContext";
+import {
+  AccessCommandBar,
+  AssignmentChips,
+  BatchResultPanel,
+  resolveAccessActionState,
+  type BatchResultSummary,
+  PrincipalIdentityCell,
+} from "@/pages/SharedAccess/components";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { SettingsDrawer } from "@/pages/Workspace/sections/Settings/components/SettingsDrawer";
 import { SettingsSection } from "@/pages/Workspace/sections/Settings/components/SettingsSection";
 import type { ApiKeySummary } from "@/types";
+import type { RoleDefinition, WorkspaceProfile } from "@/types/workspaces";
 import { ResponsiveAdminTable } from "../components/ResponsiveAdminTable";
 import { useOrganizationSettingsSection } from "../sectionContext";
 
@@ -44,6 +73,33 @@ type ProvisionedPassword = {
   readonly secret: string;
 };
 
+type CreateUserInput = {
+  readonly email: string;
+  readonly displayName: string;
+  readonly properties: {
+    readonly givenName: string;
+    readonly surname: string;
+    readonly jobTitle: string;
+    readonly department: string;
+    readonly officeLocation: string;
+    readonly mobilePhone: string;
+    readonly businessPhones: string;
+    readonly employeeId: string;
+  };
+  readonly organizationRoleIds: string[];
+  readonly workspaceSeed:
+    | {
+        readonly workspaceId: string;
+        readonly roleIds: string[];
+      }
+    | null;
+  readonly passwordProfile: {
+    readonly mode: "auto_generate" | "explicit";
+    readonly password?: string;
+    readonly forceChangeOnNextSignIn: boolean;
+  };
+};
+
 const SIMPLE_EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function UsersSettingsPage() {
@@ -55,9 +111,52 @@ export function UsersSettingsPage() {
 
   const canManageUsers = hasPermission("users.manage_all");
   const canReadUsers = hasPermission("users.read_all") || canManageUsers;
+  const canReadGroups = hasPermission("groups.read_all") || hasPermission("groups.manage_all");
+  const canReadGroupMembers =
+    hasPermission("groups.members.read_all") ||
+    hasPermission("groups.members.manage_all") ||
+    hasPermission("groups.manage_all");
+  const canManageGroupMembers =
+    hasPermission("groups.members.manage_all") || hasPermission("groups.manage_all");
+  const canReadUserMemberOf = canReadUsers && canReadGroupMembers;
+  const canManageUserMemberOf = canManageUsers && canManageGroupMembers;
 
-  const usersQuery = useAdminUsersQuery({ enabled: canReadUsers, pageSize: 100 });
+  const [searchValue, setSearchValue] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
+  const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
+  const [bulkResult, setBulkResult] = useState<BatchResultSummary | null>(null);
+  const [isRetryingBulk, setIsRetryingBulk] = useState(false);
+  const [confirmBulkDeactivateOpen, setConfirmBulkDeactivateOpen] = useState(false);
+
+  const usersQuery = useAdminUsersQuery({
+    enabled: canReadUsers,
+    pageSize: 100,
+    search: searchValue,
+  });
   const rolesQuery = useAdminRolesQuery("global");
+  const workspacesQuery = useWorkspacesQuery();
+  const groupsQuery = useQuery({
+    queryKey: ["organization", "groups", "user-member-of"],
+    queryFn: ({ signal }) => listGroups({ signal }),
+    enabled: canReadGroups,
+    staleTime: 30_000,
+    placeholderData: (previous) => previous,
+  });
+  const workspaceRoleCatalogQuery = useQuery({
+    queryKey: ["roles", "workspace", "catalog"],
+    queryFn: ({ signal }) =>
+      collectAllPages((cursor) =>
+        listWorkspaceRoles({
+          limit: MAX_PAGE_SIZE,
+          cursor,
+          includeTotal: true,
+          signal,
+        }),
+      ),
+    enabled: canManageUsers,
+    staleTime: 30_000,
+    placeholderData: (previous) => previous,
+  });
 
   const createUser = useCreateAdminUserMutation();
   const updateUser = useUpdateAdminUserMutation();
@@ -76,6 +175,26 @@ export function UsersSettingsPage() {
   );
 
   const users = usersQuery.users;
+  const filteredUsers = useMemo(() => {
+    return users.filter((user) => {
+      if (statusFilter === "active") {
+        return user.is_active;
+      }
+      if (statusFilter === "inactive") {
+        return !user.is_active;
+      }
+      return true;
+    });
+  }, [statusFilter, users]);
+
+  useEffect(() => {
+    const availableIds = new Set(filteredUsers.map((user) => user.id));
+    setSelectedUserIds((current) => {
+      const next = new Set(Array.from(current).filter((id) => availableIds.has(id)));
+      return next.size === current.size ? current : next;
+    });
+  }, [filteredUsers]);
+
   const selectedParam = params[0];
   const isCreateOpen = selectedParam === "new";
   const selectedUserId = selectedParam && selectedParam !== "new" ? decodeURIComponent(selectedParam) : null;
@@ -87,12 +206,57 @@ export function UsersSettingsPage() {
   const openCreateDrawer = () => navigate(`${basePath}/new${suffix}`);
   const openUserDrawer = (userId: string) => navigate(`${basePath}/${encodeURIComponent(userId)}${suffix}`);
 
+  const selectedUsersForBulk = useMemo(
+    () =>
+      filteredUsers.filter(
+        (user) => selectedUserIds.has(user.id) && user.id !== session.user.id,
+      ),
+    [filteredUsers, selectedUserIds, session.user.id],
+  );
+
+  const canBulkDeactivate = canManageUsers && selectedUsersForBulk.length > 0;
+
+  const runBulkDeactivate = async (userIds: string[]) => {
+    if (userIds.length === 0) {
+      return;
+    }
+
+    const requests: BatchSubrequest[] = userIds.map((userId) => ({
+      id: userId,
+      method: "POST",
+      url: `/users/${userId}/deactivate`,
+      dependsOn: [],
+    }));
+
+    const response = await executeUserBatchChunked(requests);
+    const failed = response.responses
+      .filter((item) => item.status >= 400)
+      .map((item) => {
+        const user = users.find((entry) => entry.id === item.id);
+        return {
+          id: item.id,
+          label: user?.display_name || user?.email || item.id,
+          status: item.status,
+          message: parseBatchErrorMessage(item.body),
+        };
+      });
+
+    const summary: BatchResultSummary = {
+      requested: requests.length,
+      succeeded: response.responses.length - failed.length,
+      failed,
+    };
+    setBulkResult(summary);
+
+    if (summary.succeeded > 0) {
+      setFeedbackMessage({ tone: "success", message: "Bulk deactivation completed." });
+      setSelectedUserIds(new Set());
+      await usersQuery.refetch();
+    }
+  };
+
   if (!canReadUsers) {
-    return (
-      <Alert tone="danger">
-        You do not have permission to access users.
-      </Alert>
-    );
+    return <Alert tone="danger">You do not have permission to access users.</Alert>;
   }
 
   return (
@@ -150,10 +314,35 @@ export function UsersSettingsPage() {
           {mapUiError(usersQuery.error, { fallback: "Unable to load users." }).message}
         </Alert>
       ) : null}
+      {groupsQuery.isError ? (
+        <Alert tone="warning">
+          {mapUiError(groupsQuery.error, { fallback: "Unable to load groups for membership management." }).message}
+        </Alert>
+      ) : null}
+
+      {bulkResult ? (
+        <BatchResultPanel
+          result={bulkResult}
+          onDismiss={() => setBulkResult(null)}
+          onRetryFailed={
+            bulkResult.failed.length > 0
+              ? async () => {
+                  setIsRetryingBulk(true);
+                  try {
+                    await runBulkDeactivate(bulkResult.failed.map((item) => item.id));
+                  } finally {
+                    setIsRetryingBulk(false);
+                  }
+                }
+              : undefined
+          }
+          isRetrying={isRetryingBulk}
+        />
+      ) : null}
 
       <SettingsSection
         title="Users"
-        description={usersQuery.isLoading ? "Loading users..." : `${users.length} users`}
+        description={usersQuery.isLoading ? "Loading users..." : `${filteredUsers.length} users`}
         actions={
           canManageUsers ? (
             <Button type="button" size="sm" onClick={openCreateDrawer}>
@@ -162,15 +351,57 @@ export function UsersSettingsPage() {
           ) : null
         }
       >
+        <AccessCommandBar
+          searchValue={searchValue}
+          onSearchValueChange={setSearchValue}
+          searchPlaceholder="Search users"
+          searchAriaLabel="Search users"
+          controls={
+            <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as "all" | "active" | "inactive")}>
+              <SelectTrigger className="w-full min-w-36 sm:w-40">
+                <SelectValue placeholder="Filter status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All statuses</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="inactive">Inactive</SelectItem>
+              </SelectContent>
+            </Select>
+          }
+          actions={
+            canBulkDeactivate ? (
+              <>
+                <Badge variant="secondary">{selectedUsersForBulk.length} selected</Badge>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => setConfirmBulkDeactivateOpen(true)}
+                >
+                  Deactivate selected
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setSelectedUserIds(new Set())}
+                >
+                  Clear
+                </Button>
+              </>
+            ) : null
+          }
+        />
+
         {usersQuery.isLoading ? (
           <p className="text-sm text-muted-foreground">Loading users...</p>
-        ) : users.length === 0 ? (
+        ) : filteredUsers.length === 0 ? (
           <p className="rounded-lg border border-dashed border-border bg-background p-4 text-sm text-muted-foreground">
-            No users found.
+            No users match your current filters.
           </p>
         ) : (
           <ResponsiveAdminTable
-            items={users}
+            items={filteredUsers}
             getItemKey={(user) => user.id}
             mobileListLabel="Organization users"
             desktopTable={
@@ -178,6 +409,28 @@ export function UsersSettingsPage() {
                 <Table>
                   <TableHeader>
                     <TableRow className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      <TableHead className="w-10 px-4">
+                        <input
+                          aria-label="Select all users"
+                          type="checkbox"
+                          className="h-4 w-4 rounded border-border"
+                          checked={
+                            selectedUsersForBulk.length > 0 &&
+                            selectedUsersForBulk.length ===
+                              filteredUsers.filter((user) => user.id !== session.user.id).length
+                          }
+                          onChange={(event) => {
+                            if (!event.target.checked) {
+                              setSelectedUserIds(new Set());
+                              return;
+                            }
+                            const selectableIds = filteredUsers
+                              .filter((user) => user.id !== session.user.id)
+                              .map((user) => user.id);
+                            setSelectedUserIds(new Set(selectableIds));
+                          }}
+                        />
+                      </TableHead>
                       <TableHead className="px-4">User</TableHead>
                       <TableHead className="px-4">Roles</TableHead>
                       <TableHead className="px-4">Status</TableHead>
@@ -185,24 +438,38 @@ export function UsersSettingsPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {users.map((user) => (
+                    {filteredUsers.map((user) => (
                       <TableRow key={user.id} className="text-sm text-foreground">
                         <TableCell className="px-4 py-3">
-                          <p className="font-semibold text-foreground">{user.display_name || user.email}</p>
-                          <p className="text-xs text-muted-foreground">{user.email}</p>
+                          <input
+                            aria-label={`Select ${user.display_name || user.email}`}
+                            type="checkbox"
+                            className="h-4 w-4 rounded border-border"
+                            disabled={!canManageUsers || user.id === session.user.id}
+                            checked={selectedUserIds.has(user.id)}
+                            onChange={(event) => {
+                              setSelectedUserIds((current) => {
+                                const next = new Set(current);
+                                if (event.target.checked) {
+                                  next.add(user.id);
+                                } else {
+                                  next.delete(user.id);
+                                }
+                                return next;
+                              });
+                            }}
+                          />
                         </TableCell>
                         <TableCell className="px-4 py-3">
-                          <div className="flex flex-wrap gap-1">
-                            {(user.roles ?? []).length === 0 ? (
-                              <span className="text-xs text-muted-foreground">No roles</span>
-                            ) : (
-                              (user.roles ?? []).map((role) => (
-                                <Badge key={`${user.id}-${role}`} variant="secondary" className="text-xs">
-                                  {role}
-                                </Badge>
-                              ))
-                            )}
-                          </div>
+                          <PrincipalIdentityCell
+                            principalType="user"
+                            title={user.display_name || user.email}
+                            subtitle={user.email}
+                            detail={user.department || undefined}
+                          />
+                        </TableCell>
+                        <TableCell className="px-4 py-3">
+                          <AssignmentChips assignments={user.roles ?? []} emptyLabel="No roles" />
                         </TableCell>
                         <TableCell className="px-4 py-3">
                           <Badge variant={user.is_active ? "secondary" : "outline"}>
@@ -222,24 +489,16 @@ export function UsersSettingsPage() {
             }
             mobileCard={(user) => (
               <>
-                <div className="space-y-1">
-                  <p className="text-sm font-semibold text-foreground">{user.display_name || user.email}</p>
-                  <p className="text-xs text-muted-foreground">{user.email}</p>
-                </div>
+                <PrincipalIdentityCell
+                  principalType="user"
+                  title={user.display_name || user.email}
+                  subtitle={user.email}
+                  detail={user.department || undefined}
+                />
                 <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
                   <dt className="font-semibold uppercase tracking-wide text-muted-foreground">Roles</dt>
                   <dd>
-                    {(user.roles ?? []).length === 0 ? (
-                      <span className="text-muted-foreground">No roles</span>
-                    ) : (
-                      <div className="flex flex-wrap gap-1">
-                        {(user.roles ?? []).map((role) => (
-                          <Badge key={`${user.id}-${role}`} variant="secondary" className="text-[11px]">
-                            {role}
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
+                    <AssignmentChips assignments={user.roles ?? []} emptyLabel="No roles" />
                   </dd>
                   <dt className="font-semibold uppercase tracking-wide text-muted-foreground">Status</dt>
                   <dd>
@@ -280,33 +539,69 @@ export function UsersSettingsPage() {
       <CreateUserDrawer
         open={isCreateOpen && canManageUsers}
         onClose={closeDrawer}
-        onSubmit={async ({ email, displayName, passwordProfile }) => {
+        availableRoles={rolesQuery.data?.items ?? []}
+        availableWorkspaces={workspacesQuery.data?.items ?? []}
+        availableWorkspaceRoles={workspaceRoleCatalogQuery.data?.items ?? []}
+        onSubmit={async ({
+          email,
+          displayName,
+          passwordProfile,
+          properties,
+          organizationRoleIds,
+          workspaceSeed,
+        }: CreateUserInput) => {
           setFeedbackMessage(null);
           setProvisionedPassword(null);
           setProvisionedCopyStatus("idle");
-          try {
-            const created = await createUser.mutateAsync({
-              email,
-              displayName: displayName || null,
-              passwordProfile,
-            });
-            setFeedbackMessage({ tone: "success", message: "User created." });
-            if (
-              created.passwordProvisioning.mode === "auto_generate" &&
-              created.passwordProvisioning.initialPassword
-            ) {
-              setProvisionedPassword({
-                email: created.user.email,
-                secret: created.passwordProvisioning.initialPassword,
-              });
-            }
-            closeDrawer();
-          } catch (error) {
-            const mapped = mapUiError(error, { fallback: "Unable to create user." });
-            setFeedbackMessage({ tone: "danger", message: mapped.message });
+
+          const created = await createUser.mutateAsync({
+            email,
+            displayName: displayName || null,
+            givenName: properties.givenName || null,
+            surname: properties.surname || null,
+            jobTitle: properties.jobTitle || null,
+            department: properties.department || null,
+            officeLocation: properties.officeLocation || null,
+            mobilePhone: properties.mobilePhone || null,
+            businessPhones: properties.businessPhones || null,
+            employeeId: properties.employeeId || null,
+            passwordProfile,
+          });
+
+          const createdUser = created.user;
+
+          await Promise.all(
+            organizationRoleIds.map((roleId) =>
+              assignRole.mutateAsync({ userId: createdUser.id, roleId }),
+            ),
+          );
+
+          if (workspaceSeed && workspaceSeed.workspaceId && workspaceSeed.roleIds.length > 0) {
+            await Promise.all(
+              workspaceSeed.roleIds.map((roleId) =>
+                createWorkspaceRoleAssignment(workspaceSeed.workspaceId, {
+                  principal_type: "user",
+                  principal_id: createdUser.id,
+                  role_id: roleId,
+                }),
+              ),
+            );
           }
+
+          setFeedbackMessage({ tone: "success", message: "User created with initial access assignments." });
+
+          if (
+            created.passwordProvisioning.mode === "auto_generate" &&
+            created.passwordProvisioning.initialPassword
+          ) {
+            setProvisionedPassword({
+              email: created.user.email,
+              secret: created.passwordProvisioning.initialPassword,
+            });
+          }
+          closeDrawer();
         }}
-        isSubmitting={createUser.isPending}
+        isSubmitting={createUser.isPending || assignRole.isPending}
       />
 
       <ManageUserDrawer
@@ -314,8 +609,12 @@ export function UsersSettingsPage() {
         userId={selectedUserId}
         user={selectedUser}
         canManage={canManageUsers}
+        canReadUserMemberOf={canReadUserMemberOf}
+        canManageUserMemberOf={canManageUserMemberOf}
+        availableGroups={groupsQuery.data?.items ?? []}
         currentUserId={session.user.id}
         roles={rolesQuery.data?.items ?? []}
+        onOpenGroup={(groupId) => navigate(`/organization/access/groups/${encodeURIComponent(groupId)}${suffix}`)}
         onClose={closeDrawer}
         onUpdateProfile={async (payload) => {
           if (!selectedUserId) return;
@@ -374,8 +673,44 @@ export function UsersSettingsPage() {
           revokeUserApiKey.isPending
         }
       />
+
+      <ConfirmDialog
+        open={confirmBulkDeactivateOpen}
+        title="Deactivate selected users?"
+        description={`Deactivate ${selectedUsersForBulk.length} selected user${selectedUsersForBulk.length === 1 ? "" : "s"}.`}
+        confirmLabel="Deactivate users"
+        tone="danger"
+        onCancel={() => setConfirmBulkDeactivateOpen(false)}
+        onConfirm={async () => {
+          try {
+            await runBulkDeactivate(selectedUsersForBulk.map((user) => user.id));
+          } catch (error) {
+            setFeedbackMessage({
+              tone: "danger",
+              message: error instanceof Error ? error.message : "Bulk deactivation failed.",
+            });
+          } finally {
+            setConfirmBulkDeactivateOpen(false);
+          }
+        }}
+      />
     </div>
   );
+}
+
+function parseBatchErrorMessage(body: unknown): string {
+  if (body && typeof body === "object") {
+    const asRecord = body as Record<string, unknown>;
+    const detail = asRecord.detail;
+    if (typeof detail === "string" && detail.trim().length > 0) {
+      return detail;
+    }
+    const message = asRecord.message;
+    if (typeof message === "string" && message.trim().length > 0) {
+      return message;
+    }
+  }
+  return "Operation failed.";
 }
 
 function CreateUserDrawer({
@@ -383,74 +718,153 @@ function CreateUserDrawer({
   onClose,
   onSubmit,
   isSubmitting,
+  availableRoles,
+  availableWorkspaces,
+  availableWorkspaceRoles,
 }: {
   readonly open: boolean;
   readonly onClose: () => void;
-  readonly onSubmit: (input: {
-    email: string;
-    displayName: string;
-    passwordProfile: {
-      mode: "auto_generate" | "explicit";
-      password?: string;
-      forceChangeOnNextSignIn: boolean;
-    };
-  }) => Promise<void>;
+  readonly onSubmit: (input: CreateUserInput) => Promise<void>;
   readonly isSubmitting: boolean;
+  readonly availableRoles: readonly { id: string; name: string }[];
+  readonly availableWorkspaces: readonly WorkspaceProfile[];
+  readonly availableWorkspaceRoles: readonly RoleDefinition[];
 }) {
+  const [stepIndex, setStepIndex] = useState(0);
   const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [givenName, setGivenName] = useState("");
+  const [surname, setSurname] = useState("");
+  const [jobTitle, setJobTitle] = useState("");
+  const [department, setDepartment] = useState("");
+  const [officeLocation, setOfficeLocation] = useState("");
+  const [mobilePhone, setMobilePhone] = useState("");
+  const [businessPhones, setBusinessPhones] = useState("");
+  const [employeeId, setEmployeeId] = useState("");
   const [passwordMode, setPasswordMode] = useState<"auto_generate" | "explicit">("auto_generate");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [forceChangeOnNextSignIn, setForceChangeOnNextSignIn] = useState(false);
+  const [organizationRoleIds, setOrganizationRoleIds] = useState<string[]>([]);
+  const [seedWorkspaceAccess, setSeedWorkspaceAccess] = useState(false);
+  const [seedWorkspaceId, setSeedWorkspaceId] = useState("");
+  const [seedWorkspaceRoleIds, setSeedWorkspaceRoleIds] = useState<string[]>([]);
+
   const [error, setError] = useState<string | null>(null);
-  const [emailError, setEmailError] = useState<string | null>(null);
-  const [passwordError, setPasswordError] = useState<string | null>(null);
+
+  const steps = ["Basics", "Properties", "Assignments", "Review"] as const;
+  const isLastStep = stepIndex === steps.length - 1;
 
   useEffect(() => {
     if (!open) {
+      setStepIndex(0);
       setEmail("");
       setDisplayName("");
+      setGivenName("");
+      setSurname("");
+      setJobTitle("");
+      setDepartment("");
+      setOfficeLocation("");
+      setMobilePhone("");
+      setBusinessPhones("");
+      setEmployeeId("");
       setPasswordMode("auto_generate");
       setPassword("");
       setConfirmPassword("");
       setForceChangeOnNextSignIn(false);
+      setOrganizationRoleIds([]);
+      setSeedWorkspaceAccess(false);
+      setSeedWorkspaceId("");
+      setSeedWorkspaceRoleIds([]);
       setError(null);
-      setEmailError(null);
-      setPasswordError(null);
     }
   }, [open]);
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setError(null);
-    setEmailError(null);
-    setPasswordError(null);
+  const validateBasics = () => {
     const trimmedEmail = email.trim();
     if (!trimmedEmail) {
-      setEmailError("Email is required.");
-      return;
+      setError("Email is required.");
+      return false;
     }
     if (!SIMPLE_EMAIL_PATTERN.test(trimmedEmail)) {
-      setEmailError("Enter a valid email address.");
-      return;
+      setError("Enter a valid email address.");
+      return false;
     }
 
     if (passwordMode === "explicit") {
       if (!password) {
-        setPasswordError("Password is required in explicit mode.");
-        return;
+        setError("Password is required in explicit mode.");
+        return false;
       }
       if (password !== confirmPassword) {
-        setPasswordError("Password and confirmation must match.");
-        return;
+        setError("Password and confirmation must match.");
+        return false;
       }
+    }
+
+    return true;
+  };
+
+  const validateAssignments = () => {
+    if (!seedWorkspaceAccess) {
+      return true;
+    }
+    if (!seedWorkspaceId) {
+      setError("Select a workspace for workspace role seeding.");
+      return false;
+    }
+    if (seedWorkspaceRoleIds.length === 0) {
+      setError("Select at least one workspace role when workspace seeding is enabled.");
+      return false;
+    }
+    return true;
+  };
+
+  const goNext = () => {
+    setError(null);
+    if (stepIndex === 0 && !validateBasics()) {
+      return;
+    }
+    if (stepIndex === 2 && !validateAssignments()) {
+      return;
+    }
+    setStepIndex((current) => Math.min(current + 1, steps.length - 1));
+  };
+
+  const goBack = () => {
+    setError(null);
+    setStepIndex((current) => Math.max(current - 1, 0));
+  };
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError(null);
+
+    if (!validateBasics() || !validateAssignments()) {
+      return;
     }
 
     try {
       await onSubmit({
-        email: trimmedEmail,
+        email: email.trim().toLowerCase(),
         displayName: displayName.trim(),
+        properties: {
+          givenName: givenName.trim(),
+          surname: surname.trim(),
+          jobTitle: jobTitle.trim(),
+          department: department.trim(),
+          officeLocation: officeLocation.trim(),
+          mobilePhone: mobilePhone.trim(),
+          businessPhones: businessPhones.trim(),
+          employeeId: employeeId.trim(),
+        },
+        organizationRoleIds,
+        workspaceSeed: seedWorkspaceAccess
+          ? {
+              workspaceId: seedWorkspaceId,
+              roleIds: seedWorkspaceRoleIds,
+            }
+          : null,
         passwordProfile:
           passwordMode === "explicit"
             ? {
@@ -474,94 +888,324 @@ function CreateUserDrawer({
       open={open}
       onClose={onClose}
       title="Create user"
-      description="Provision a user and choose how their initial password is set."
+      description="Provision a user, configure profile details, and optionally assign access during creation."
+      widthClassName="w-full max-w-2xl"
     >
-      <form className="space-y-4" onSubmit={handleSubmit}>
+      <form className="space-y-5" onSubmit={handleSubmit}>
+        <ol className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+          {steps.map((step, index) => {
+            const isActive = stepIndex === index;
+            const isComplete = stepIndex > index;
+            return (
+              <li
+                key={step}
+                className={`rounded-md border px-2 py-2 text-center font-semibold ${
+                  isActive
+                    ? "border-ring bg-accent text-foreground"
+                    : isComplete
+                      ? "border-success/40 bg-success/10 text-success"
+                      : "border-border text-muted-foreground"
+                }`}
+              >
+                {index + 1}. {step}
+              </li>
+            );
+          })}
+        </ol>
+
         {error ? <Alert tone="danger">{error}</Alert> : null}
-        <FormField label="Email" required error={emailError}>
-          <Input
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            placeholder="user@example.com"
-            disabled={isSubmitting}
-          />
-        </FormField>
-        <FormField label="Display name">
-          <Input
-            value={displayName}
-            onChange={(event) => setDisplayName(event.target.value)}
-            placeholder="Optional"
-            disabled={isSubmitting}
-          />
-        </FormField>
 
-        <fieldset className="space-y-2">
-          <legend className="text-sm font-medium text-foreground">Initial password</legend>
-          <label className="flex items-center gap-2 text-sm text-foreground">
-            <input
-              type="radio"
-              name="password-mode"
-              checked={passwordMode === "auto_generate"}
-              onChange={() => setPasswordMode("auto_generate")}
-              disabled={isSubmitting}
-            />
-            Auto-generate password
-          </label>
-          <label className="flex items-center gap-2 text-sm text-foreground">
-            <input
-              type="radio"
-              name="password-mode"
-              checked={passwordMode === "explicit"}
-              onChange={() => setPasswordMode("explicit")}
-              disabled={isSubmitting}
-            />
-            Set password manually
-          </label>
-        </fieldset>
-
-        {passwordMode === "explicit" ? (
-          <>
-            <FormField label="Password" required error={passwordError}>
+        {stepIndex === 0 ? (
+          <div className="space-y-4">
+            <FormField label="Email" required>
               <Input
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="user@example.com"
                 disabled={isSubmitting}
               />
             </FormField>
-            <FormField label="Confirm password" required>
+            <FormField label="Display name">
               <Input
-                type="password"
-                value={confirmPassword}
-                onChange={(event) => setConfirmPassword(event.target.value)}
+                value={displayName}
+                onChange={(event) => setDisplayName(event.target.value)}
+                placeholder="Optional"
                 disabled={isSubmitting}
               />
             </FormField>
-          </>
-        ) : (
-          <Alert tone="info">
-            A compliant random password will be generated and shown once after user creation.
-          </Alert>
-        )}
 
-        <label className="flex items-center gap-2 text-sm text-foreground">
-          <input
-            type="checkbox"
-            className="h-4 w-4 rounded border-border"
-            checked={forceChangeOnNextSignIn}
-            onChange={(event) => setForceChangeOnNextSignIn(event.target.checked)}
-            disabled={isSubmitting}
-          />
-          Force password change on next sign-in
-        </label>
+            <fieldset className="space-y-2">
+              <legend className="text-sm font-medium text-foreground">Initial password</legend>
+              <label className="flex items-center gap-2 text-sm text-foreground">
+                <input
+                  type="radio"
+                  name="password-mode"
+                  checked={passwordMode === "auto_generate"}
+                  onChange={() => setPasswordMode("auto_generate")}
+                  disabled={isSubmitting}
+                />
+                Auto-generate password
+              </label>
+              <label className="flex items-center gap-2 text-sm text-foreground">
+                <input
+                  type="radio"
+                  name="password-mode"
+                  checked={passwordMode === "explicit"}
+                  onChange={() => setPasswordMode("explicit")}
+                  disabled={isSubmitting}
+                />
+                Set password manually
+              </label>
+            </fieldset>
 
-        <div className="flex justify-end gap-2">
+            {passwordMode === "explicit" ? (
+              <>
+                <FormField label="Password" required>
+                  <Input
+                    type="password"
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    disabled={isSubmitting}
+                  />
+                </FormField>
+                <FormField label="Confirm password" required>
+                  <Input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(event) => setConfirmPassword(event.target.value)}
+                    disabled={isSubmitting}
+                  />
+                </FormField>
+              </>
+            ) : (
+              <Alert tone="info">
+                A compliant random password will be generated and shown once after user creation.
+              </Alert>
+            )}
+
+            <label className="flex items-center gap-2 text-sm text-foreground">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-border"
+                checked={forceChangeOnNextSignIn}
+                onChange={(event) => setForceChangeOnNextSignIn(event.target.checked)}
+                disabled={isSubmitting}
+              />
+              Force password change on next sign-in
+            </label>
+          </div>
+        ) : null}
+
+        {stepIndex === 1 ? (
+          <div className="grid gap-3 md:grid-cols-2">
+            <FormField label="Given name">
+              <Input value={givenName} onChange={(event) => setGivenName(event.target.value)} disabled={isSubmitting} />
+            </FormField>
+            <FormField label="Surname">
+              <Input value={surname} onChange={(event) => setSurname(event.target.value)} disabled={isSubmitting} />
+            </FormField>
+            <FormField label="Job title">
+              <Input value={jobTitle} onChange={(event) => setJobTitle(event.target.value)} disabled={isSubmitting} />
+            </FormField>
+            <FormField label="Department">
+              <Input value={department} onChange={(event) => setDepartment(event.target.value)} disabled={isSubmitting} />
+            </FormField>
+            <FormField label="Office location">
+              <Input
+                value={officeLocation}
+                onChange={(event) => setOfficeLocation(event.target.value)}
+                disabled={isSubmitting}
+              />
+            </FormField>
+            <FormField label="Mobile phone">
+              <Input value={mobilePhone} onChange={(event) => setMobilePhone(event.target.value)} disabled={isSubmitting} />
+            </FormField>
+            <FormField label="Business phones">
+              <Input
+                value={businessPhones}
+                onChange={(event) => setBusinessPhones(event.target.value)}
+                disabled={isSubmitting}
+              />
+            </FormField>
+            <FormField label="Employee ID">
+              <Input value={employeeId} onChange={(event) => setEmployeeId(event.target.value)} disabled={isSubmitting} />
+            </FormField>
+          </div>
+        ) : null}
+
+        {stepIndex === 2 ? (
+          <div className="space-y-4">
+            <fieldset className="space-y-2">
+              <legend className="text-sm font-semibold text-foreground">Organization roles</legend>
+              <p className="text-xs text-muted-foreground">Optional: assign global roles immediately.</p>
+              <div className="flex flex-wrap gap-2">
+                {availableRoles.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">No organization roles available.</p>
+                ) : (
+                  availableRoles.map((role) => (
+                    <label
+                      key={role.id}
+                      className="flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                    >
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 rounded border-border"
+                        checked={organizationRoleIds.includes(role.id)}
+                        onChange={(event) =>
+                          setOrganizationRoleIds((current) =>
+                            event.target.checked
+                              ? Array.from(new Set([...current, role.id]))
+                              : current.filter((id) => id !== role.id),
+                          )
+                        }
+                        disabled={isSubmitting}
+                      />
+                      <span>{role.name}</span>
+                    </label>
+                  ))
+                )}
+              </div>
+            </fieldset>
+
+            <div className="space-y-3 rounded-lg border border-border bg-background p-3">
+              <label className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-border"
+                  checked={seedWorkspaceAccess}
+                  onChange={(event) => {
+                    const enabled = event.target.checked;
+                    setSeedWorkspaceAccess(enabled);
+                    if (!enabled) {
+                      setSeedWorkspaceId("");
+                      setSeedWorkspaceRoleIds([]);
+                    }
+                  }}
+                  disabled={isSubmitting}
+                />
+                Seed workspace access
+              </label>
+              <p className="text-xs text-muted-foreground">
+                Optional: assign workspace roles at creation time so access is ready immediately.
+              </p>
+
+              {seedWorkspaceAccess ? (
+                <>
+                  <FormField label="Workspace" required>
+                    <Select value={seedWorkspaceId || undefined} onValueChange={setSeedWorkspaceId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a workspace" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableWorkspaces.map((workspace) => (
+                          <SelectItem key={workspace.id} value={workspace.id}>
+                            {workspace.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </FormField>
+
+                  <fieldset className="space-y-2">
+                    <legend className="text-sm font-semibold text-foreground">Workspace roles</legend>
+                    <div className="flex flex-wrap gap-2">
+                      {availableWorkspaceRoles.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">No workspace roles available.</p>
+                      ) : (
+                        availableWorkspaceRoles.map((role) => (
+                          <label
+                            key={role.id}
+                            className="flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                          >
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4 rounded border-border"
+                              checked={seedWorkspaceRoleIds.includes(role.id)}
+                              onChange={(event) =>
+                                setSeedWorkspaceRoleIds((current) =>
+                                  event.target.checked
+                                    ? Array.from(new Set([...current, role.id]))
+                                    : current.filter((id) => id !== role.id),
+                                )
+                              }
+                              disabled={isSubmitting}
+                            />
+                            <span>{role.name}</span>
+                          </label>
+                        ))
+                      )}
+                    </div>
+                  </fieldset>
+                </>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+
+        {stepIndex === 3 ? (
+          <div className="space-y-3 rounded-lg border border-border bg-background p-4 text-sm">
+            <p>
+              <span className="font-semibold">Email:</span> {email || "—"}
+            </p>
+            <p>
+              <span className="font-semibold">Display name:</span> {displayName || "—"}
+            </p>
+            <p>
+              <span className="font-semibold">Password mode:</span>{" "}
+              {passwordMode === "explicit" ? "Manual" : "Auto-generated"}
+            </p>
+            <div>
+              <p className="font-semibold">Organization roles</p>
+              <AssignmentChips
+                assignments={organizationRoleIds.map((roleId) => {
+                  const role = availableRoles.find((entry) => entry.id === roleId);
+                  return role?.name ?? roleId;
+                })}
+                emptyLabel="No organization roles"
+              />
+            </div>
+            <div>
+              <p className="font-semibold">Workspace seed</p>
+              {!seedWorkspaceAccess ? (
+                <p className="text-muted-foreground">Not configured</p>
+              ) : (
+                <div className="space-y-1">
+                  <p>
+                    Workspace: {availableWorkspaces.find((workspace) => workspace.id === seedWorkspaceId)?.name || "—"}
+                  </p>
+                  <AssignmentChips
+                    assignments={seedWorkspaceRoleIds.map((roleId) => {
+                      const role = availableWorkspaceRoles.find((entry) => entry.id === roleId);
+                      return role?.name ?? roleId;
+                    })}
+                    emptyLabel="No workspace roles"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        ) : null}
+
+        <div className="flex items-center justify-between gap-2">
           <Button type="button" variant="ghost" onClick={onClose} disabled={isSubmitting}>
             Cancel
           </Button>
-          <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? "Creating..." : "Create user"}
-          </Button>
+          <div className="flex items-center gap-2">
+            {stepIndex > 0 ? (
+              <Button type="button" variant="ghost" onClick={goBack} disabled={isSubmitting}>
+                Back
+              </Button>
+            ) : null}
+            {!isLastStep ? (
+              <Button type="button" onClick={goNext} disabled={isSubmitting}>
+                Next
+              </Button>
+            ) : (
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? "Creating..." : "Create user"}
+              </Button>
+            )}
+          </div>
         </div>
       </form>
     </SettingsDrawer>
@@ -573,8 +1217,12 @@ function ManageUserDrawer({
   userId,
   user,
   canManage,
+  canReadUserMemberOf,
+  canManageUserMemberOf,
+  availableGroups,
   currentUserId,
   roles,
+  onOpenGroup,
   onClose,
   onUpdateProfile,
   onDeactivate,
@@ -594,8 +1242,12 @@ function ManageUserDrawer({
       }
     | undefined;
   readonly canManage: boolean;
+  readonly canReadUserMemberOf: boolean;
+  readonly canManageUserMemberOf: boolean;
+  readonly availableGroups: readonly Group[];
   readonly currentUserId?: string;
   readonly roles: readonly { id: string; name: string }[];
+  readonly onOpenGroup: (groupId: string) => void;
   readonly onClose: () => void;
   readonly onUpdateProfile: (payload: { display_name?: string | null; is_active?: boolean | null }) => Promise<void>;
   readonly onDeactivate: () => Promise<void>;
@@ -606,9 +1258,29 @@ function ManageUserDrawer({
 }) {
   const userRolesQuery = useAdminUserRolesQuery(userId);
   const userApiKeysQuery = useAdminUserApiKeysQuery(userId, { includeRevoked: true, limit: 100 });
+  const userMemberOfQuery = useQuery({
+    queryKey: ["admin", "users", userId, "memberOf"],
+    queryFn: ({ signal }) => listAdminUserMemberOf(userId!, { signal }),
+    enabled: open && Boolean(userId) && canReadUserMemberOf,
+    staleTime: 10_000,
+  });
+  const addMemberOfMutation = useMutation({
+    mutationFn: ({ groupId }: { groupId: string }) => addAdminUserMemberOf(userId!, groupId),
+    onSuccess: () => {
+      userMemberOfQuery.refetch();
+    },
+  });
+  const removeMemberOfMutation = useMutation({
+    mutationFn: ({ groupId }: { groupId: string }) => removeAdminUserMemberOf(userId!, groupId),
+    onSuccess: () => {
+      userMemberOfQuery.refetch();
+    },
+  });
   const [displayName, setDisplayName] = useState("");
   const [isActive, setIsActive] = useState(true);
   const [roleDraft, setRoleDraft] = useState<string[]>([]);
+  const [groupSearch, setGroupSearch] = useState("");
+  const [selectedGroupId, setSelectedGroupId] = useState<string>("");
   const [apiKeyName, setApiKeyName] = useState("");
   const [apiKeyExpiry, setApiKeyExpiry] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -622,15 +1294,39 @@ function ManageUserDrawer({
       : null;
 
   const currentRoleIds = useMemo(
-    () => (userRolesQuery.data?.roles ?? []).map((entry) => entry.role_id),
+    () => (userRolesQuery.data?.roles ?? []).map((entry: { role_id: string }) => entry.role_id),
     [userRolesQuery.data?.roles],
   );
+  const memberOfItems = userMemberOfQuery.data?.items ?? [];
+  const memberOfByGroupId = useMemo(() => {
+    const next = new Map<string, (typeof memberOfItems)[number]>();
+    for (const item of memberOfItems) {
+      next.set(item.group_id, item);
+    }
+    return next;
+  }, [memberOfItems]);
+  const filteredGroupOptions = useMemo(() => {
+    const query = groupSearch.trim().toLowerCase();
+    return availableGroups
+      .filter((group) => !memberOfByGroupId.get(group.id)?.is_member)
+      .filter((group) => {
+        if (!query) {
+          return true;
+        }
+        return `${group.display_name} ${group.slug} ${group.description ?? ""}`
+          .toLowerCase()
+          .includes(query);
+      })
+      .slice(0, 100);
+  }, [availableGroups, groupSearch, memberOfByGroupId]);
 
   useEffect(() => {
     if (!open || !user) {
       setDisplayName("");
       setIsActive(true);
       setRoleDraft([]);
+      setGroupSearch("");
+      setSelectedGroupId("");
       setError(null);
       setIssuedKey(null);
       setCopyStatus("idle");
@@ -646,7 +1342,43 @@ function ManageUserDrawer({
     setRoleDraft(currentRoleIds);
   }, [currentRoleIds, open]);
 
+  useEffect(() => {
+    if (!selectedGroupId) {
+      return;
+    }
+    if (!filteredGroupOptions.some((group) => group.id === selectedGroupId)) {
+      setSelectedGroupId("");
+    }
+  }, [filteredGroupOptions, selectedGroupId]);
+
   const disabled = !canManage || isMutating;
+  const selectedGroup = selectedGroupId
+    ? availableGroups.find((group) => group.id === selectedGroupId)
+    : null;
+  const selectedGroupIsReadOnly =
+    selectedGroup?.source === "idp" || selectedGroup?.membership_mode === "dynamic";
+  const addMembershipState = resolveAccessActionState({
+    isDisabled:
+      !canManageUserMemberOf ||
+      !canReadUserMemberOf ||
+      !selectedGroupId ||
+      selectedGroupIsReadOnly ||
+      addMemberOfMutation.isPending,
+    reasonCode: !canManageUserMemberOf || !canReadUserMemberOf
+      ? "perm_missing"
+      : selectedGroup?.source === "idp"
+        ? "provider_managed"
+        : selectedGroup?.membership_mode === "dynamic"
+          ? "dynamic_membership"
+          : !selectedGroupId
+            ? "invalid_selection"
+            : null,
+    reasonText: !canReadUserMemberOf
+      ? "You need users and group-membership read access to view and manage memberships."
+      : !canManageUserMemberOf
+        ? "You need user and group-membership manage permissions to add memberships."
+        : undefined,
+  });
 
   return (
     <SettingsDrawer
@@ -806,6 +1538,173 @@ function ManageUserDrawer({
             </div>
           </SettingsSection>
 
+          <SettingsSection title="Groups" description="Manage direct group memberships for this user.">
+            {!canReadUserMemberOf ? (
+              <p className="text-sm text-muted-foreground">
+                You need users and group-membership read access to view memberships.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                <div className="rounded-lg border border-border p-3">
+                  <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end">
+                    <FormField label="Search groups">
+                      <Input
+                        value={groupSearch}
+                        onChange={(event) => setGroupSearch(event.target.value)}
+                        placeholder="Search groups"
+                        disabled={!canReadUserMemberOf || addMemberOfMutation.isPending}
+                      />
+                    </FormField>
+                    <FormField label="Group">
+                      <Select
+                        value={selectedGroupId}
+                        onValueChange={setSelectedGroupId}
+                        disabled={!canReadUserMemberOf || addMemberOfMutation.isPending}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a group" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {filteredGroupOptions.length === 0 ? (
+                            <SelectItem value="__none__" disabled>
+                              No eligible groups
+                            </SelectItem>
+                          ) : (
+                            filteredGroupOptions.map((group) => (
+                              <SelectItem key={group.id} value={group.id}>
+                                {group.display_name}
+                              </SelectItem>
+                            ))
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </FormField>
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        disabled={addMembershipState.disabled}
+                        onClick={async () => {
+                          if (!selectedGroupId) {
+                            return;
+                          }
+                          setError(null);
+                          try {
+                            await addMemberOfMutation.mutateAsync({ groupId: selectedGroupId });
+                            setSelectedGroupId("");
+                          } catch (membershipError) {
+                            const mapped = mapUiError(membershipError, {
+                              fallback: "Unable to add group membership.",
+                              statusMessages: {
+                                409: "This group is provider-managed and cannot be edited in ADE.",
+                              },
+                            });
+                            setError(mapped.message);
+                          }
+                        }}
+                      >
+                        Add membership
+                      </Button>
+                    </div>
+                  </div>
+                  {addMembershipState.reasonText ? (
+                    <p className="mt-2 text-xs text-muted-foreground">{addMembershipState.reasonText}</p>
+                  ) : null}
+                </div>
+
+                {userMemberOfQuery.isLoading ? (
+                  <p className="text-sm text-muted-foreground">Loading memberships...</p>
+                ) : memberOfItems.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No direct group memberships.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {memberOfItems.map((membership) => {
+                      const removeState = resolveAccessActionState({
+                        isDisabled:
+                          !membership.is_member ||
+                          !canManageUserMemberOf ||
+                          membership.source === "idp" ||
+                          membership.membership_mode === "dynamic" ||
+                          removeMemberOfMutation.isPending,
+                        reasonCode: !canManageUserMemberOf
+                          ? "perm_missing"
+                          : membership.source === "idp"
+                            ? "provider_managed"
+                            : membership.membership_mode === "dynamic"
+                              ? "dynamic_membership"
+                              : !membership.is_member
+                                ? "conflict_state"
+                                : null,
+                        reasonText: !membership.is_member
+                          ? "Only direct memberships can be removed here."
+                          : undefined,
+                      });
+                      return (
+                        <div
+                          key={membership.group_id}
+                          className="flex flex-col gap-2 rounded-lg border border-border px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
+                        >
+                          <div className="space-y-1">
+                            <p className="text-sm font-semibold text-foreground">{membership.display_name}</p>
+                            <div className="flex flex-wrap items-center gap-2 text-xs">
+                              <Badge variant="outline">{membership.slug}</Badge>
+                              {membership.is_member ? <Badge variant="secondary">Member</Badge> : null}
+                              {membership.is_owner ? <Badge variant="secondary">Owner</Badge> : null}
+                              <Badge
+                                variant={
+                                  membership.source === "idp" || membership.membership_mode === "dynamic"
+                                    ? "outline"
+                                    : "secondary"
+                                }
+                              >
+                                {membership.source === "idp"
+                                  ? "Provider-managed"
+                                  : membership.membership_mode === "dynamic"
+                                    ? "Dynamic"
+                                    : "Internal"}
+                              </Badge>
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap items-center justify-end gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => onOpenGroup(membership.group_id)}
+                            >
+                              Open group
+                            </Button>
+                            <DisabledActionButton
+                              label="Remove"
+                              disabled={removeState.disabled}
+                              reason={removeState.reasonText}
+                              tone="danger"
+                              onClick={async () => {
+                                setError(null);
+                                try {
+                                  await removeMemberOfMutation.mutateAsync({
+                                    groupId: membership.group_id,
+                                  });
+                                } catch (removeError) {
+                                  const mapped = mapUiError(removeError, {
+                                    fallback: "Unable to remove group membership.",
+                                    statusMessages: {
+                                      409: "This group is provider-managed and cannot be edited in ADE.",
+                                    },
+                                  });
+                                  setError(mapped.message);
+                                }
+                              }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </SettingsSection>
+
           <SettingsSection title="API keys" description="Create and revoke API keys for this user.">
             <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_9rem_auto] md:items-end">
               <FormField label="Name">
@@ -963,5 +1862,46 @@ function ManageUserDrawer({
         </Button>
       </div>
     </SettingsDrawer>
+  );
+}
+
+function DisabledActionButton({
+  label,
+  disabled,
+  reason,
+  tone = "default",
+  onClick,
+}: {
+  readonly label: string;
+  readonly disabled: boolean;
+  readonly reason: string | null;
+  readonly tone?: "default" | "danger";
+  readonly onClick: () => void | Promise<void>;
+}) {
+  const button = (
+    <Button
+      type="button"
+      size="sm"
+      variant={tone === "danger" ? "destructive" : "ghost"}
+      disabled={disabled}
+      onClick={() => {
+        void onClick();
+      }}
+    >
+      {label}
+    </Button>
+  );
+
+  if (!disabled || !reason) {
+    return button;
+  }
+
+  return (
+    <TooltipProvider delayDuration={150}>
+      <Tooltip>
+        <TooltipTrigger asChild>{button}</TooltipTrigger>
+        <TooltipContent side="top">{reason}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }

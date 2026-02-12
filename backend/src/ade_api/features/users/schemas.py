@@ -4,12 +4,14 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Literal
+from uuid import UUID
 
 from pydantic import EmailStr, Field, SecretStr, field_validator, model_validator
 
 from ade_api.common.cursor_listing import CursorPage
 from ade_api.common.ids import UUIDStr
 from ade_api.common.schema import BaseSchema
+from ade_db.models import GroupMembershipMode, GroupSource
 
 
 class UserProfile(BaseSchema):
@@ -177,9 +179,30 @@ class UserCreateResponse(BaseSchema):
     password_provisioning: UserPasswordProvisioning = Field(alias="passwordProvisioning")
 
 
+class UserMemberOfRefCreate(BaseSchema):
+    group_id: UUID = Field(alias="groupId")
+
+
+class UserMemberOfOut(BaseSchema):
+    group_id: UUID
+    display_name: str
+    slug: str
+    source: GroupSource
+    membership_mode: GroupMembershipMode
+    is_member: bool
+    is_owner: bool
+
+
+class UserMemberOfResponse(BaseSchema):
+    items: list[UserMemberOfOut]
+
+
 __all__ = [
     "UserCreate",
     "UserCreateResponse",
+    "UserMemberOfOut",
+    "UserMemberOfRefCreate",
+    "UserMemberOfResponse",
     "UserOut",
     "UserPage",
     "UserPasswordProfile",

@@ -9,6 +9,7 @@ Back to [Docs Home](../README.md).
 1. [Triage Playbook](triage-playbook.md)
 2. [Common Failures](common-failures.md)
 3. [Auth Incident Runbook](auth-incident-runbook.md)
+4. [Access Management Incident Runbook](access-management-incident-runbook.md)
 
 ## Incident Flow
 
@@ -16,3 +17,5 @@ Back to [Docs Home](../README.md).
 - Use [Common Failures](common-failures.md) to map symptoms to likely causes.
 - Escalate auth-specific incidents with
   [Auth Incident Runbook](auth-incident-runbook.md).
+- Use [Access Management Incident Runbook](access-management-incident-runbook.md)
+  for role, assignment, invitation, or provisioning incidents.

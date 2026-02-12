@@ -19,7 +19,7 @@ export function collectRuntimeSettingFieldMeta(
     settings.meta.auth.password.complexity.requireSymbol,
     settings.meta.auth.password.lockout.maxAttempts,
     settings.meta.auth.password.lockout.durationSeconds,
-    settings.meta.auth.identityProvider.jitProvisioningEnabled,
+    settings.meta.auth.identityProvider.provisioningMode,
   ];
 }
 

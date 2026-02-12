@@ -123,3 +123,103 @@ async def test_workspace_owner_invite_existing_user_does_not_duplicate_identity(
 
     assignment_count = await anyio.to_thread.run_sync(_count_workspace_assignments)
     assert assignment_count >= 1
+
+
+async def test_invitation_list_enforces_workspace_scope_read_permissions(
+    async_client: AsyncClient,
+    seed_identity,
+    db_session: Session,
+) -> None:
+    owner = seed_identity.workspace_owner
+    owner_token, _ = await login(async_client, email=owner.email, password=owner.password)
+    member = seed_identity.member
+    member_token, _ = await login(async_client, email=member.email, password=member.password)
+
+    workspace_member_role_id = await anyio.to_thread.run_sync(
+        _workspace_member_role_id,
+        db_session,
+    )
+
+    create_response = await async_client.post(
+        "/api/v1/invitations",
+        json={
+            "invitedUserEmail": "visibility-check@example.com",
+            "workspaceContext": {
+                "workspaceId": str(seed_identity.workspace_id),
+                "roleAssignments": [{"roleId": workspace_member_role_id}],
+            },
+        },
+        headers={"X-API-Key": owner_token},
+    )
+    assert create_response.status_code == 201, create_response.text
+
+    owner_list = await async_client.get(
+        "/api/v1/invitations",
+        params={"workspace_id": str(seed_identity.workspace_id)},
+        headers={"X-API-Key": owner_token},
+    )
+    assert owner_list.status_code == 200, owner_list.text
+    emails = [item["email_normalized"] for item in owner_list.json().get("items", [])]
+    assert "visibility-check@example.com" in emails
+
+    member_list = await async_client.get(
+        "/api/v1/invitations",
+        params={"workspace_id": str(seed_identity.workspace_id)},
+        headers={"X-API-Key": member_token},
+    )
+    assert member_list.status_code == 403
+
+
+async def test_invitation_manage_actions_enforce_scope_permissions(
+    async_client: AsyncClient,
+    seed_identity,
+    db_session: Session,
+) -> None:
+    owner = seed_identity.workspace_owner
+    owner_token, _ = await login(async_client, email=owner.email, password=owner.password)
+    member = seed_identity.member
+    member_token, _ = await login(async_client, email=member.email, password=member.password)
+
+    workspace_member_role_id = await anyio.to_thread.run_sync(
+        _workspace_member_role_id,
+        db_session,
+    )
+
+    create_response = await async_client.post(
+        "/api/v1/invitations",
+        json={
+            "invitedUserEmail": "manage-check@example.com",
+            "workspaceContext": {
+                "workspaceId": str(seed_identity.workspace_id),
+                "roleAssignments": [{"roleId": workspace_member_role_id}],
+            },
+        },
+        headers={"X-API-Key": owner_token},
+    )
+    assert create_response.status_code == 201, create_response.text
+    invitation_id = create_response.json()["id"]
+
+    forbidden_resend = await async_client.post(
+        f"/api/v1/invitations/{invitation_id}/resend",
+        headers={"X-API-Key": member_token},
+    )
+    assert forbidden_resend.status_code == 403
+
+    forbidden_cancel = await async_client.post(
+        f"/api/v1/invitations/{invitation_id}/cancel",
+        headers={"X-API-Key": member_token},
+    )
+    assert forbidden_cancel.status_code == 403
+
+    owner_resend = await async_client.post(
+        f"/api/v1/invitations/{invitation_id}/resend",
+        headers={"X-API-Key": owner_token},
+    )
+    assert owner_resend.status_code == 200, owner_resend.text
+
+    owner_cancel = await async_client.post(
+        f"/api/v1/invitations/{invitation_id}/cancel",
+        headers={"X-API-Key": owner_token},
+    )
+    assert owner_cancel.status_code == 200, owner_cancel.text
+    assert owner_cancel.json()["status"] == "cancelled"

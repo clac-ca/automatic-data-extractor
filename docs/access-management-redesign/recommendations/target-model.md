@@ -4,16 +4,17 @@ This is the single recommended design for hard cutover.
 
 ## Model Overview
 
-Adopt a principal-centric access model:
+Adopt a principal-centric access model with explicit provisioning modes.
 
 - Principals: `user`, `group`
 - Scopes: `organization`, `workspace`
 - Grants: role assignments from principal to scope
-- Membership: user-to-group links (assigned or dynamic)
+- Membership: user-to-group links (internal or provider-managed)
+- Provisioning modes: `disabled | jit | scim`
 
-This yields one mental model across organization and workspace screens:
+Core mental model:
 
-`Principal -> Assignment(s) -> Effective Access`
+`Provisioning Mode -> Principal Records -> Role Assignment(s) -> Effective Access`
 
 ## Resource Set
 
@@ -23,18 +24,37 @@ This yields one mental model across organization and workspace screens:
 4. `roles`
 5. `roleAssignments`
 6. `invitations`
+7. `scim` discovery and provisioning resources (`/scim/v2/...`)
 
 ## RBAC and Scope Rules
 
 1. Role definitions are scope-typed (`organization` or `workspace`).
 2. Assignments enforce scope compatibility.
 3. Effective permissions are union of direct + group-derived grants.
-4. Inactive users have no effective access, regardless of assignments.
+4. Inactive users have no effective access regardless of assignments.
 5. Workspace-owner delegated admin is enabled through workspace permissions, not global user-admin grants.
 
-## Invitation-Driven Provisioning
+## Provisioning Modes
 
-Default user-add flow for workspace access:
+### 1. `disabled`
+
+- No automatic user creation on SSO login.
+- Users enter by invite/admin create only.
+
+### 2. `jit`
+
+- Users may be created on first SSO login if policy permits.
+- Group memberships hydrate at sign-in for that user only.
+- No tenant-wide background sync that provisions unknown users.
+
+### 3. `scim`
+
+- SCIM endpoints provide automated user/group lifecycle.
+- SSO login links existing identity; unknown users are not auto-created by JIT in this mode.
+
+## Invitation-Driven Provisioning for Workspace Owners
+
+Default workspace add flow remains invitation-based:
 
 1. Actor opens workspace principals screen.
 2. Actor enters email and initial workspace role(s).
@@ -43,15 +63,13 @@ Default user-add flow for workspace access:
    - links existing user and creates assignment, or
    - creates invited user + invitation + assignment atomically.
 
-This directly solves the “workspace owner can create users without org user permissions” requirement.
+This solves the delegated-admin requirement without global user-management grants.
 
 ## Groups (Future-Ready, First-Cut Safe)
 
-- Support both:
-  - `assigned` memberships (ADE-managed)
-  - `dynamic` memberships (IdP-managed, read-only in ADE)
-- Keep nested groups out of first cut.
-- Add `external_id` + sync metadata to support Entra/SCIM reconciliation.
+- Support both internal assigned groups and provider-managed groups.
+- Provider-managed groups are read-only in ADE membership mutation APIs.
+- Nested groups remain out of first cut.
 
 ## UI Information Architecture
 
@@ -71,19 +89,15 @@ Principals page includes segmented tabs (Users | Groups) with one shared table +
 
 ## Rejected Alternatives
 
-1. Keep user creation globally privileged only.
-   - Rejected: blocks delegated admin and harms onboarding velocity.
+1. Keep create-user globally privileged only.
 2. Grant workspace owners global user-management permissions.
-   - Rejected: violates least-privilege boundaries.
-3. Build internal dynamic-group rules in first cut.
-   - Rejected: high complexity and delivery risk for hard cutover.
-4. Keep mixed legacy route families.
-   - Rejected: locks in conceptual drift and technical debt.
+3. Keep mixed legacy routes and assignment semantics.
+4. Keep background group sync as implicit user-provisioning path.
+5. Remove JIT entirely and require SCIM for all organizations.
 
-## Why this is the right cutover
+## Why This Model
 
-- It is standard, not bespoke.
-- It aligns to Graph/Entra patterns while respecting ADE constraints.
-- It resolves current UX and policy pain without overbuilding.
-- It is implementation-ready with clear API/data/UI boundaries.
-
+1. It is standard and follows common Graph/SCIM conventions.
+2. It keeps policy boundaries explicit and auditable.
+3. It supports both enterprise and non-enterprise operators.
+4. It simplifies runtime behavior with clear mode ownership.

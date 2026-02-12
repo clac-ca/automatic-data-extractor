@@ -6,8 +6,8 @@ This document anchors the redesign to widely adopted identity-management standar
 
 ### Key conventions
 
-- User creation is a first-class resource operation (`POST /users`).
-- User schema supports enterprise profile fields such as `jobTitle`, `department`, `officeLocation`, `mobilePhone`, and `businessPhones`.
+- User lifecycle is first-class (`POST /users`, `PATCH /users/{id}`).
+- User schema includes enterprise profile fields (`jobTitle`, `department`, `officeLocation`, `mobilePhone`, `businessPhones`, etc.).
 
 Sources:
 
@@ -16,17 +16,17 @@ Sources:
 
 Implication for ADE:
 
-- Extend ADE `users` with common enterprise profile attributes now, even if some are initially nullable and IdP-synced later.
+- Keep ADE user schema aligned with common enterprise identity fields.
 
 ## 2. Microsoft Graph: Groups and Membership
 
 ### Key conventions
 
-- Groups are first-class resources (`/groups`).
-- Membership management uses reference endpoints:
+- Groups are first-class (`/groups`).
+- Membership writes use reference endpoints:
   - `POST /groups/{groupId}/members/$ref`
   - `DELETE /groups/{groupId}/members/{memberId}/$ref`
-- Graph also exposes membership reads (`/groups/{groupId}/members`) and user membership traversals (`/users/{id}/memberOf`, `/users/{id}/transitiveMemberOf`).
+- User-centric group traversal is available (`/users/{id}/memberOf`).
 
 Sources:
 
@@ -37,15 +37,13 @@ Sources:
 
 Implication for ADE:
 
-- Use Graph-like membership routes and semantics to avoid bespoke endpoint design.
-- Store effective access as the union of direct and group-derived assignments.
+- Keep Graph-like membership semantics in ADE API (`$ref` routes) to avoid bespoke design.
 
 ## 3. Microsoft Graph: Invitations
 
 ### Key conventions
 
-- Invitation is explicit (`POST /invitations`) and includes email and redirect context.
-- Graph supports delegated invitation behavior (including non-admin usage under policy).
+- Invitation is explicit (`POST /invitations`) and policy-aware.
 
 Source:
 
@@ -53,14 +51,13 @@ Source:
 
 Implication for ADE:
 
-- Workspace-owner “create user” should be modeled as an invitation resource with optional immediate workspace assignment.
+- Workspace-owner onboarding should remain invitation-first, not hidden side effects.
 
-## 4. OData Query Semantics (Graph)
+## 4. OData Query Semantics
 
 ### Key conventions
 
-- Standard list behavior relies on OData-style operators (`$filter`, `$select`, `$orderby`, `$top`, `$count`, etc.).
-- Advanced queries often require `ConsistencyLevel: eventual` plus `$count=true`.
+- Graph list APIs use query parameters such as `$filter`, `$select`, `$orderby`, `$top`, `$count`.
 
 Sources:
 
@@ -69,52 +66,82 @@ Sources:
 
 Implication for ADE:
 
-- Keep ADE list APIs cursor-based but add Graph-like query compatibility where practical:
-  - canonical filter keys
-  - predictable sort behavior
-  - explicit consistency semantics for complex filters.
+- Keep ADE cursor pagination but allow predictable filter/sort behavior and optional Graph-like query aliasing.
 
-## 5. Entra Dynamic Groups
+## 5. Group Claims Overage and Runtime Membership Fetch
 
 ### Key conventions
 
-- Dynamic membership is rule-driven and distinct from assigned membership.
-- Dynamic groups are provider-managed; manual membership operations are not equivalent to assigned groups.
+- Large group sets may not fit reliably in tokens; Entra guidance calls out group overage and using Graph lookup patterns.
 
 Source:
 
-- [Dynamic membership groups (Microsoft Entra)](https://learn.microsoft.com/en-us/entra/identity/users/groups-dynamic-membership)
+- [Configure group claims and app roles in tokens](https://learn.microsoft.com/en-us/security/zero-trust/develop/configure-tokens-group-claims-app-roles)
 
 Implication for ADE:
 
-- Model group `membership_mode` as `assigned | dynamic`.
-- For first cut, treat dynamic groups as read-only from ADE and sourced from IdP sync.
+- In JIT mode, membership hydration at sign-in should use user-specific Graph calls rather than trusting token group claims alone.
 
-## 6. SCIM Provisioning Standards
+## 6. Entra Provisioning Guidance: Graph vs SCIM
 
 ### Key conventions
 
-- SCIM defines interoperable user/group schemas and protocol operations.
-- Core resources: `/Users`, `/Groups`, schema discovery, service provider configuration.
-- Enterprise user extension supports attributes such as employee number and department.
+- Graph-based sync and SCIM-based provisioning are distinct integration models.
+- SCIM is the standard protocol choice for app provisioning interoperability.
 
 Sources:
 
-- [SCIM endpoint guidance (Microsoft Entra)](https://learn.microsoft.com/en-us/entra/identity/app-provisioning/use-scim-to-provision-users-and-groups)
-- [RFC 7643 SCIM Core Schema](https://datatracker.ietf.org/doc/rfc7643/)
-- [RFC 7644 SCIM Protocol](https://datatracker.ietf.org/doc/rfc7644/)
+- [Choose between Microsoft Graph and SCIM for user and group provisioning](https://learn.microsoft.com/en-us/entra/identity/app-provisioning/scim-graph-scenarios)
+- [Use SCIM to provision users and groups](https://learn.microsoft.com/en-us/entra/identity/app-provisioning/use-scim-to-provision-users-and-groups)
 
 Implication for ADE:
 
-- Keep internal model SCIM-compatible now so future SCIM inbound provisioning does not require another schema rewrite.
-- Add stable external-id mapping on users/groups/memberships for IdP reconciliation.
+- Provide explicit provisioning-mode choice so operators know which channel is authoritative.
+
+## 7. SCIM Protocol Requirements
+
+### Key conventions
+
+- Standard endpoint families include:
+  - `/ServiceProviderConfig`
+  - `/ResourceTypes`
+  - `/Schemas`
+  - `/Users`
+  - `/Groups`
+- Standard operations include filtering, pagination, and PATCH semantics.
+
+Sources:
+
+- [RFC 7644 SCIM Protocol](https://datatracker.ietf.org/doc/html/rfc7644)
+- [RFC 7643 SCIM Core Schema](https://datatracker.ietf.org/doc/html/rfc7643)
+
+Implication for ADE:
+
+- If ADE ships SCIM, it should follow standard `/scim/v2` resource layout and behavior rather than custom provisioning routes.
 
 ## ADE Standards Checklist (Derived)
 
-1. Resource-first APIs for users, groups, invitations, and role assignments.
-2. Principal-aware grants (`user` and `group`) at both org and workspace scope.
-3. `$ref` style group membership operations.
-4. Invitation records with lifecycle state and audit metadata.
-5. Dynamic groups: IdP-owned, read-only in ADE first cut.
-6. SCIM/Entra-compatible identity fields and external IDs.
+1. Principal-aware RBAC (`user|group`) with consistent org/workspace scope handling.
+2. Invitation-first explicit onboarding flow for delegated workspace admins.
+3. Provider-managed groups are read-only in ADE membership mutation endpoints.
+4. Provisioning mode is explicit per organization: `disabled | jit | scim`.
+5. JIT mode uses per-user sign-in membership hydration; no hidden tenant-wide user provisioning.
+6. SCIM mode uses standards-shaped `/scim/v2` endpoints and becomes automated provisioning authority.
 
+## 8. Graph Bulk Semantics
+
+### Key conventions
+
+1. Graph bulk request execution is modeled with `POST /$batch`, not user-specific bulk CRUD routes.
+2. Graph batches have a practical limit of 20 subrequests with per-item status outcomes.
+3. Graph supports subrequest dependencies (`dependsOn`) for ordered execution.
+4. Throttling in batch is per-subrequest; clients retry failed items only.
+
+Sources:
+
+- [JSON batching](https://learn.microsoft.com/en-us/graph/json-batching)
+- [Microsoft Graph throttling](https://learn.microsoft.com/en-us/graph/throttling)
+
+Implication for ADE:
+
+Use Graph-style `POST /api/v1/$batch` for bulk user operations and keep SCIM `/Bulk` out of initial scope.

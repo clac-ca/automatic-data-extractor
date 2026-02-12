@@ -61,7 +61,7 @@ async def test_read_admin_settings_defaults(async_client: AsyncClient, seed_iden
     }
     assert payload["values"]["auth"]["mode"] == "password_only"
     assert payload["values"]["auth"]["password"]["resetEnabled"] is True
-    assert payload["values"]["auth"]["identityProvider"]["jitProvisioningEnabled"] is True
+    assert payload["values"]["auth"]["identityProvider"]["provisioningMode"] == "jit"
     assert payload["meta"]["auth"]["mode"]["restartRequired"] is False
 
 
@@ -231,7 +231,7 @@ async def test_patch_allows_idp_only_with_active_provider(
                 "auth": {
                     "mode": "idp_only",
                     "identityProvider": {
-                        "jitProvisioningEnabled": False,
+                        "provisioningMode": "disabled",
                     },
                 }
             },
@@ -241,7 +241,7 @@ async def test_patch_allows_idp_only_with_active_provider(
     assert response.status_code == 200, response.text
     payload = response.json()
     assert payload["values"]["auth"]["mode"] == "idp_only"
-    assert payload["values"]["auth"]["identityProvider"]["jitProvisioningEnabled"] is False
+    assert payload["values"]["auth"]["identityProvider"]["provisioningMode"] == "disabled"
 
 
 async def test_patch_rejects_locked_and_unlocked_changes_atomically(
@@ -390,3 +390,51 @@ async def test_patch_rejects_env_locked_password_reset_setting(
     )
     assert blocked.status_code == 409, blocked.text
     assert "setting_locked_by_env" in _error_codes(blocked.json())
+
+
+async def test_read_admin_settings_normalizes_legacy_jit_flag(
+    async_client: AsyncClient,
+    seed_identity,
+    db_session: Session,
+) -> None:
+    record = db_session.get(ApplicationSetting, 1)
+    assert record is not None
+    record.data = {
+        "safe_mode": {
+            "enabled": False,
+            "detail": DEFAULT_SAFE_MODE_DETAIL,
+        },
+        "auth": {
+            "mode": "password_and_idp",
+            "password": {
+                "reset_enabled": True,
+                "mfa_required": False,
+                "complexity": {
+                    "min_length": 12,
+                    "require_uppercase": False,
+                    "require_lowercase": False,
+                    "require_number": False,
+                    "require_symbol": False,
+                },
+                "lockout": {
+                    "max_attempts": 5,
+                    "duration_seconds": 300,
+                },
+            },
+            "identity_provider": {
+                "jit_provisioning_enabled": False,
+            },
+        },
+    }
+    db_session.flush()
+
+    admin = seed_identity.admin
+    token, _ = await login(async_client, email=admin.email, password=admin.password)
+
+    response = await async_client.get(
+        "/api/v1/admin/settings",
+        headers={"X-API-Key": token},
+    )
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["values"]["auth"]["identityProvider"]["provisioningMode"] == "disabled"

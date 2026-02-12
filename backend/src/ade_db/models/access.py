@@ -141,6 +141,12 @@ class Group(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         cascade="all, delete-orphan",
         lazy="selectin",
     )
+    owners: Mapped[list[GroupOwner]] = relationship(
+        "GroupOwner",
+        back_populates="group",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
 
     __table_args__ = (
         Index("ix_groups_slug", "slug"),
@@ -178,6 +184,37 @@ class GroupMembership(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         UniqueConstraint("group_id", "user_id", name="uq_group_memberships_group_user"),
         Index("ix_group_memberships_group_id", "group_id"),
         Index("ix_group_memberships_user_id", "user_id"),
+    )
+
+
+class GroupOwner(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    """Explicit relation from user to group ownership."""
+
+    __tablename__ = "group_owners"
+
+    group_id: Mapped[UUID] = mapped_column(
+        GUID(),
+        ForeignKey("groups.id", ondelete="NO ACTION"),
+        nullable=False,
+    )
+    user_id: Mapped[UUID] = mapped_column(
+        GUID(),
+        ForeignKey("users.id", ondelete="NO ACTION"),
+        nullable=False,
+    )
+    ownership_source: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="internal",
+        server_default="internal",
+    )
+
+    group: Mapped[Group] = relationship("Group", back_populates="owners")
+
+    __table_args__ = (
+        UniqueConstraint("group_id", "user_id", name="uq_group_owners_group_user"),
+        Index("ix_group_owners_group_id", "group_id"),
+        Index("ix_group_owners_user_id", "user_id"),
     )
 
 
@@ -282,6 +319,7 @@ __all__ = [
     "AssignmentScopeType",
     "Group",
     "GroupMembership",
+    "GroupOwner",
     "GroupMembershipMode",
     "GroupSource",
     "Invitation",

@@ -8,8 +8,15 @@ export type AdminRoleCreateRequest = components["schemas"]["RoleCreate"];
 export type AdminRoleUpdateRequest = components["schemas"]["RoleUpdate"];
 export type AdminPermissionPage = components["schemas"]["PermissionPage"];
 export type AdminPermission = components["schemas"]["PermissionOut"];
-export type AdminUserRoles = components["schemas"]["UserRolesEnvelope"];
 type RoleAssignmentOut = components["schemas"]["RoleAssignmentOut"];
+export interface AdminUserRoles {
+  readonly user_id: string;
+  readonly roles: ReadonlyArray<{
+    readonly role_id: string;
+    readonly role_slug: string;
+    readonly created_at: string;
+  }>;
+}
 
 async function listOrganizationRoleAssignments(signal?: AbortSignal): Promise<RoleAssignmentOut[]> {
   const { data } = await client.GET("/api/v1/roleAssignments", { signal });
@@ -69,9 +76,11 @@ export async function updateAdminRole(
   options: { ifMatch?: string | null } = {},
 ): Promise<AdminRole> {
   const { data } = await client.PATCH("/api/v1/roles/{roleId}", {
-    params: { path: { roleId } },
+    params: {
+      path: { roleId },
+      header: { "If-Match": options.ifMatch ?? "*" },
+    },
     body: payload,
-    headers: options.ifMatch ? { "If-Match": options.ifMatch } : undefined,
   });
 
   if (!data) {
@@ -83,8 +92,10 @@ export async function updateAdminRole(
 
 export async function deleteAdminRole(roleId: string, options: { ifMatch?: string | null } = {}): Promise<void> {
   await client.DELETE("/api/v1/roles/{roleId}", {
-    params: { path: { roleId } },
-    headers: { "If-Match": options.ifMatch ?? "*" },
+    params: {
+      path: { roleId },
+      header: { "If-Match": options.ifMatch ?? "*" },
+    },
   });
 }
 
@@ -168,7 +179,9 @@ export async function removeAdminUserRole(
   );
   if (!assignment) return;
   await client.DELETE("/api/v1/roleAssignments/{assignmentId}", {
-    params: { path: { assignmentId: assignment.id } },
-    headers: { "If-Match": options.ifMatch ?? "*" },
+    params: {
+      path: { assignmentId: assignment.id },
+      header: { "If-Match": options.ifMatch ?? "*" },
+    },
   });
 }

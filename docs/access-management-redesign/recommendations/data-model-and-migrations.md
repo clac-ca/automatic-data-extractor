@@ -2,150 +2,87 @@
 
 ## Goals
 
-1. Replace user-only access grants with principal-aware assignments.
-2. Add first-class groups and memberships.
-3. Expand user profile schema for common AD/Entra fields.
-4. Preserve auditability and sync readiness.
+1. Keep principal-aware access grants as the RBAC foundation.
+2. Keep user/group schema compatible with Graph + SCIM attributes.
+3. Support explicit provisioning modes without schema sprawl.
+4. Keep migration path simple and operationally safe.
 
-## Target Schema Changes
+## Core Schema Shape
 
-## 1. `users` table extensions
+## 1. `users` table
 
-Add nullable columns:
+Expected fields include:
 
-- `given_name`
-- `surname`
-- `job_title`
-- `department`
-- `office_location`
-- `mobile_phone`
-- `business_phones` (JSON/text array)
-- `employee_id`
-- `employee_type`
-- `preferred_language`
-- `city`
-- `state`
-- `country`
-- `source` (`internal|idp|scim`)
-- `external_id` (IdP/SCIM correlation key)
-- `last_synced_at`
+- identity: `email`, `email_normalized`, `display_name`
+- enterprise profile: `given_name`, `surname`, `job_title`, `department`, `office_location`, `mobile_phone`, `business_phones`, `employee_id`, `employee_type`, `preferred_language`, `city`, `state`, `country`
+- lifecycle/source: `is_active`, `source`, `external_id`, `last_synced_at`
 
-Constraints:
+Notes:
 
-- Unique index on `(source, external_id)` when `external_id` is not null.
+- `source` should distinguish internal/JIT/SCIM ownership (`internal`, `idp`, `scim`).
+- `external_id` should remain provider correlation key.
 
-## 2. `groups` (new)
+## 2. `groups` table
 
-Columns:
+Expected fields include:
 
-- `id` (UUID)
-- `display_name`
-- `slug`
-- `description`
-- `membership_mode` (`assigned|dynamic`)
-- `source` (`internal|idp`)
-- `external_id` (nullable)
-- `is_active`
-- `created_at`, `updated_at`
+- `display_name`, `slug`, `description`
+- `membership_mode` (assigned/provider-managed)
+- `source` (`internal` or provider-managed)
+- `external_id`, `is_active`
 
-Constraints:
+## 3. `group_memberships` table
 
-- Unique `slug`
-- Unique `(source, external_id)` when `external_id` is not null
+Expected fields include:
 
-## 3. `group_memberships` (new)
+- `group_id`, `user_id`
+- `membership_source` (`internal` or provider-managed)
+- uniqueness on `(group_id, user_id)`
 
-Columns:
+## 4. `role_assignments` table
 
-- `id` (UUID)
-- `group_id`
-- `user_id`
-- `membership_source` (`internal|idp_sync`)
-- `created_at`, `updated_at`
+Principal-aware assignment shape:
 
-Constraints:
+- `principal_type`, `principal_id`
+- `role_id`
+- `scope_type`, `scope_id`
+- scope consistency constraints and uniqueness across principal+role+scope
 
-- Unique `(group_id, user_id)`
-- FK to `groups`, FK to `users`
+## 5. `invitations` table
 
-## 4. `role_assignments` (new normalized table)
+Lifecycle model:
 
-Replace `user_role_assignments` with:
+- `email_normalized`, `invited_user_id`, `invited_by_user_id`
+- `status`, `expires_at`, `redeemed_at`, `metadata`
 
-- `id` (UUID)
-- `principal_type` (`user|group`)
-- `principal_id` (UUID)
-- `role_id` (UUID)
-- `scope_type` (`organization|workspace`)
-- `scope_id` (UUID nullable; null for organization)
-- `created_at`
+## 6. Provisioning mode storage
 
-Constraints:
+Provisioning mode is policy/config, not identity data.
 
-- Unique `(principal_type, principal_id, role_id, scope_type, scope_id)`
-- FK `role_id -> roles.id`
-- check constraint: `scope_type=organization => scope_id is null`
-- check constraint: `scope_type=workspace => scope_id is not null`
+Recommended storage:
 
-## 5. `invitations` (new)
+- runtime settings payload (`application_settings.data.auth.identity_provider.provisioning_mode`)
+- enum values: `disabled | jit | scim`
 
-Columns:
+No standalone table is required for provisioning mode itself.
 
-- `id` (UUID)
-- `email_normalized`
-- `invited_user_id` (nullable FK users)
-- `status` (`pending|accepted|expired|cancelled`)
-- `invited_by_user_id`
-- `expires_at`
-- `redeemed_at`
-- `metadata` (JSON: workspace context, role seed)
-- `created_at`, `updated_at`
+## Migration Constraint (Locked)
 
-## Migration Strategy (Hard Cutover)
+`0002_access_model_hard_cutover` has not been deployed yet. If schema updates are required for this redesign, update migration in place:
 
-### Phase 0: Preflight checks
+- `backend/src/ade_db/migrations/versions/0002_access_model_hard_cutover.py`
 
-1. Snapshot DB.
-2. Export current role assignments and workspace memberships.
-3. Verify no orphaned `user_role_assignments` rows.
+Do not create a new migration revision for this iteration.
 
-### Phase 1: Additive schema deployment
+## Migration Strategy
 
-1. Add new tables (`groups`, `group_memberships`, `role_assignments`, `invitations`).
-2. Add new user profile columns.
-3. Keep old routes disabled until app cutover deploy.
-
-### Phase 2: Backfill and transform
-
-1. Backfill `role_assignments` from `user_role_assignments`:
-   - `principal_type='user'`
-   - `principal_id=user_id`
-   - `scope_type='organization'` when `workspace_id is null`
-   - `scope_type='workspace'` and `scope_id=workspace_id` otherwise
-2. Validate assignment counts and unique constraints.
-3. Maintain `workspace_memberships` only for workspace preference/default behavior (not RBAC grant source).
-
-### Phase 3: Application cutover
-
-1. Deploy backend using only new assignment model and new routes.
-2. Deploy frontend route/IA cutover in same release.
-3. Start writing audit events for invitations/group changes.
-
-### Phase 4: Cleanup
-
-1. Drop `user_role_assignments` after verification window.
-2. Remove obsolete route handlers and frontend hooks.
-3. Regenerate API types.
+1. Keep migration idempotent and parity-checked.
+2. Validate transformed assignment counts before app boot.
+3. Keep rollback snapshot-based (downgrade script remains unsupported).
 
 ## Data Integrity and Audit Requirements
 
-1. Every create/delete assignment action writes structured audit events.
-2. Invitation lifecycle transitions are auditable.
-3. Group sync updates include source event correlation IDs.
-4. Deactivated users are excluded from effective-access materialization/evaluation.
-
-## Rollback Considerations
-
-- Because this is hard cutover, rollback must restore DB snapshot and previous app image as a pair.
-- Keep migration scripts reversible where possible, but plan operational rollback at deployment level.
-
+1. Every assignment mutation writes structured audit events.
+2. Invitation transitions are auditable.
+3. Provider-managed group changes record channel (`jit` hydration or `scim`).
+4. Deactivated users are excluded from effective-access evaluation.

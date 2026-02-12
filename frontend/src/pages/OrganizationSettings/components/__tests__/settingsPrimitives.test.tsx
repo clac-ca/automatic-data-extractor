@@ -39,7 +39,7 @@ const settingsFixture: AdminSettingsReadResponse = {
         },
       },
       identityProvider: {
-        jitProvisioningEnabled: true,
+        provisioningMode: "jit",
       },
     },
   },
@@ -126,10 +126,10 @@ const settingsFixture: AdminSettingsReadResponse = {
         },
       },
       identityProvider: {
-        jitProvisioningEnabled: {
+        provisioningMode: {
           source: "db",
           lockedByEnv: false,
-          envVar: "ADE_AUTH_IDP_JIT_PROVISIONING_ENABLED",
+          envVar: "ADE_AUTH_IDP_PROVISIONING_MODE",
           restartRequired: false,
         },
       },
