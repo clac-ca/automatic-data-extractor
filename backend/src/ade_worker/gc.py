@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import shutil
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from sqlalchemy import text
@@ -139,7 +139,7 @@ def run_gc(settings: Settings | None = None) -> tuple[GcResult, GcResult | None]
         worker_venvs_root=settings.worker_venvs_dir,
         worker_pip_cache_root=settings.worker_uv_cache_dir,
     )
-    now = datetime.utcnow().replace(tzinfo=None)
+    now = datetime.now(timezone.utc)
 
     cache_result = gc_local_venv_cache(
         paths=paths,
