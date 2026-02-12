@@ -12,5 +12,7 @@ export const adminKeys = {
   userApiKeys: (userId: string) => [...adminKeys.apiKeys(), "user", userId] as const,
   sso: () => [...adminKeys.all(), "sso"] as const,
   ssoProviders: () => [...adminKeys.sso(), "providers"] as const,
+  scim: () => [...adminKeys.all(), "scim"] as const,
+  scimTokens: () => [...adminKeys.scim(), "tokens"] as const,
   settings: () => [...adminKeys.all(), "settings"] as const,
 };

@@ -33,11 +33,11 @@ uv run ade api types
 | Area | Typical URL prefixes | Main use | Detailed reference |
 | --- | --- | --- | --- |
 | Auth | `/api/v1/auth/*`, `/api/v1/me*` | sign-in, session bootstrap, API-key identity checks | [Authentication API](api/authentication.md) |
-| Workspaces | `/api/v1/workspaces*` | create/update workspaces, manage members | [Workspaces API](api/workspaces.md) |
+| Workspaces | `/api/v1/workspaces*` | create/update workspaces | [Workspaces API](api/workspaces.md) |
 | Configurations | `/api/v1/workspaces/{workspaceId}/configurations*` | draft/import/archive configurations and manage config files | [Configurations API](api/configurations.md) |
 | Documents | `/api/v1/workspaces/{workspaceId}/documents*` | upload, version, tag, preview, and stream document changes | [Documents API](api/documents.md) |
 | Runs | `/api/v1/runs*`, `/api/v1/workspaces/{workspaceId}/runs*` | create runs, monitor status, stream events, and download output | [Runs API](api/runs.md) |
-| Roles/Permissions | `/api/v1/roles*`, `/api/v1/permissions*`, `/api/v1/roleassignments*` | access-control administration | [Manage Users and Access](../how-to/manage-users-and-access.md) |
+| Access management | `/api/v1/users*`, `/api/v1/groups*`, `/api/v1/invitations*`, `/api/v1/roles*`, `/api/v1/permissions*`, `/api/v1/roleAssignments*`, `/api/v1/$batch`, `/scim/v2/*` | users, groups, assignments, invitations, provisioning | [Access Management API](api/access-management.md) |
 | System | `/api/v1/admin/settings` | view/change runtime settings (`safeMode`, auth policy) with env-lock metadata and revision-based updates | [Manage Runtime Settings](../how-to/manage-runtime-settings.md) |
 | Health/Meta | `/api/v1/health`, `/api/v1/info`, `/api/v1/meta/versions` | health checks and runtime metadata | [CLI Reference](cli-reference.md) |
 
@@ -68,3 +68,12 @@ Use: [Upload a Document and Queue Runs](../how-to/api-upload-and-queue-runs.md) 
 4. Archive superseded configurations.
 
 Use: [Manage Configurations via API](../how-to/api-manage-configurations.md)
+
+### Access Administration
+
+1. List users and groups.
+2. Create invitations and seed workspace assignments.
+3. Create/remove role assignments for user or group principals.
+4. Use `POST /api/v1/$batch` for high-volume user lifecycle updates.
+
+Use: [Manage Users and Access](../how-to/manage-users-and-access.md)

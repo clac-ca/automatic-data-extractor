@@ -22,7 +22,7 @@ const defaultWorkspaceListParams = {
   q: null,
 };
 
-const defaultMemberListParams = {
+const defaultPrincipalListParams = {
   page: 1,
   pageSize: DEFAULT_MEMBER_PAGE_SIZE,
 };
@@ -43,8 +43,10 @@ export const workspacesKeys = {
   list: (params: Record<string, unknown> = defaultWorkspaceListParams) =>
     [...workspacesKeys.all(), "list", params] as const,
   detail: (workspaceId: string) => [...workspacesKeys.all(), "detail", workspaceId] as const,
-  members: (workspaceId: string, params: Record<string, unknown> = defaultMemberListParams) =>
-    [...workspacesKeys.detail(workspaceId), "members", params] as const,
+  principals: (workspaceId: string, params: Record<string, unknown> = defaultPrincipalListParams) =>
+    [...workspacesKeys.detail(workspaceId), "principals", params] as const,
+  members: (workspaceId: string, params: Record<string, unknown> = defaultPrincipalListParams) =>
+    [...workspacesKeys.detail(workspaceId), "principals", params] as const,
   roles: (workspaceId: string, params: Record<string, unknown> = defaultRoleListParams) =>
     [...workspacesKeys.detail(workspaceId), "roles", params] as const,
   permissions: (params: Record<string, unknown> = defaultPermissionListParams) =>

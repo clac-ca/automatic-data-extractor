@@ -256,3 +256,14 @@ export class ApiError extends Error {
     this.problem = problem;
   }
 }
+
+export function hasProblemCode(error: unknown, code: string): boolean {
+  if (!(error instanceof ApiError)) {
+    return false;
+  }
+  const errors = error.problem?.errors;
+  if (!errors || errors.length === 0) {
+    return false;
+  }
+  return errors.some((item) => item.code === code);
+}

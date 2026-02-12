@@ -11,6 +11,7 @@ from pydantic import Field
 from ade_api.common.schema import BaseSchema
 
 AuthMode = Literal["password_only", "idp_only", "password_and_idp"]
+ProvisioningMode = Literal["disabled", "jit", "scim"]
 
 
 class RuntimeSafeModeValues(BaseSchema):
@@ -39,7 +40,7 @@ class RuntimePasswordValues(BaseSchema):
 
 
 class RuntimeIdentityProviderValues(BaseSchema):
-    jit_provisioning_enabled: bool = Field(alias="jitProvisioningEnabled")
+    provisioning_mode: ProvisioningMode = Field(alias="provisioningMode")
 
 
 class RuntimeAuthValues(BaseSchema):
@@ -86,7 +87,7 @@ class RuntimePasswordMeta(BaseSchema):
 
 
 class RuntimeIdentityProviderMeta(BaseSchema):
-    jit_provisioning_enabled: RuntimeSettingFieldMeta = Field(alias="jitProvisioningEnabled")
+    provisioning_mode: RuntimeSettingFieldMeta = Field(alias="provisioningMode")
 
 
 class RuntimeAuthMeta(BaseSchema):
@@ -135,7 +136,7 @@ class RuntimePasswordPatch(BaseSchema):
 
 
 class RuntimeIdentityProviderPatch(BaseSchema):
-    jit_provisioning_enabled: bool | None = Field(default=None, alias="jitProvisioningEnabled")
+    provisioning_mode: ProvisioningMode | None = Field(default=None, alias="provisioningMode")
 
 
 class RuntimeAuthPatch(BaseSchema):
@@ -167,6 +168,7 @@ __all__ = [
     "RuntimeIdentityProviderMeta",
     "RuntimeIdentityProviderPatch",
     "RuntimeIdentityProviderValues",
+    "ProvisioningMode",
     "RuntimePasswordComplexityMeta",
     "RuntimePasswordComplexityPatch",
     "RuntimePasswordComplexityValues",

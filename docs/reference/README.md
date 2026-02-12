@@ -17,6 +17,7 @@ Back to [Docs Home](../README.md).
 
 - [Backend Service Module Contract](backend-service-module-contract.md)
 - [Auth Architecture](auth-architecture.md)
+- [Access Reference](access/README.md)
 - [API Capability Map](api-capability-map.md)
 
 ## Subsections

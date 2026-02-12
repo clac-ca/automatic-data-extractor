@@ -115,7 +115,7 @@ class AuthnService:
             password_require_symbol=bool(complexity.require_symbol),
             password_lockout_max_attempts=int(lockout.max_attempts),
             password_lockout_duration_seconds=int(lockout.duration_seconds),
-            idp_jit_provisioning_enabled=bool(resolved.identity_provider.jit_provisioning_enabled),
+            idp_provisioning_mode=resolved.identity_provider.provisioning_mode,
         )
 
     # ------------------------------------------------------------------

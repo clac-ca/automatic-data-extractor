@@ -84,6 +84,28 @@ def test_openapi_exposes_expected_tag_metadata_and_security_schemes() -> None:
     assert "APIKeyHeader" in security_schemes
 
 
+def test_role_assignment_delete_does_not_require_if_match_header() -> None:
+    schema = _openapi_schema(public_web_url="https://ade.example.test")
+    operation = schema["paths"]["/api/v1/roleAssignments/{assignmentId}"]["delete"]
+    parameters = operation.get("parameters", [])
+    components = schema.get("components", {}).get("parameters", {})
+
+    header_names: set[str] = set()
+    for parameter in parameters:
+        if "$ref" in parameter:
+            ref = str(parameter["$ref"])
+            ref_name = ref.rsplit("/", 1)[-1]
+            resolved = components.get(ref_name, {})
+            if resolved.get("in") == "header" and isinstance(resolved.get("name"), str):
+                header_names.add(resolved["name"])
+            continue
+
+        if parameter.get("in") == "header" and isinstance(parameter.get("name"), str):
+            header_names.add(parameter["name"])
+
+    assert "If-Match" not in header_names
+
+
 def test_generated_openapi_file_matches_runtime_schema() -> None:
     schema = _openapi_schema(public_web_url=CANONICAL_SERVER_URL)
     schema["servers"] = [{"url": CANONICAL_SERVER_URL}]

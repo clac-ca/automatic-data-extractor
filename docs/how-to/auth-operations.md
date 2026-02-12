@@ -2,9 +2,11 @@
 
 ## Goal
 
-Operate ADE authentication safely in production using the Authentication Policy V2 model.
+Operate ADE authentication and identity provisioning safely in production.
 
 ## Canonical Routes
+
+Authentication and admin settings:
 
 - `POST /api/v1/auth/login`
 - `POST /api/v1/auth/logout`
@@ -12,123 +14,78 @@ Operate ADE authentication safely in production using the Authentication Policy 
 - `POST /api/v1/auth/password/reset`
 - `POST /api/v1/auth/password/change`
 - `POST /api/v1/auth/mfa/challenge/verify`
-- `POST /api/v1/admin/sso/providers/validate`
-- `GET/POST/PATCH/DELETE /api/v1/admin/sso/providers*`
 - `GET/PATCH /api/v1/admin/settings`
+- `GET/POST/PATCH/DELETE /api/v1/admin/sso/providers*`
 
-Do not use removed legacy auth route namespaces.
+SCIM and provisioning:
+
+- `GET/POST /api/v1/admin/scim/tokens`
+- `POST /api/v1/admin/scim/tokens/{tokenId}/revoke`
+- `/scim/v2/*`
 
 ## Authentication Policy Model
 
-Runtime policy lives in `auth` under `/api/v1/admin/settings`:
+Runtime auth policy is managed under `/api/v1/admin/settings`:
 
 - `auth.mode`: `password_only | idp_only | password_and_idp`
-- `auth.password.*`: password-reset, MFA requirement, complexity, lockout
-- `auth.identityProvider.jitProvisioningEnabled`
+- `auth.password.*`: reset, MFA, complexity, lockout
+- `auth.identityProvider.provisioningMode`: `disabled | jit | scim`
 
-## Setup First, Policy Second
+## Setup Order
 
-Use this rollout order:
+Use this sequence:
 
-1. Configure provider metadata.
-2. Validate provider connection (`POST /api/v1/admin/sso/providers/validate`).
-3. Save provider and set provider status.
-4. Update `auth.mode` and related policy settings.
+1. configure and validate IdP provider metadata
+2. set provider status (`active`/`disabled`)
+3. set auth mode and password policy
+4. set provisioning mode
+5. if using SCIM, issue SCIM token and validate SCIM endpoint behavior
 
-Provider setup does not auto-change policy mode.
+## Provisioning Mode Behavior
 
-## Provider Lifecycle
+### `disabled`
 
-Preferred lifecycle API is `PATCH /api/v1/admin/sso/providers/{id}`:
+1. unknown SSO users are denied
+2. provisioning paths are invitation and admin create
 
-- set `status=active` to enable provider sign-in
-- set `status=disabled` to disable provider sign-in
+### `jit`
 
-UI/API status values are user-facing only: `active` and `disabled`.
+1. unknown users can be created/linked at successful sign-in (policy dependent)
+2. signed-in user memberships are hydrated from provider after login
 
-## Mode Behavior
+### `scim`
 
-- `password_only`: password sign-in available; IdP sign-in unavailable.
-- `password_and_idp`: both sign-in methods available.
-- `idp_only`: organization members use IdP sign-in; global admins still have password + MFA break-glass access.
+1. unknown SSO users are denied auto-provisioning
+2. SCIM and invitation paths provide identity provisioning
 
-## Password Reset Behavior
+## IdP Group Membership Contract
 
-Password reset is available only when:
+1. membership hydration occurs for signed-in user only in JIT path
+2. hydration failures do not block login
+3. provider-managed groups are read-only in manual membership endpoints
 
-- `auth.password.resetEnabled=true`
-- `auth.mode != idp_only`
+## Password and MFA Behavior
 
-Forgot/reset endpoints return `403` when reset is disabled by policy.
+1. password reset requires reset enabled and compatible auth mode
+2. MFA requirement applies to password-authenticated sessions
+3. forced password-change users are limited to onboarding-safe routes until password change succeeds
 
-## MFA Behavior
+## SCIM Operations
 
-- `auth.password.mfaRequired=true` requires MFA enrollment for password-authenticated sessions before protected API access.
-- SSO and API-key sessions are not forced by password MFA policy.
-
-## Password Policy Behavior
-
-Password checks use runtime settings:
-
-- `auth.password.complexity.*`
-- `auth.password.lockout.*`
-
-These are enforced for:
-
-- first-admin creation
-- admin-created/reset passwords
-- password reset flow
-- failed password login lockout
-
-## User Provisioning Contract
-
-`POST /api/v1/users` now requires `passwordProfile`:
-
-- `mode=explicit`: caller provides `passwordProfile.password`.
-- `mode=auto_generate`: API generates a compliant password and returns it one time in `passwordProvisioning.initialPassword`.
-- `forceChangeOnNextSignIn`: when `true`, user must change password before normal app access.
-
-No implicit hidden-random-password behavior is supported.
-
-## Forced Password Change Behavior
-
-- Login success includes `passwordChangeRequired`.
-- Flagged users can access onboarding endpoints
-  (`/api/v1/me/bootstrap`, MFA routes, logout, `/api/v1/auth/password/change`)
-  and are blocked from other protected routes with
-  `403 password_change_required`.
-- `POST /api/v1/auth/password/change` clears the requirement after successful change.
-
-## SSO Validation Failure Codes
-
-`POST /api/v1/admin/sso/providers/validate` may return:
-
-- `sso_discovery_failed`
-- `sso_issuer_mismatch`
-- `sso_metadata_invalid`
-- `sso_validation_timeout`
-
-Operational actions:
-
-- `sso_discovery_failed`: verify issuer URL reachability and OIDC metadata endpoint.
-- `sso_issuer_mismatch`: ensure configured issuer exactly matches metadata issuer.
-- `sso_metadata_invalid`: provider metadata is incomplete/invalid.
-- `sso_validation_timeout`: verify DNS/TLS/network egress from ADE to issuer.
-
-## API Key Contract
-
-- API keys are accepted only via `X-API-Key`.
-- `Authorization: Bearer` is not an API-key transport channel.
+1. rotate SCIM tokens regularly
+2. monitor token usage and revoke unused credentials
+3. verify provisioning mode is `scim` before troubleshooting SCIM route errors
 
 ## Observability Checklist
 
-Track and alert on:
+Monitor:
 
-- repeated password login failures and lockout spikes
-- MFA challenge failures and recovery code spikes
-- password reset request spikes/failures
-- SSO callback/provider validation failures
-- admin settings update failures
+1. login and MFA failure spikes
+2. password reset failure rates
+3. SSO callback failures
+4. provisioning-mode change events
+5. SCIM token lifecycle events and SCIM error rates
+6. invitation and assignment mutation failures
 
 ## Validation Commands
 
@@ -140,8 +97,15 @@ cd backend && uv run ade api types
 
 ## Post-Change Smoke Checklist
 
-1. Password login/logout works as expected for selected `auth.mode`.
-2. SSO sign-in works for active providers.
-3. Global-admin break-glass password path still works in `idp_only` mode.
-4. Forgot/reset behavior matches policy.
-5. Admin settings and provider lifecycle updates succeed.
+1. selected auth mode works for expected users
+2. break-glass path works for global admins
+3. provisioning mode behavior matches policy (`disabled|jit|scim`)
+4. workspace-owner invitation flow remains functional
+5. SCIM mode gate and SCIM token auth behavior are correct
+
+## Related
+
+- [Authentication API Reference](../reference/api/authentication.md)
+- [Access Management API Reference](../reference/api/access-management.md)
+- [Access Reference](../reference/access/README.md)
+- [Auth Incident Runbook](../troubleshooting/auth-incident-runbook.md)

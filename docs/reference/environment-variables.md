@@ -70,7 +70,7 @@ See [Production Bootstrap](../tutorials/production-bootstrap.md) for the exact m
 | `ADE_AUTH_PASSWORD_REQUIRE_SYMBOL` | API auth policy | optional | `false` | require symbols in passwords |
 | `ADE_AUTH_PASSWORD_LOCKOUT_MAX_ATTEMPTS` | API auth policy | optional | `5` | failed password attempts before lockout |
 | `ADE_AUTH_PASSWORD_LOCKOUT_DURATION_SECONDS` | API auth policy | optional | `300` | lockout duration in seconds after threshold is reached |
-| `ADE_AUTH_IDP_JIT_PROVISIONING_ENABLED` | API auth policy | optional | `true` | runtime override for IdP JIT provisioning policy |
+| `ADE_AUTH_IDP_PROVISIONING_MODE` | API auth policy | optional | `jit` | runtime override for IdP provisioning mode (`disabled`, `jit`, `scim`) |
 | `ADE_AUTH_SSO_PROVIDERS_JSON` | API SSO | optional | none | provider settings payload |
 | `ADE_SSO_ENCRYPTION_KEY` | API SSO | optional | none | encryption key for SSO secrets |
 | `ADE_SESSION_COOKIE_DOMAIN` | API sessions | optional | none | override cookie domain |
@@ -106,7 +106,7 @@ The runtime-setting env vars below are overrides, not primary storage:
 - `ADE_AUTH_PASSWORD_REQUIRE_SYMBOL`
 - `ADE_AUTH_PASSWORD_LOCKOUT_MAX_ATTEMPTS`
 - `ADE_AUTH_PASSWORD_LOCKOUT_DURATION_SECONDS`
-- `ADE_AUTH_IDP_JIT_PROVISIONING_ENABLED`
+- `ADE_AUTH_IDP_PROVISIONING_MODE`
 
 Runtime settings are resolved as:
 
@@ -116,6 +116,11 @@ Runtime settings are resolved as:
 
 When an override is present, the field is locked in API/UI and managed by environment + restart workflow.
 Use [Manage Runtime Settings](../how-to/manage-runtime-settings.md) for full update examples and failure handling.
+
+Legacy compatibility note:
+
+- `ADE_AUTH_IDP_JIT_PROVISIONING_ENABLED` is still read as a fallback bridge for existing undeployed/local environments.
+- New deployments should set only `ADE_AUTH_IDP_PROVISIONING_MODE`.
 
 Removed auth env vars that are no longer accepted:
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from enum import Enum
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from sqlalchemy import Boolean, ForeignKey, Index, String, Text, UniqueConstraint, false, true
@@ -14,6 +15,9 @@ from ade_db import GUID, Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 from .user import User
 from .workspace import Workspace
+
+if TYPE_CHECKING:
+    from .access import RoleAssignment
 
 
 def _enum_values(enum_cls: type[Enum]) -> list[str]:
@@ -83,6 +87,12 @@ class Role(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         "UserRoleAssignment",
         back_populates="role",
         cascade="all, delete-orphan",
+    )
+    principal_assignments: Mapped[list[RoleAssignment]] = relationship(
+        "RoleAssignment",
+        primaryjoin="Role.id == foreign(RoleAssignment.role_id)",
+        cascade="all, delete-orphan",
+        overlaps="assignments",
     )
 
     __table_args__ = (Index("ix_roles_slug", "slug"),)

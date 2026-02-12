@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ade_api.features.admin_settings.service import DEFAULT_SAFE_MODE_DETAIL
+from ade_api.features.sso.group_sync import GroupSyncStats
 from ade_api.features.sso.oidc import OidcMetadata
 from ade_api.features.sso.service import SsoService
 from ade_api.settings import Settings
@@ -46,7 +47,11 @@ def _create_auth_state(session: Session, settings: Settings, provider_id: str) -
     return state
 
 
-def _set_runtime_auth_mode_password_and_idp(session: Session) -> None:
+def _set_runtime_auth_mode_password_and_idp(
+    session: Session,
+    *,
+    provisioning_mode: str = "jit",
+) -> None:
     payload = {
         "safe_mode": {
             "enabled": False,
@@ -70,7 +75,7 @@ def _set_runtime_auth_mode_password_and_idp(session: Session) -> None:
                 },
             },
             "identity_provider": {
-                "jit_provisioning_enabled": True,
+                "provisioning_mode": provisioning_mode,
             },
         },
     }
@@ -224,6 +229,43 @@ async def test_callback_sso_returns_email_missing_when_no_email_claim_candidates
     assert payload["error"] == "EMAIL_MISSING"
 
 
+@pytest.mark.parametrize("provisioning_mode", ["disabled", "scim"])
+async def test_callback_sso_blocks_unknown_user_when_auto_provision_is_disabled(
+    async_client: AsyncClient,
+    session: Session,
+    settings: Settings,
+    monkeypatch: pytest.MonkeyPatch,
+    provisioning_mode: str,
+) -> None:
+    _set_runtime_auth_mode_password_and_idp(session, provisioning_mode=provisioning_mode)
+    provider_id = _configure_provider(session, settings)
+    state = _create_auth_state(session, settings, provider_id)
+
+    _mock_oidc_callback(
+        monkeypatch,
+        claims={
+            "sub": "legacy-subject-mode",
+            "tid": "tenant-id",
+            "oid": "object-id-mode",
+            "email": "new.user@example.com",
+        },
+    )
+
+    response = await async_client.get(
+        f"/api/v1/auth/sso/callback?code=abc123&state={state}",
+        headers={"accept": "application/json"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is False
+    assert payload["error"] == "AUTO_PROVISION_DISABLED"
+    assert (
+        session.execute(select(User).where(User.email_normalized == "new.user@example.com")).scalar_one_or_none()
+        is None
+    )
+
+
 async def test_callback_sso_blocks_unverified_email_link_to_existing_user(
     async_client: AsyncClient,
     session: Session,
@@ -264,3 +306,124 @@ async def test_callback_sso_blocks_unverified_email_link_to_existing_user(
     payload = response.json()
     assert payload["ok"] is False
     assert payload["error"] == "EMAIL_LINK_UNVERIFIED"
+
+
+async def test_callback_sso_hydrates_group_memberships_and_sets_external_id(
+    async_client: AsyncClient,
+    session: Session,
+    settings: Settings,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings.auth_group_sync_tenant_id = "tenant-id"
+    settings.auth_group_sync_client_id = "client-id"
+    settings.auth_group_sync_client_secret = "client-secret"  # type: ignore[assignment]
+    _set_runtime_auth_mode_password_and_idp(session)
+    provider_id = _configure_provider(session, settings)
+    state = _create_auth_state(session, settings, provider_id)
+
+    _mock_oidc_callback(
+        monkeypatch,
+        claims={
+            "sub": "legacy-subject-5",
+            "tid": "tenant-id",
+            "oid": "object-id-5",
+            "email": "hydrated.user@example.com",
+        },
+    )
+
+    captured: dict[str, str] = {}
+
+    def _fake_sync_user_memberships(self, *, settings, user, user_external_id):  # noqa: ANN001
+        del self
+        del settings
+        captured["user_id"] = str(user.id)
+        captured["external_id"] = user_external_id
+        return GroupSyncStats(
+            known_users_linked=1,
+            users_created=0,
+            groups_upserted=1,
+            memberships_added=1,
+            memberships_removed=0,
+            unknown_members_skipped=0,
+        )
+
+    monkeypatch.setattr(
+        "ade_api.features.auth.sso_router.GroupSyncService.sync_user_memberships",
+        _fake_sync_user_memberships,
+    )
+
+    response = await async_client.get(
+        f"/api/v1/auth/sso/callback?code=abc123&state={state}",
+        headers={"accept": "application/json"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["ok"] is True
+
+    session.expire_all()
+    identity = session.execute(
+        select(SsoIdentity)
+        .where(SsoIdentity.provider_id == provider_id)
+        .where(SsoIdentity.subject == "tenant-id:object-id-5")
+        .limit(1)
+    ).scalar_one_or_none()
+    assert identity is not None
+    user = session.get(User, identity.user_id)
+    assert user is not None
+    assert user.source == "idp"
+    assert user.external_id == "object-id-5"
+    assert captured["user_id"] == str(user.id)
+    assert captured["external_id"] == "object-id-5"
+
+
+async def test_callback_sso_allows_login_when_membership_hydration_fails(
+    async_client: AsyncClient,
+    session: Session,
+    settings: Settings,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings.auth_group_sync_tenant_id = "tenant-id"
+    settings.auth_group_sync_client_id = "client-id"
+    settings.auth_group_sync_client_secret = "client-secret"  # type: ignore[assignment]
+    _set_runtime_auth_mode_password_and_idp(session)
+    provider_id = _configure_provider(session, settings)
+    state = _create_auth_state(session, settings, provider_id)
+
+    _mock_oidc_callback(
+        monkeypatch,
+        claims={
+            "sub": "legacy-subject-6",
+            "tid": "tenant-id",
+            "oid": "object-id-6",
+            "email": "retry.user@example.com",
+        },
+    )
+
+    def _raising_sync(self, *, settings, user, user_external_id):  # noqa: ANN001
+        del self, settings, user, user_external_id
+        raise RuntimeError("transient graph error")
+
+    retry_calls: list[dict[str, str]] = []
+
+    def _fake_retry(*, request, settings, user_id, user_external_id):  # noqa: ANN001
+        del request, settings
+        retry_calls.append({"user_id": str(user_id), "external_id": user_external_id})
+
+    monkeypatch.setattr(
+        "ade_api.features.auth.sso_router.GroupSyncService.sync_user_memberships",
+        _raising_sync,
+    )
+    monkeypatch.setattr(
+        "ade_api.features.auth.sso_router._hydrate_user_memberships_retry",
+        _fake_retry,
+    )
+
+    response = await async_client.get(
+        f"/api/v1/auth/sso/callback?code=abc123&state={state}",
+        headers={"accept": "application/json"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["ok"] is True
+    assert len(retry_calls) == 1
+    assert retry_calls[0]["external_id"] == "object-id-6"

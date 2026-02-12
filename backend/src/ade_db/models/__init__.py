@@ -1,5 +1,17 @@
 """Central exports for ADE SQLAlchemy models."""
 
+from .access import (
+    AssignmentScopeType,
+    Group,
+    GroupMembership,
+    GroupMembershipMode,
+    GroupOwner,
+    GroupSource,
+    Invitation,
+    InvitationStatus,
+    PrincipalType,
+    RoleAssignment,
+)
 from .api_key import ApiKey
 from .application_setting import ApplicationSetting
 from .authn import (
@@ -31,6 +43,7 @@ from .run import Run, RunOperation, RunStatus
 from .run_field import RunField
 from .run_metrics import RunMetrics
 from .run_table_column import RunTableColumn
+from .scim import ScimToken
 from .sso import (
     SsoAuthState,
     SsoIdentity,
@@ -46,6 +59,7 @@ from .workspace import Workspace, WorkspaceMembership
 
 __all__ = [
     "ApiKey",
+    "AssignmentScopeType",
     "ApplicationSetting",
     "AUTH_SESSION_AUTH_METHOD_VALUES",
     "AuthSession",
@@ -73,6 +87,7 @@ __all__ = [
     "RunOperation",
     "RunStatus",
     "RunTableColumn",
+    "ScimToken",
     "ScopeType",
     "SsoAuthState",
     "SsoIdentity",
@@ -90,4 +105,13 @@ __all__ = [
     "UserRoleAssignment",
     "Workspace",
     "WorkspaceMembership",
+    "Group",
+    "GroupMembership",
+    "GroupOwner",
+    "GroupMembershipMode",
+    "GroupSource",
+    "Invitation",
+    "InvitationStatus",
+    "PrincipalType",
+    "RoleAssignment",
 ]

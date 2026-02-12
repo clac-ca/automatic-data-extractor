@@ -50,6 +50,8 @@ def test_mutating_routes_require_csrf(app) -> None:
     for route in app.router.routes:
         if not isinstance(route, APIRoute):
             continue
+        if not route.path.startswith("/api/v1/"):
+            continue
         if route.path.startswith("/api/v1/rbac"):
             # New RBAC endpoints are bearer-only; CSRF enforcement will be added separately.
             continue

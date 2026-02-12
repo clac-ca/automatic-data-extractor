@@ -3,12 +3,12 @@ from __future__ import annotations
 import logging
 import re
 from collections import deque
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import Select, delete, func, select
+from sqlalchemy import Select, and_, case, delete, func, select, true
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
@@ -16,7 +16,6 @@ from ade_api.common.cursor_listing import (
     CursorPage,
     ResolvedCursorSort,
     paginate_query_cursor,
-    paginate_sequence_cursor,
 )
 from ade_api.common.list_filters import FilterItem, FilterJoinOperator
 from ade_api.core.rbac.policy import GLOBAL_IMPLICATIONS, WORKSPACE_IMPLICATIONS
@@ -29,14 +28,27 @@ from ade_api.core.rbac.registry import (
     role_allows_scope,
 )
 from ade_api.core.rbac.types import ScopeType
-from ade_db.models import Permission, Role, RolePermission, User, UserRoleAssignment, Workspace
+from ade_db.models import (
+    AssignmentScopeType,
+    Group,
+    GroupMembership,
+    Permission,
+    PrincipalType,
+    Role,
+    RoleAssignment,
+    RolePermission,
+    User,
+    UserRoleAssignment,
+    Workspace,
+)
 
 from .filters import (
     apply_assignment_filters,
     apply_permission_filters,
-    evaluate_role_filters,
-    parse_role_filters,
+    apply_principal_assignment_filters,
+    apply_role_filters,
 )
+from .sorting import PrincipalAssignmentRow
 
 logger = logging.getLogger(__name__)
 
@@ -204,6 +216,49 @@ def _assignment_scope_filter(workspace_id: UUID | None) -> Any:
     return UserRoleAssignment.workspace_id == workspace_id
 
 
+def _assignment_scope_filter_v2(
+    *,
+    scope_type: AssignmentScopeType,
+    scope_id: UUID | None,
+) -> Any:
+    if scope_type == AssignmentScopeType.ORGANIZATION:
+        return and_(
+            RoleAssignment.scope_type == AssignmentScopeType.ORGANIZATION,
+            RoleAssignment.scope_id.is_(None),
+        )
+    return and_(
+        RoleAssignment.scope_type == AssignmentScopeType.WORKSPACE,
+        RoleAssignment.scope_id == scope_id,
+    )
+
+
+def _map_principal_assignment_row(row: Mapping[str, Any]) -> PrincipalAssignmentRow:
+    principal_type = row.get("principal_type")
+    scope_type = row.get("scope_type")
+
+    return PrincipalAssignmentRow(
+        id=row["id"],
+        principal_type=(
+            principal_type
+            if isinstance(principal_type, PrincipalType)
+            else PrincipalType(str(principal_type))
+        ),
+        principal_id=row["principal_id"],
+        role_id=row["role_id"],
+        role_slug=str(row.get("role_slug") or ""),
+        scope_type=(
+            scope_type
+            if isinstance(scope_type, AssignmentScopeType)
+            else AssignmentScopeType(str(scope_type))
+        ),
+        scope_id=row.get("scope_id"),
+        created_at=row["created_at"],
+        principal_display_name=row.get("principal_display_name"),
+        principal_email=row.get("principal_email"),
+        principal_slug=row.get("principal_slug"),
+    )
+
+
 # ---------------------------------------------------------------------------
 # RBAC service
 # ---------------------------------------------------------------------------
@@ -360,24 +415,18 @@ class RbacService:
         cursor: str | None,
         include_total: bool,
     ) -> CursorPage[Role]:
-        stmt: Select[Role] = select(Role).options(
+        stmt = select(Role).options(
             selectinload(Role.permissions).selectinload(RolePermission.permission),
         )
-        result = self._session.execute(stmt)
-        roles = list(result.scalars().all())
-        parsed_filters = parse_role_filters(filters)
-        filtered = [
-            role
-            for role in roles
-            if evaluate_role_filters(
-                role,
-                parsed_filters,
-                join_operator=join_operator,
-                q=q,
-            )
-        ]
-        return paginate_sequence_cursor(
-            filtered,
+        stmt = apply_role_filters(
+            stmt=stmt,
+            filters=filters,
+            join_operator=join_operator,
+            q=q,
+        )
+        return paginate_query_cursor(
+            self._session,
+            stmt,
             resolved_sort=resolved_sort,
             limit=limit,
             cursor=cursor,
@@ -558,7 +607,7 @@ class RbacService:
         include_total: bool,
         default_active_only: bool = True,
     ) -> CursorPage[UserRoleAssignment]:
-        stmt: Select[UserRoleAssignment] = select(UserRoleAssignment).options(
+        stmt = select(UserRoleAssignment).options(
             selectinload(UserRoleAssignment.user),
             selectinload(UserRoleAssignment.role)
             .selectinload(Role.permissions)
@@ -661,6 +710,18 @@ class RbacService:
             assignment,
             attribute_names=["user", "role", "workspace"],
         )
+        mirror_scope_type = (
+            AssignmentScopeType.WORKSPACE
+            if workspace_id is not None
+            else AssignmentScopeType.ORGANIZATION
+        )
+        self.assign_principal_role_if_missing(
+            principal_type=PrincipalType.USER,
+            principal_id=user.id,
+            role_id=role.id,
+            scope_type=mirror_scope_type,
+            scope_id=workspace_id,
+        )
         return assignment
 
     def assign_role_if_missing(
@@ -706,17 +767,255 @@ class RbacService:
         if assignment.workspace_id != workspace_id:
             raise ScopeMismatchError("Scope mismatch for assignment deletion")
 
+        mirror_scope_type = (
+            AssignmentScopeType.WORKSPACE
+            if assignment.workspace_id is not None
+            else AssignmentScopeType.ORGANIZATION
+        )
+        mirror = self.get_principal_assignment_for_scope(
+            principal_type=PrincipalType.USER,
+            principal_id=assignment.user_id,
+            role_id=assignment.role_id,
+            scope_type=mirror_scope_type,
+            scope_id=assignment.workspace_id,
+        )
+        if mirror is not None:
+            self._session.delete(mirror)
+        self._session.delete(assignment)
+        self._session.flush()
+
+    def list_principal_assignments(
+        self,
+        *,
+        scope_type: AssignmentScopeType,
+        scope_id: UUID | None,
+        filters: list[FilterItem],
+        join_operator: FilterJoinOperator,
+        q: str | None,
+        resolved_sort: ResolvedCursorSort[PrincipalAssignmentRow],
+        limit: int,
+        cursor: str | None,
+        include_total: bool,
+    ) -> CursorPage[PrincipalAssignmentRow]:
+        principal_display_name = case(
+            (
+                RoleAssignment.principal_type == PrincipalType.USER,
+                func.coalesce(User.display_name, User.email),
+            ),
+            (
+                RoleAssignment.principal_type == PrincipalType.GROUP,
+                Group.display_name,
+            ),
+            else_=None,
+        ).label("principal_display_name")
+        principal_email = case(
+            (RoleAssignment.principal_type == PrincipalType.USER, User.email),
+            else_=None,
+        ).label("principal_email")
+        principal_slug = case(
+            (RoleAssignment.principal_type == PrincipalType.GROUP, Group.slug),
+            else_=None,
+        ).label("principal_slug")
+
+        stmt = (
+            select(
+                RoleAssignment.id.label("id"),
+                RoleAssignment.principal_type.label("principal_type"),
+                RoleAssignment.principal_id.label("principal_id"),
+                RoleAssignment.role_id.label("role_id"),
+                Role.slug.label("role_slug"),
+                RoleAssignment.scope_type.label("scope_type"),
+                RoleAssignment.scope_id.label("scope_id"),
+                RoleAssignment.created_at.label("created_at"),
+                principal_display_name,
+                principal_email,
+                principal_slug,
+            )
+            .select_from(RoleAssignment)
+            .join(Role, Role.id == RoleAssignment.role_id)
+            .outerjoin(
+                User,
+                and_(
+                    RoleAssignment.principal_type == PrincipalType.USER,
+                    User.id == RoleAssignment.principal_id,
+                ),
+            )
+            .outerjoin(
+                Group,
+                and_(
+                    RoleAssignment.principal_type == PrincipalType.GROUP,
+                    Group.id == RoleAssignment.principal_id,
+                ),
+            )
+            .where(_assignment_scope_filter_v2(scope_type=scope_type, scope_id=scope_id))
+        )
+        stmt = apply_principal_assignment_filters(
+            stmt,
+            filters,
+            join_operator=join_operator,
+            q=q,
+        )
+
+        return paginate_query_cursor(
+            self._session,
+            stmt,
+            resolved_sort=resolved_sort,
+            limit=limit,
+            cursor=cursor,
+            include_total=include_total,
+            changes_cursor="0",
+            row_mapper=_map_principal_assignment_row,
+        )
+
+    def get_principal_assignment(self, *, assignment_id: UUID) -> RoleAssignment | None:
+        stmt = (
+            select(RoleAssignment)
+            .options(selectinload(RoleAssignment.workspace))
+            .where(RoleAssignment.id == assignment_id)
+            .limit(1)
+        )
+        result = self._session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    def get_principal_identity(
+        self,
+        *,
+        principal_type: PrincipalType,
+        principal_id: UUID,
+    ) -> tuple[str | None, str | None, str | None]:
+        if principal_type == PrincipalType.USER:
+            user = self._session.get(User, principal_id)
+            if user is None:
+                return (None, None, None)
+            return (user.display_name or user.email, user.email, None)
+
+        group = self._session.get(Group, principal_id)
+        if group is None:
+            return (None, None, None)
+        return (group.display_name, None, group.slug)
+
+    def get_principal_assignment_for_scope(
+        self,
+        *,
+        principal_type: PrincipalType,
+        principal_id: UUID,
+        role_id: UUID,
+        scope_type: AssignmentScopeType,
+        scope_id: UUID | None,
+    ) -> RoleAssignment | None:
+        stmt = (
+            select(RoleAssignment)
+            .where(
+                RoleAssignment.principal_type == principal_type,
+                RoleAssignment.principal_id == principal_id,
+                RoleAssignment.role_id == role_id,
+                _assignment_scope_filter_v2(scope_type=scope_type, scope_id=scope_id),
+            )
+            .limit(1)
+        )
+        result = self._session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    def assign_principal_role_if_missing(
+        self,
+        *,
+        principal_type: PrincipalType,
+        principal_id: UUID,
+        role_id: UUID,
+        scope_type: AssignmentScopeType,
+        scope_id: UUID | None,
+    ) -> RoleAssignment:
+        existing = self.get_principal_assignment_for_scope(
+            principal_type=principal_type,
+            principal_id=principal_id,
+            role_id=role_id,
+            scope_type=scope_type,
+            scope_id=scope_id,
+        )
+        if existing is not None:
+            return existing
+        return self.assign_principal_role(
+            principal_type=principal_type,
+            principal_id=principal_id,
+            role_id=role_id,
+            scope_type=scope_type,
+            scope_id=scope_id,
+        )
+
+    def assign_principal_role(
+        self,
+        *,
+        principal_type: PrincipalType,
+        principal_id: UUID,
+        role_id: UUID,
+        scope_type: AssignmentScopeType,
+        scope_id: UUID | None,
+    ) -> RoleAssignment:
+        role = self.get_role(role_id)
+        if role is None:
+            raise RoleNotFoundError("Role not found")
+
+        expected_scope = (
+            ScopeType.WORKSPACE
+            if scope_type == AssignmentScopeType.WORKSPACE
+            else ScopeType.GLOBAL
+        )
+        if not role_allows_scope(role.slug, expected_scope):
+            raise ScopeMismatchError("Role cannot be assigned to this scope")
+
+        if principal_type == PrincipalType.USER:
+            if self._session.get(User, principal_id) is None:
+                raise AssignmentError("User not found")
+        elif principal_type == PrincipalType.GROUP:
+            # Import inline to avoid cyc dependency at module import.
+            from ade_db.models import Group
+
+            if self._session.get(Group, principal_id) is None:
+                raise AssignmentError("Group not found")
+
+        if scope_type == AssignmentScopeType.WORKSPACE:
+            if scope_id is None:
+                raise ScopeMismatchError("workspace scope requires scope_id")
+            if self._session.get(Workspace, scope_id) is None:
+                raise AssignmentError("Workspace not found")
+        else:
+            scope_id = None
+
+        assignment = RoleAssignment(
+            principal_type=principal_type,
+            principal_id=principal_id,
+            role_id=role_id,
+            scope_type=scope_type,
+            scope_id=scope_id,
+        )
+        self._session.add(assignment)
+        try:
+            self._session.flush([assignment])
+        except IntegrityError as exc:
+            raise RoleConflictError("Assignment already exists") from exc
+        return assignment
+
+    def delete_principal_assignment(self, *, assignment_id: UUID) -> None:
+        assignment = self.get_principal_assignment(assignment_id=assignment_id)
+        if assignment is None:
+            raise AssignmentNotFoundError("Role assignment not found")
         self._session.delete(assignment)
         self._session.flush()
 
     def _count_assignments_for_role(self, *, role_id: UUID) -> int:
-        stmt = (
+        legacy_stmt = (
             select(func.count())
             .select_from(UserRoleAssignment)
             .where(UserRoleAssignment.role_id == role_id)
         )
-        result = self._session.execute(stmt)
-        return int(result.scalar_one() or 0)
+        legacy = int(self._session.execute(legacy_stmt).scalar_one() or 0)
+        v2_stmt = (
+            select(func.count())
+            .select_from(RoleAssignment)
+            .where(RoleAssignment.role_id == role_id)
+        )
+        v2 = int(self._session.execute(v2_stmt).scalar_one() or 0)
+        return max(legacy, v2)
 
     def has_assignments_for_role(
         self,
@@ -733,12 +1032,27 @@ class RbacService:
             .limit(1)
         )
         result = self._session.execute(stmt)
-        return result.scalar_one_or_none() is not None
+        if result.scalar_one_or_none() is not None:
+            return True
+        scope_type = (
+            AssignmentScopeType.WORKSPACE
+            if workspace_id is not None
+            else AssignmentScopeType.ORGANIZATION
+        )
+        stmt_v2 = (
+            select(RoleAssignment.id)
+            .where(
+                RoleAssignment.role_id == role_id,
+                _assignment_scope_filter_v2(scope_type=scope_type, scope_id=workspace_id),
+            )
+            .limit(1)
+        )
+        return self._session.execute(stmt_v2).scalar_one_or_none() is not None
 
     # ------------- permission evaluation ---------
 
     def get_global_permissions_for_user(self, *, user: User) -> frozenset[str]:
-        if user.is_service_account:
+        if user.is_service_account or not user.is_active:
             return frozenset()
 
         cache_key = ("global_permissions", str(user.id))
@@ -758,8 +1072,47 @@ class RbacService:
                 Permission.scope_type == ScopeType.GLOBAL,
             )
         )
-        result = self._session.execute(stmt)
-        granted = frozenset(result.scalars().all())
+        legacy = set(self._session.execute(stmt).scalars().all())
+
+        stmt_v2_user: Select[tuple[str]] = (
+            select(Permission.key)
+            .select_from(RolePermission)
+            .join(Permission, Permission.id == RolePermission.permission_id)
+            .join(Role, Role.id == RolePermission.role_id)
+            .join(RoleAssignment, RoleAssignment.role_id == Role.id)
+            .where(
+                RoleAssignment.principal_type == PrincipalType.USER,
+                RoleAssignment.principal_id == user.id,
+                RoleAssignment.scope_type == AssignmentScopeType.ORGANIZATION,
+                Permission.scope_type == ScopeType.GLOBAL,
+            )
+        )
+        from_user_assignments = set(self._session.execute(stmt_v2_user).scalars().all())
+
+        stmt_v2_group: Select[tuple[str]] = (
+            select(Permission.key)
+            .select_from(RolePermission)
+            .join(Permission, Permission.id == RolePermission.permission_id)
+            .join(Role, Role.id == RolePermission.role_id)
+            .join(RoleAssignment, RoleAssignment.role_id == Role.id)
+            .join(
+                GroupMembership,
+                and_(
+                    GroupMembership.group_id == RoleAssignment.principal_id,
+                    GroupMembership.user_id == user.id,
+                ),
+            )
+            .join(Group, Group.id == GroupMembership.group_id)
+            .where(
+                RoleAssignment.principal_type == PrincipalType.GROUP,
+                RoleAssignment.scope_type == AssignmentScopeType.ORGANIZATION,
+                Group.is_active == true(),
+                Permission.scope_type == ScopeType.GLOBAL,
+            )
+        )
+        from_group_assignments = set(self._session.execute(stmt_v2_group).scalars().all())
+
+        granted = frozenset(legacy.union(from_user_assignments).union(from_group_assignments))
         expanded = _expand_implications(granted, scope=ScopeType.GLOBAL)
         self._set_cached(cache_key, expanded)
         return expanded
@@ -770,7 +1123,7 @@ class RbacService:
         user: User,
         workspace_id: UUID,
     ) -> frozenset[str]:
-        if user.is_service_account:
+        if user.is_service_account or not user.is_active:
             return frozenset()
 
         cache_key = ("workspace_permissions", str(user.id), str(workspace_id))
@@ -790,8 +1143,49 @@ class RbacService:
                 Permission.scope_type == ScopeType.WORKSPACE,
             )
         )
-        result = self._session.execute(stmt)
-        granted = frozenset(result.scalars().all())
+        legacy = set(self._session.execute(stmt).scalars().all())
+
+        stmt_v2_user: Select[tuple[str]] = (
+            select(Permission.key)
+            .select_from(RolePermission)
+            .join(Permission, Permission.id == RolePermission.permission_id)
+            .join(Role, Role.id == RolePermission.role_id)
+            .join(RoleAssignment, RoleAssignment.role_id == Role.id)
+            .where(
+                RoleAssignment.principal_type == PrincipalType.USER,
+                RoleAssignment.principal_id == user.id,
+                RoleAssignment.scope_type == AssignmentScopeType.WORKSPACE,
+                RoleAssignment.scope_id == workspace_id,
+                Permission.scope_type == ScopeType.WORKSPACE,
+            )
+        )
+        from_user_assignments = set(self._session.execute(stmt_v2_user).scalars().all())
+
+        stmt_v2_group: Select[tuple[str]] = (
+            select(Permission.key)
+            .select_from(RolePermission)
+            .join(Permission, Permission.id == RolePermission.permission_id)
+            .join(Role, Role.id == RolePermission.role_id)
+            .join(RoleAssignment, RoleAssignment.role_id == Role.id)
+            .join(
+                GroupMembership,
+                and_(
+                    GroupMembership.group_id == RoleAssignment.principal_id,
+                    GroupMembership.user_id == user.id,
+                ),
+            )
+            .join(Group, Group.id == GroupMembership.group_id)
+            .where(
+                RoleAssignment.principal_type == PrincipalType.GROUP,
+                RoleAssignment.scope_type == AssignmentScopeType.WORKSPACE,
+                RoleAssignment.scope_id == workspace_id,
+                Group.is_active == true(),
+                Permission.scope_type == ScopeType.WORKSPACE,
+            )
+        )
+        from_group_assignments = set(self._session.execute(stmt_v2_group).scalars().all())
+
+        granted = frozenset(legacy.union(from_user_assignments).union(from_group_assignments))
         expanded = _expand_implications(granted, scope=ScopeType.WORKSPACE)
 
         # Global override: workspaces.manage_all grants all workspace permissions
@@ -842,7 +1236,7 @@ class RbacService:
         )
 
     def get_global_role_slugs_for_user(self, *, user: User) -> frozenset[str]:
-        if user.is_service_account:
+        if user.is_service_account or not user.is_active:
             return frozenset()
 
         cache_key = ("global_role_slugs", str(user.id))
@@ -850,7 +1244,7 @@ class RbacService:
         if cached is not None:
             return cached
 
-        stmt: Select[tuple[str]] = (
+        stmt_legacy: Select[tuple[str]] = (
             select(Role.slug)
             .join(UserRoleAssignment, UserRoleAssignment.role_id == Role.id)
             .where(
@@ -858,8 +1252,39 @@ class RbacService:
                 UserRoleAssignment.workspace_id.is_(None),
             )
         )
-        result = self._session.execute(stmt)
-        slugs = frozenset(result.scalars().all())
+        legacy = set(self._session.execute(stmt_legacy).scalars().all())
+
+        stmt_v2_user: Select[tuple[str]] = (
+            select(Role.slug)
+            .join(RoleAssignment, RoleAssignment.role_id == Role.id)
+            .where(
+                RoleAssignment.principal_type == PrincipalType.USER,
+                RoleAssignment.principal_id == user.id,
+                RoleAssignment.scope_type == AssignmentScopeType.ORGANIZATION,
+            )
+        )
+        from_user_assignments = set(self._session.execute(stmt_v2_user).scalars().all())
+
+        stmt_v2_group: Select[tuple[str]] = (
+            select(Role.slug)
+            .join(RoleAssignment, RoleAssignment.role_id == Role.id)
+            .join(
+                GroupMembership,
+                and_(
+                    GroupMembership.group_id == RoleAssignment.principal_id,
+                    GroupMembership.user_id == user.id,
+                ),
+            )
+            .join(Group, Group.id == GroupMembership.group_id)
+            .where(
+                RoleAssignment.principal_type == PrincipalType.GROUP,
+                RoleAssignment.scope_type == AssignmentScopeType.ORGANIZATION,
+                Group.is_active == true(),
+            )
+        )
+        from_group_assignments = set(self._session.execute(stmt_v2_group).scalars().all())
+
+        slugs = frozenset(legacy.union(from_user_assignments).union(from_group_assignments))
         self._set_cached(cache_key, slugs)
         return slugs
 
