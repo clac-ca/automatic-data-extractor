@@ -16,6 +16,8 @@ import JsonWorker from "monaco-editor/esm/vs/language/json/json.worker?worker";
 import TsWorker from "monaco-editor/esm/vs/language/typescript/ts.worker?worker";
 import clsx from "clsx";
 
+import { resolveCssColor } from "@/providers/theme/cssColor";
+
 import type { CodeEditorHandle, CodeEditorProps } from "./CodeEditor.types";
 import { disposeAdeScriptHelpers, registerAdeScriptHelpers } from "./registerAdeScriptHelpers";
 
@@ -290,62 +292,4 @@ function buildAdeDarkTheme(): MonacoEditor.IStandaloneThemeData {
     rules: [],
     colors,
   };
-}
-
-function resolveCssColor(variable: string, fallback: string): string {
-  if (typeof window === "undefined" || typeof document === "undefined") {
-    return fallback;
-  }
-  const resolved = resolveCssVarColor(variable, fallback);
-  const rgb = parseRgbColor(resolved);
-  if (!rgb) {
-    return fallback;
-  }
-  return rgbToHex(rgb[0], rgb[1], rgb[2]);
-}
-
-function resolveCssVarColor(variable: string, fallback: string): string {
-  const root = document.documentElement;
-  if (!root) {
-    return fallback;
-  }
-  const probe = document.createElement("span");
-  probe.style.color = `var(${variable}, ${fallback})`;
-  probe.style.position = "absolute";
-  probe.style.opacity = "0";
-  probe.style.pointerEvents = "none";
-  probe.style.userSelect = "none";
-  root.appendChild(probe);
-  try {
-    const computed = getComputedStyle(probe).color.trim();
-    return computed || fallback;
-  } finally {
-    root.removeChild(probe);
-  }
-}
-
-function parseRgbColor(value: string): [number, number, number] | null {
-  const matches = value.match(/-?\d*\.?\d+/g);
-  if (!matches || matches.length < 3) {
-    return null;
-  }
-  const numbers = matches.slice(0, 3).map((part) => Number(part));
-  if (numbers.some((num) => Number.isNaN(num))) {
-    return null;
-  }
-  let [red, green, blue] = numbers;
-  if (Math.max(red, green, blue) <= 1) {
-    red *= 255;
-    green *= 255;
-    blue *= 255;
-  }
-  return [red, green, blue];
-}
-
-function rgbToHex(red: number, green: number, blue: number): string {
-  const toHex = (value: number) => {
-    const clamped = Math.max(0, Math.min(255, Math.round(value)));
-    return clamped.toString(16).padStart(2, "0");
-  };
-  return `#${toHex(red)}${toHex(green)}${toHex(blue)}`;
 }
