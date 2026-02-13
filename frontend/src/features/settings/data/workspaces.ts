@@ -1,6 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { createInvitation, type Invitation, type InvitationCreateRequest, listInvitations, cancelInvitation, resendInvitation } from "@/api/invitations/api";
+import {
+  cancelInvitation,
+  createInvitation,
+  getInvitation,
+  listInvitations,
+  resendInvitation,
+  type Invitation,
+  type InvitationCreateRequest,
+  type InvitationPage,
+} from "@/api/invitations/api";
 import { collectAllPages, MAX_PAGE_SIZE } from "@/api/pagination";
 import {
   addWorkspacePrincipalRoles,
@@ -19,6 +28,7 @@ import {
 } from "@/api/workspaces/api";
 import { fetchUsers, type UserListPage, type UserSummary } from "@/api/users/api";
 import { listGroups, type Group } from "@/api/groups/api";
+import { useCursorPager } from "@/hooks/use-cursor-pager";
 import type {
   PermissionListPage,
   RoleCreatePayload,
@@ -35,6 +45,7 @@ import type {
 import { settingsKeys } from "./keys";
 
 const SETTINGS_PAGE_SIZE = MAX_PAGE_SIZE;
+const INVITATION_LIST_DEFAULT_SORT = JSON.stringify([{ id: "createdAt", desc: true }]);
 
 function normalizeSearch(search: string) {
   const trimmed = search.trim();
@@ -244,25 +255,81 @@ export function useRemoveWorkspacePrincipalMutation(workspaceId: string) {
   });
 }
 
-export function useWorkspaceInvitationsListQuery(workspaceId: string | null) {
-  return useQuery<{ items: Invitation[] }, Error>({
-    queryKey: settingsKeys.workspaceInvitations(workspaceId ?? ""),
-    queryFn: ({ signal }) => listInvitations({ workspaceId: workspaceId ?? undefined, signal }),
+export function useWorkspaceInvitationsListQuery(
+  workspaceId: string | null,
+  options: {
+    page: number;
+    pageSize: number;
+    q: string;
+    status: Invitation["status"] | "all";
+    sort?: string;
+    includeTotal?: boolean;
+  },
+) {
+  const queryClient = useQueryClient();
+  const sort = options.sort ?? INVITATION_LIST_DEFAULT_SORT;
+  const includeTotal = options.includeTotal ?? true;
+  const normalizedQ = options.q.trim();
+  const normalizedStatus = options.status === "all" ? null : options.status;
+  const resetKey = [
+    workspaceId ?? "",
+    options.pageSize,
+    normalizedQ,
+    normalizedStatus ?? "all",
+    sort,
+    includeTotal ? "total" : "no-total",
+  ].join("|");
+
+  const cursorPager = useCursorPager<InvitationPage>({
+    page: options.page,
+    limit: options.pageSize,
+    includeTotal,
+    resetKey,
+    fetchPage: ({ cursor, limit, includeTotal: includeTotalForPage, signal }) =>
+      listInvitations({
+        workspaceId: workspaceId ?? undefined,
+        limit,
+        cursor,
+        q: normalizedQ || undefined,
+        status: normalizedStatus,
+        sort,
+        includeTotal: includeTotalForPage,
+        signal,
+      }),
+  });
+
+  const queryKey = settingsKeys.workspaceInvitationsList(workspaceId ?? "", {
+    page: options.page,
+    pageSize: options.pageSize,
+    q: normalizedQ,
+    status: normalizedStatus ?? "all",
+    sort,
+    includeTotal,
+  });
+  const initialData = queryClient.getQueryData<InvitationPage>(queryKey);
+
+  return useQuery<InvitationPage, Error>({
+    queryKey,
+    queryFn: ({ signal }) => cursorPager.fetchCurrentPage(signal),
     enabled: Boolean(workspaceId),
     staleTime: 10_000,
-    placeholderData: (previous) => previous,
+    placeholderData: (previous) => previous ?? initialData,
   });
 }
 
 export function useWorkspaceInvitationDetailQuery(workspaceId: string | null, invitationId: string | null) {
-  const listQuery = useWorkspaceInvitationsListQuery(workspaceId);
-  return {
-    ...listQuery,
-    data:
-      invitationId == null
-        ? null
-        : listQuery.data?.items.find((invitation) => invitation.id === invitationId) ?? null,
-  };
+  return useQuery<Invitation | null, Error>({
+    queryKey: settingsKeys.workspaceInvitationDetail(workspaceId ?? "", invitationId ?? ""),
+    queryFn: () => {
+      if (!workspaceId || !invitationId) {
+        return Promise.resolve(null);
+      }
+      return getInvitation(invitationId);
+    },
+    enabled: Boolean(workspaceId && invitationId),
+    staleTime: 10_000,
+    placeholderData: (previous) => previous,
+  });
 }
 
 export function useCreateWorkspaceInvitationMutation(workspaceId: string) {
@@ -280,8 +347,12 @@ export function useResendWorkspaceInvitationMutation(workspaceId: string) {
   const queryClient = useQueryClient();
   return useMutation<Invitation, Error, string>({
     mutationFn: (invitationId) => resendInvitation(invitationId),
-    onSuccess: () => {
+    onSuccess: (invitation) => {
       queryClient.invalidateQueries({ queryKey: settingsKeys.workspaceInvitations(workspaceId) });
+      queryClient.setQueryData(
+        settingsKeys.workspaceInvitationDetail(workspaceId, invitation.id),
+        invitation,
+      );
     },
   });
 }
@@ -290,8 +361,12 @@ export function useCancelWorkspaceInvitationMutation(workspaceId: string) {
   const queryClient = useQueryClient();
   return useMutation<Invitation, Error, string>({
     mutationFn: (invitationId) => cancelInvitation(invitationId),
-    onSuccess: () => {
+    onSuccess: (invitation) => {
       queryClient.invalidateQueries({ queryKey: settingsKeys.workspaceInvitations(workspaceId) });
+      queryClient.setQueryData(
+        settingsKeys.workspaceInvitationDetail(workspaceId, invitation.id),
+        invitation,
+      );
     },
   });
 }

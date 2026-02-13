@@ -51,7 +51,7 @@ SCIM endpoints (`/scim/v2/*`) require SCIM bearer token auth issued via
 | `GET` | `/api/v1/workspaces/{workspaceId}/roleAssignments` | protected | `200` | path | role assignment page | `401`, `403`, `404` |
 | `POST` | `/api/v1/workspaces/{workspaceId}/roleAssignments` | protected + CSRF | `201` | path + JSON assignment create | role assignment | `401`, `403`, `404`, `409`, `422` |
 | `DELETE` | `/api/v1/roleAssignments/{assignmentId}` | protected + CSRF | `204` | path | empty | `401`, `403`, `404` |
-| `GET` | `/api/v1/invitations` | protected | `200` | query: `workspace_id` / `invitation_status` | invitation list | `401`, `403` |
+| `GET` | `/api/v1/invitations` | protected | `200` | query: cursor params (`limit`,`cursor`,`sort`,`q`,`includeTotal`) + `workspace_id` + `status` | cursor invitation page | `401`, `403`, `422` |
 | `POST` | `/api/v1/invitations` | protected + CSRF | `201` | JSON invitation create | invitation | `401`, `403`, `404`, `409`, `422` |
 | `GET` | `/api/v1/invitations/{invitationId}` | protected | `200` | path | invitation | `401`, `403`, `404` |
 | `POST` | `/api/v1/invitations/{invitationId}/resend` | protected + CSRF | `200` | path | invitation | `401`, `403`, `404`, `409` |
@@ -98,6 +98,12 @@ Use this as the workspace-owner provisioning path:
 
 1. if user exists, role assignment is created in scope
 2. if user does not exist, invited user is created and assignment is seeded
+
+### Invitation lifecycle semantics
+
+1. Persisted invitation statuses are `pending`, `accepted`, `cancelled`.
+2. `expired` is a derived API lifecycle state: `pending` with `expires_at <= now`.
+3. This invitation lifecycle model is a hard-cutover and is not backward compatible with persisted `expired` state.
 
 ### `POST /api/v1/workspaces/{workspaceId}/roleAssignments`
 
