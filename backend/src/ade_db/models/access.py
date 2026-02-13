@@ -62,7 +62,6 @@ class InvitationStatus(str, Enum):
 
     PENDING = "pending"
     ACCEPTED = "accepted"
-    EXPIRED = "expired"
     CANCELLED = "cancelled"
 
 
@@ -293,6 +292,11 @@ class Invitation(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         ForeignKey("users.id", ondelete="NO ACTION"),
         nullable=False,
     )
+    workspace_id: Mapped[UUID | None] = mapped_column(
+        GUID(),
+        ForeignKey("workspaces.id", ondelete="NO ACTION"),
+        nullable=True,
+    )
     status: Mapped[InvitationStatus] = mapped_column(
         invitation_status_enum,
         nullable=False,
@@ -306,10 +310,13 @@ class Invitation(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         JSON(),
         nullable=True,
     )
+    workspace: Mapped[Workspace | None] = relationship("Workspace")
 
     __table_args__ = (
         Index("ix_invitations_email_normalized", "email_normalized"),
         Index("ix_invitations_status", "status"),
+        Index("ix_invitations_workspace_status_expires", "workspace_id", "status", "expires_at"),
+        Index("ix_invitations_workspace_created_id", "workspace_id", "created_at", "id"),
         Index("ix_invitations_invited_user_id", "invited_user_id"),
         Index("ix_invitations_invited_by_user_id", "invited_by_user_id"),
     )

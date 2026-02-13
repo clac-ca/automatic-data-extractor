@@ -46,6 +46,20 @@ export const settingsKeys = {
 
   workspaceInvitations: (workspaceId: string) =>
     [...settingsKeys.workspaceDetail(workspaceId), "invitations"] as const,
+  workspaceInvitationsList: (
+    workspaceId: string,
+    params: {
+      page: number;
+      pageSize: number;
+      q: string;
+      status: string;
+      sort: string;
+      includeTotal: boolean;
+    },
+  ) =>
+    [...settingsKeys.workspaceInvitations(workspaceId), "list", params] as const,
+  workspaceInvitationDetail: (workspaceId: string, invitationId: string) =>
+    [...settingsKeys.workspaceInvitations(workspaceId), "detail", invitationId] as const,
 
   usersLookup: (search: string) => [...settingsKeys.all(), "usersLookup", { search }] as const,
   groupsLookup: (search: string) => [...settingsKeys.all(), "groupsLookup", { search }] as const,
