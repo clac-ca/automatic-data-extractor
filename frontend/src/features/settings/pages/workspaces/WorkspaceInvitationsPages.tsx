@@ -59,23 +59,15 @@ function workspaceBreadcrumbs(workspace: WorkspaceProfile, section: string) {
 }
 
 function extractRoleIds(invitation: Invitation) {
-  const metadata = invitation.metadata;
-  if (!metadata || typeof metadata !== "object") {
-    return [];
-  }
-
-  const workspaceContext = (metadata as Record<string, unknown>).workspaceContext;
+  const workspaceContext = invitation.workspaceContext;
   if (!workspaceContext || typeof workspaceContext !== "object") {
     return [];
   }
-
-  const roleAssignments = (workspaceContext as Record<string, unknown>).roleAssignments;
-  if (!Array.isArray(roleAssignments)) {
+  if (!Array.isArray(workspaceContext.roleAssignments)) {
     return [];
   }
-
-  return roleAssignments
-    .map((entry) => (entry && typeof entry === "object" ? (entry as Record<string, unknown>).roleId : null))
+  return workspaceContext.roleAssignments
+    .map((entry) => entry.roleId)
     .filter((value): value is string => typeof value === "string");
 }
 
@@ -100,7 +92,7 @@ const WORKSPACE_INVITATION_DETAIL_SECTIONS = [
 export function WorkspaceInvitationsListPage({ workspace }: { readonly workspace: WorkspaceProfile }) {
   const navigate = useNavigate();
   const listState = useSettingsListState({
-    defaults: { sort: "expires", order: "desc", pageSize: 25 },
+    defaults: { pageSize: 25 },
     filterKeys: ["status"],
   });
   const statusFilter = (listState.state.filters.status as "all" | Invitation["status"] | undefined) ?? "all";
@@ -110,7 +102,12 @@ export function WorkspaceInvitationsListPage({ workspace }: { readonly workspace
     hasWorkspacePermission(workspace, "workspace.invitations.manage");
   const canManage = hasWorkspacePermission(workspace, "workspace.invitations.manage");
 
-  const invitationsQuery = useWorkspaceInvitationsListQuery(workspace.id);
+  const invitationsQuery = useWorkspaceInvitationsListQuery(workspace.id, {
+    page: listState.state.page,
+    pageSize: listState.state.pageSize,
+    q: listState.state.q,
+    status: statusFilter,
+  });
   const rolesQuery = useWorkspaceRolesListQuery(workspace.id);
 
   const roleNamesById = useMemo(() => {
@@ -121,20 +118,11 @@ export function WorkspaceInvitationsListPage({ workspace }: { readonly workspace
     return map;
   }, [rolesQuery.data?.items]);
 
-  const filteredInvitations = useMemo(() => {
-    const invitations = invitationsQuery.data?.items ?? [];
-    const term = listState.state.q.trim().toLowerCase();
-
-    return invitations.filter((invitation) => {
-      if (statusFilter !== "all" && invitation.status !== statusFilter) {
-        return false;
-      }
-      if (!term) {
-        return true;
-      }
-      return `${invitation.email_normalized} ${invitation.invited_by_user_id}`.toLowerCase().includes(term);
-    });
-  }, [invitationsQuery.data?.items, listState.state.q, statusFilter]);
+  const invitationItems = invitationsQuery.data?.items ?? [];
+  const totalCount =
+    typeof invitationsQuery.data?.meta.totalCount === "number"
+      ? invitationsQuery.data.meta.totalCount
+      : invitationItems.length;
 
   if (!canView) {
     return <SettingsAccessDenied returnHref={settingsPaths.workspaces.general(workspace.id)} />;
@@ -186,7 +174,7 @@ export function WorkspaceInvitationsListPage({ workspace }: { readonly workspace
           message={normalizeSettingsError(invitationsQuery.error, "Unable to load workspace invitations.").message}
         />
       ) : null}
-      {invitationsQuery.isSuccess && filteredInvitations.length === 0 ? (
+      {invitationsQuery.isSuccess && invitationItems.length === 0 ? (
         <SettingsEmptyState
           title="No invitations"
           description="Create an invitation to onboard a workspace principal."
@@ -199,9 +187,9 @@ export function WorkspaceInvitationsListPage({ workspace }: { readonly workspace
           }
         />
       ) : null}
-      {invitationsQuery.isSuccess && filteredInvitations.length > 0 ? (
+      {invitationsQuery.isSuccess && invitationItems.length > 0 ? (
         <SettingsDataTable
-          rows={filteredInvitations}
+          rows={invitationItems}
           columns={[
             {
               id: "email",
@@ -241,10 +229,11 @@ export function WorkspaceInvitationsListPage({ workspace }: { readonly workspace
           }
           page={listState.state.page}
           pageSize={listState.state.pageSize}
-          totalCount={filteredInvitations.length}
+          totalCount={totalCount}
           onPageChange={listState.setPage}
           onPageSizeChange={listState.setPageSize}
           focusStorageKey={`settings-workspace-invitations-${workspace.id}`}
+          rowsAreCurrentPage
         />
       ) : null}
     </SettingsListLayout>
@@ -446,7 +435,9 @@ export function WorkspaceInvitationDetailPage({ workspace }: { readonly workspac
 
   const invitation = detailQuery.data;
   const roleNames = extractRoleIds(invitation).map((roleId) => roleNamesById.get(roleId) ?? roleId);
-  const canMutate = canManage && invitation.status === "pending";
+  const canMutate =
+    canManage &&
+    (invitation.status === "pending" || invitation.status === "expired");
 
   return (
     <SettingsDetailLayout
