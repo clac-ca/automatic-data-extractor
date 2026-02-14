@@ -15,7 +15,7 @@ urls = { "Repository" = "https://github.com/clac-ca/automatic-data-extractor" }
 # Runtime deps — pinned for reproducible builds
 # Union of API + worker dependencies.
 dependencies = [
-  "fastapi==0.128.7",
+  "fastapi==0.129.0",
   "uvicorn[standard]==0.40.0",
   "sqlalchemy==2.0.46",
   "alembic==1.18.4",
@@ -34,10 +34,10 @@ dependencies = [
   "openpyxl==3.1.5",
   "greenlet==3.3.1",
   "fastapi-users[sqlalchemy]==15.0.3",
-  "authlib==1.6.7",
+  "authlib==1.6.8",
   "sse-starlette==3.2.0",
   "pwdlib[argon2]==0.3.0",
-  "typer==0.21.2",
+  "typer==0.23.1",
   "uv==0.10.2",
 ]
 
@@ -55,7 +55,7 @@ dev = [
   "pytest-cov==7.0.0",
   "asgi-lifespan==2.1.0",
   "mypy==1.19.1",
-  "ruff==0.14.14",
+  "ruff==0.15.1",
   "openapi-spec-validator==0.7.2",
 ]
 
