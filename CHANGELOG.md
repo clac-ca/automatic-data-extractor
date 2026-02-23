@@ -1,5 +1,32 @@
 # Changelog
 
+## [1.9.0](https://github.com/clac-ca/automatic-data-extractor/compare/v1.8.0...v1.9.0) (2026-02-23)
+
+
+### Features
+
+* **access:** hard-cut invitation lifecycle and cursor paging ([#311](https://github.com/clac-ca/automatic-data-extractor/issues/311)) ([ab2cfd5](https://github.com/clac-ca/automatic-data-extractor/commit/ab2cfd5aff03dbbda0b00444d575ab28881c4e2a))
+* **access:** hard-cutover first-class access management model and UI ([#284](https://github.com/clac-ca/automatic-data-extractor/issues/284)) ([fb9d83f](https://github.com/clac-ca/automatic-data-extractor/commit/fb9d83f760dbfc96c1ce97fc181583d148b33103))
+* **documents:** polish preview tab with glide-first UX ([#291](https://github.com/clac-ca/automatic-data-extractor/issues/291)) ([b2502d0](https://github.com/clac-ca/automatic-data-extractor/commit/b2502d047a3059ecdded34186a8a82ec64994044))
+* **ops:** add azure launch infra bootstrap workflow ([#259](https://github.com/clac-ca/automatic-data-extractor/issues/259)) ([c2c1ef6](https://github.com/clac-ca/automatic-data-extractor/commit/c2c1ef6f42f3e39339fdf3552b6ff6f03cdaa792))
+
+
+### Bug Fixes
+
+* align Entra SSO identity model and bootstrap claims ([#271](https://github.com/clac-ca/automatic-data-extractor/issues/271)) ([0025ea4](https://github.com/clac-ca/automatic-data-extractor/commit/0025ea47721646ed9f7477273965ba64c22cb902))
+* **api:** enable API docs by default ([#283](https://github.com/clac-ca/automatic-data-extractor/issues/283)) ([365da73](https://github.com/clac-ca/automatic-data-extractor/commit/365da73c6a6fd902476f7b080c15d8a5c84f22e2))
+* **api:** enforce invitation lifecycle states and SCIM phone remove semantics ([#309](https://github.com/clac-ca/automatic-data-extractor/issues/309)) ([7509da9](https://github.com/clac-ca/automatic-data-extractor/commit/7509da9723fcb5c77d31fd7a458e88871d24eacf))
+* **api:** handle SCIM update conflicts and member filter removes ([#301](https://github.com/clac-ca/automatic-data-extractor/issues/301)) ([51bbf8b](https://github.com/clac-ca/automatic-data-extractor/commit/51bbf8b1bbb7fa3be59367f2e25877cb1d584073))
+* **api:** honor document stream resume cursor on connect ([#292](https://github.com/clac-ca/automatic-data-extractor/issues/292)) ([346d307](https://github.com/clac-ca/automatic-data-extractor/commit/346d30767445f63e7c05000f2ff5ad5e0ec80e55))
+* **documents:** force resync signal on stream queue overflow ([#293](https://github.com/clac-ca/automatic-data-extractor/issues/293)) ([e2f2b38](https://github.com/clac-ca/automatic-data-extractor/commit/e2f2b3876655422e2497788ab040ac649873ec06))
+* **infra:** ignore local cloudflare deploy scripts and cert material ([#279](https://github.com/clac-ca/automatic-data-extractor/issues/279)) ([2c9b9ad](https://github.com/clac-ca/automatic-data-extractor/commit/2c9b9adde8dd332d7eafc56c8f073cbfb6b822fd))
+* **infra:** use API health probes and document manual config overwrite ([#278](https://github.com/clac-ca/automatic-data-extractor/issues/278)) ([aec98ec](https://github.com/clac-ca/automatic-data-extractor/commit/aec98ec99708c2bace03870ffd483e823e56e0e3))
+* remove jit group sync and enforce scim-only idp groups ([#304](https://github.com/clac-ca/automatic-data-extractor/issues/304)) ([1f8fcac](https://github.com/clac-ca/automatic-data-extractor/commit/1f8fcacbcedff367ff4e874adedceacb887c9cfc))
+* **web:** align document preview Glide grid with ADE theme modes ([#310](https://github.com/clac-ca/automatic-data-extractor/issues/310)) ([f72ddf7](https://github.com/clac-ca/automatic-data-extractor/commit/f72ddf7f243a3aee0e3f099353f71f5cdf31f8ea))
+* **web:** derive preview column summary from returned preview width ([#302](https://github.com/clac-ca/automatic-data-extractor/issues/302)) ([4a13dc4](https://github.com/clac-ca/automatic-data-extractor/commit/4a13dc4b6d0e415d0cde5b1fba6a0bd1c42f027a))
+* **web:** remove vulnerable workbook sheet parsing on upload ([#287](https://github.com/clac-ca/automatic-data-extractor/issues/287)) ([7d1e040](https://github.com/clac-ca/automatic-data-extractor/commit/7d1e040a26a891e2539fc39f8a562582b27534cb))
+* **worker:** use UTC-aware cutoff in garbage collection ([#288](https://github.com/clac-ca/automatic-data-extractor/issues/288)) ([1aac23b](https://github.com/clac-ca/automatic-data-extractor/commit/1aac23b2e9d6a51197dfd107bfed1f01a3a8cebf))
+
 ## [1.8.0](https://github.com/clac-ca/automatic-data-extractor/compare/v1.7.2...v1.8.0) (2026-02-11)
 
 
