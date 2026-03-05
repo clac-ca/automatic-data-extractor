@@ -1160,13 +1160,12 @@ def download_document_original(
                 settings=settings,
                 storage=blob_storage,
             )
-            record, version, stream = service.stream_document_version(
+            record, filename, version, stream = service.stream_document_version(
                 workspace_id=workspace_id,
                 document_id=document_id,
                 version_no=1,
             )
             media_type = version.content_type or record.content_type or "application/octet-stream"
-            filename = version.filename_at_upload or record.name
             disposition = build_content_disposition(filename)
     except DocumentNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -1212,13 +1211,12 @@ def download_document_version(
                 settings=settings,
                 storage=blob_storage,
             )
-            record, version, stream = service.stream_document_version(
+            record, filename, version, stream = service.stream_document_version(
                 workspace_id=workspace_id,
                 document_id=document_id,
                 version_no=version_no,
             )
             media_type = version.content_type or record.content_type or "application/octet-stream"
-            filename = version.filename_at_upload or record.name
             disposition = build_content_disposition(filename)
     except DocumentNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc

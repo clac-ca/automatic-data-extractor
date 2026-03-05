@@ -52,6 +52,15 @@ All run endpoints are protected and scoped to workspace run permissions.
 - Downloads produced output when run output is available.
 - Returns conflict/availability errors while output is not ready.
 
+### Download Filename Behavior
+
+- Applies to:
+  - `GET /api/v1/workspaces/{workspaceId}/runs/{runId}/input/download`
+  - `GET /api/v1/workspaces/{workspaceId}/runs/{runId}/output/download`
+- Download filenames use the current source document display-name stem when available.
+- Output downloads fall back to the output artifact stem if the source document is unavailable.
+- Download filename extensions are derived from the artifact being streamed (version filename, artifact filename, then content-type fallback).
+
 ## Error Handling
 
 - `401 Unauthorized`: missing/invalid auth credentials.
