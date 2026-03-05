@@ -3,7 +3,11 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from ade_api.common.downloads import build_content_disposition
+from ade_api.common.downloads import (
+    build_canonical_download_filename,
+    build_content_disposition,
+    derive_artifact_extension,
+)
 from ade_api.features.documents.service import DocumentsService
 from ade_api.settings import Settings
 
@@ -35,6 +39,38 @@ def test_build_content_disposition_preserves_unicode_filename() -> None:
 
     assert 'filename="r_port _.pdf"' in header_value
     assert "filename*=UTF-8''r%C3%AAport%20%E2%9C%85.pdf" in header_value
+
+
+def test_derive_artifact_extension_precedence() -> None:
+    assert (
+        derive_artifact_extension(
+            version_filename="normalized.xlsx",
+            artifact_filename="output.csv",
+            content_type="text/plain",
+            fallback_filename="source.pdf",
+        )
+        == ".xlsx"
+    )
+
+
+def test_build_canonical_download_filename_uses_document_stem_and_artifact_extension() -> None:
+    filename = build_canonical_download_filename(
+        document_name="Quarterly Intake.csv",
+        version_filename="normalized.xlsx",
+        artifact_filename="output.csv",
+        content_type="text/csv",
+    )
+    assert filename == "Quarterly Intake.xlsx"
+
+
+def test_build_canonical_download_filename_falls_back_to_default_when_name_empty() -> None:
+    filename = build_canonical_download_filename(
+        document_name="   ",
+        version_filename=None,
+        artifact_filename=None,
+        content_type=None,
+    )
+    assert filename == "download"
 
 
 def test_normalise_filename_removes_control_characters(tmp_path: Path) -> None:

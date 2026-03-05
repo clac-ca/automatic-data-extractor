@@ -11,10 +11,11 @@ from httpx import AsyncClient
 
 from ade_api.common.ids import generate_uuid7
 from ade_api.common.time import utc_now
-from ade_storage import build_storage_adapter
-from ade_db.models import File, FileKind, FileVersion, FileVersionOrigin
 from ade_api.settings import Settings
+from ade_db.models import File, FileKind, FileVersion, FileVersionOrigin
+from ade_storage import build_storage_adapter
 from tests.api.utils import login
+
 from .helpers import seed_failed_run
 
 pytestmark = pytest.mark.asyncio
@@ -28,6 +29,7 @@ def _create_output_version(
     document: File,
     payload: bytes,
     filename: str = "normalized.xlsx",
+    content_type: str = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 ) -> FileVersion:
     output_file_id = generate_uuid7()
     output_blob_name = f"{workspace_id}/files/{output_file_id}"
@@ -56,7 +58,7 @@ def _create_output_version(
         created_by_user_id=None,
         sha256=stored.sha256,
         byte_size=stored.byte_size,
-        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        content_type=content_type,
         filename_at_upload=filename,
         storage_version_id=stored.version_id,
         created_at=utc_now(),
@@ -165,7 +167,7 @@ async def test_unified_download_prefers_newer_output_version(
     )
     assert download.status_code == 200
     assert download.content == b"normalized-bytes"
-    assert 'filename="normalized.xlsx"' in download.headers["content-disposition"]
+    assert 'filename="source.xlsx"' in download.headers["content-disposition"]
 
 
 async def test_unified_download_prefers_newer_input_version(
@@ -258,7 +260,7 @@ async def test_unified_download_still_returns_output_after_failed_run_without_ne
     )
     assert download.status_code == 200
     assert download.content == b"normalized-v1"
-    assert 'filename="normalized.xlsx"' in download.headers["content-disposition"]
+    assert 'filename="source.xlsx"' in download.headers["content-disposition"]
 
 
 async def test_download_original_endpoint_returns_version_one(
@@ -296,3 +298,212 @@ async def test_download_original_endpoint_returns_version_one(
     )
     assert download_original.content == expected_payload
     assert 'filename="source.csv"' in download_original.headers["content-disposition"]
+
+
+async def test_renamed_document_latest_download_uses_renamed_stem_without_output(
+    async_client: AsyncClient,
+    seed_identity,
+) -> None:
+    member = seed_identity.member
+    token, _ = await login(async_client, email=member.email, password=member.password)
+    workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
+    headers = {"X-API-Key": token}
+
+    upload = await async_client.post(
+        f"{workspace_base}/documents",
+        headers=headers,
+        files={"file": ("source.csv", b"original-bytes", "text/csv")},
+    )
+    assert upload.status_code == 201, upload.text
+    document_id = upload.json()["id"]
+
+    rename = await async_client.patch(
+        f"{workspace_base}/documents/{document_id}",
+        headers=headers,
+        json={"name": "Quarterly Intake.csv"},
+    )
+    assert rename.status_code == 200, rename.text
+
+    download = await async_client.get(
+        f"{workspace_base}/documents/{document_id}/download",
+        headers=headers,
+    )
+    assert download.status_code == 200
+    assert download.content == b"original-bytes"
+    assert 'filename="Quarterly Intake.csv"' in download.headers["content-disposition"]
+
+
+async def test_renamed_document_latest_download_uses_renamed_stem_with_output_same_extension(
+    async_client: AsyncClient,
+    seed_identity,
+    db_session,
+    settings: Settings,
+) -> None:
+    member = seed_identity.member
+    token, _ = await login(async_client, email=member.email, password=member.password)
+    workspace_id = seed_identity.workspace_id
+    workspace_base = f"/api/v1/workspaces/{workspace_id}"
+    headers = {"X-API-Key": token}
+
+    upload = await async_client.post(
+        f"{workspace_base}/documents",
+        headers=headers,
+        files={"file": ("source.csv", b"original-bytes", "text/csv")},
+    )
+    assert upload.status_code == 201, upload.text
+    document_id = UUID(upload.json()["id"])
+
+    rename = await async_client.patch(
+        f"{workspace_base}/documents/{document_id}",
+        headers=headers,
+        json={"name": "Quarterly Intake.csv"},
+    )
+    assert rename.status_code == 200, rename.text
+
+    document = await anyio.to_thread.run_sync(db_session.get, File, document_id)
+    assert document is not None
+    _create_output_version(
+        db_session=db_session,
+        settings=settings,
+        workspace_id=workspace_id,
+        document=document,
+        payload=b"normalized-csv-bytes",
+        filename="normalized.csv",
+        content_type="text/csv",
+    )
+    await anyio.to_thread.run_sync(db_session.commit)
+
+    download = await async_client.get(
+        f"{workspace_base}/documents/{document_id}/download",
+        headers=headers,
+    )
+    assert download.status_code == 200
+    assert download.content == b"normalized-csv-bytes"
+    assert 'filename="Quarterly Intake.csv"' in download.headers["content-disposition"]
+
+
+async def test_renamed_document_latest_download_uses_output_extension_when_different(
+    async_client: AsyncClient,
+    seed_identity,
+    db_session,
+    settings: Settings,
+) -> None:
+    member = seed_identity.member
+    token, _ = await login(async_client, email=member.email, password=member.password)
+    workspace_id = seed_identity.workspace_id
+    workspace_base = f"/api/v1/workspaces/{workspace_id}"
+    headers = {"X-API-Key": token}
+
+    upload = await async_client.post(
+        f"{workspace_base}/documents",
+        headers=headers,
+        files={"file": ("source.csv", b"original-bytes", "text/csv")},
+    )
+    assert upload.status_code == 201, upload.text
+    document_id = UUID(upload.json()["id"])
+
+    rename = await async_client.patch(
+        f"{workspace_base}/documents/{document_id}",
+        headers=headers,
+        json={"name": "Quarterly Intake.csv"},
+    )
+    assert rename.status_code == 200, rename.text
+
+    document = await anyio.to_thread.run_sync(db_session.get, File, document_id)
+    assert document is not None
+    _create_output_version(
+        db_session=db_session,
+        settings=settings,
+        workspace_id=workspace_id,
+        document=document,
+        payload=b"normalized-xlsx-bytes",
+        filename="normalized.xlsx",
+    )
+    await anyio.to_thread.run_sync(db_session.commit)
+
+    download = await async_client.get(
+        f"{workspace_base}/documents/{document_id}/download",
+        headers=headers,
+    )
+    assert download.status_code == 200
+    assert download.content == b"normalized-xlsx-bytes"
+    assert 'filename="Quarterly Intake.xlsx"' in download.headers["content-disposition"]
+
+
+async def test_renamed_document_original_download_uses_renamed_stem(
+    async_client: AsyncClient,
+    seed_identity,
+) -> None:
+    member = seed_identity.member
+    token, _ = await login(async_client, email=member.email, password=member.password)
+    workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
+    headers = {"X-API-Key": token}
+
+    upload = await async_client.post(
+        f"{workspace_base}/documents",
+        headers=headers,
+        files={"file": ("source.csv", b"original-v1", "text/csv")},
+    )
+    assert upload.status_code == 201, upload.text
+    document_id = upload.json()["id"]
+
+    rename = await async_client.patch(
+        f"{workspace_base}/documents/{document_id}",
+        headers=headers,
+        json={"name": "Quarterly Intake.csv"},
+    )
+    assert rename.status_code == 200, rename.text
+
+    download_original = await async_client.get(
+        f"{workspace_base}/documents/{document_id}/original/download",
+        headers=headers,
+    )
+    assert download_original.status_code == 200
+    assert download_original.content == b"original-v1"
+    assert 'filename="Quarterly Intake.csv"' in download_original.headers["content-disposition"]
+
+
+async def test_renamed_document_specific_version_download_uses_renamed_stem_and_version_extension(
+    async_client: AsyncClient,
+    seed_identity,
+) -> None:
+    member = seed_identity.member
+    token, _ = await login(async_client, email=member.email, password=member.password)
+    workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
+    headers = {"X-API-Key": token}
+
+    upload = await async_client.post(
+        f"{workspace_base}/documents",
+        headers=headers,
+        files={"file": ("source.csv", b"original-v1", "text/csv")},
+    )
+    assert upload.status_code == 201, upload.text
+    document_id = upload.json()["id"]
+
+    upload_v2 = await async_client.post(
+        f"{workspace_base}/documents/{document_id}/versions",
+        headers=headers,
+        files={
+            "file": (
+                "source.xlsx",
+                b"original-v2",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+    assert upload_v2.status_code == 201, upload_v2.text
+
+    rename = await async_client.patch(
+        f"{workspace_base}/documents/{document_id}",
+        headers=headers,
+        json={"name": "Quarterly Intake.csv"},
+    )
+    assert rename.status_code == 200, rename.text
+
+    download_version = await async_client.get(
+        f"{workspace_base}/documents/{document_id}/versions/2/download",
+        headers=headers,
+    )
+    assert download_version.status_code == 200
+    assert download_version.content == b"original-v2"
+    assert 'filename="Quarterly Intake.xlsx"' in download_version.headers["content-disposition"]
