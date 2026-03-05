@@ -25,6 +25,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ade_api.common.cursor_listing import ResolvedCursorSort
+from ade_api.common.downloads import build_canonical_download_filename
 from ade_api.common.list_filters import FilterItem, FilterJoinOperator
 from ade_api.common.logging import log_context
 from ade_api.common.sse import sse_text
@@ -1150,7 +1151,10 @@ class RunsService:
                 )
                 document_id = str(document.id)
                 version_no = version.version_no
-                filename = version.filename_at_upload or document.name
+                filename = self._build_input_download_filename(
+                    document=document,
+                    version=version,
+                )
                 content_type = version.content_type
                 size_bytes = version.byte_size
             except RunDocumentMissingError:
@@ -1201,9 +1205,11 @@ class RunsService:
             version_no = output_version.version_no
             size_bytes = output_version.byte_size
             content_type = output_version.content_type or "application/octet-stream"
-            filename = output_version.filename_at_upload or (
-                output_file.name if output_file is not None else None
-            )
+            if output_file is not None:
+                filename = self._build_output_download_filename(
+                    output_file=output_file,
+                    output_version=output_version,
+                )
 
         return RunOutput(
             ready=ready,
@@ -1251,7 +1257,7 @@ class RunsService:
         self,
         *,
         run_id: UUID,
-    ) -> tuple[Run, File, FileVersion, Iterator[bytes]]:
+    ) -> tuple[Run, File, FileVersion, str, Iterator[bytes]]:
         run = self._require_run(run_id)
         if not run.input_file_version_id:
             raise RunInputMissingError("Run input is unavailable")
@@ -1259,6 +1265,7 @@ class RunsService:
             workspace_id=run.workspace_id,
             file_version_id=run.input_file_version_id,
         )
+        filename = self._build_input_download_filename(document=document, version=version)
 
         stream = self._blob_storage.stream(
             document.blob_name,
@@ -1282,7 +1289,7 @@ class RunsService:
                 )
                 raise RunDocumentMissingError("Run input file is unavailable") from exc
 
-        return run, document, version, _guarded()
+        return run, document, version, filename, _guarded()
 
     def get_run_output_metadata(
         self,
@@ -1388,8 +1395,12 @@ class RunsService:
         self,
         *,
         run_id: UUID,
-    ) -> tuple[Run, File, FileVersion, Iterator[bytes]]:
+    ) -> tuple[Run, File, FileVersion, str, Iterator[bytes]]:
         run, output_file, output_version = self.resolve_output_for_download(run_id=run_id)
+        filename = self._build_output_download_filename(
+            output_file=output_file,
+            output_version=output_version,
+        )
         stream = self._blob_storage.stream(
             output_file.blob_name,
             version_id=output_version.storage_version_id,
@@ -1411,7 +1422,48 @@ class RunsService:
                 )
                 raise RunOutputMissingError("Run output is unavailable") from exc
 
-        return run, output_file, output_version, _guarded()
+        return run, output_file, output_version, filename, _guarded()
+
+    @staticmethod
+    def _build_input_download_filename(
+        *,
+        document: File,
+        version: FileVersion,
+    ) -> str:
+        return build_canonical_download_filename(
+            document_name=document.name,
+            version_filename=version.filename_at_upload,
+            artifact_filename=document.name,
+            content_type=version.content_type,
+        )
+
+    def _build_output_download_filename(
+        self,
+        *,
+        output_file: File,
+        output_version: FileVersion,
+    ) -> str:
+        source_document_name = self._resolve_output_source_document_name(output_file=output_file)
+        return build_canonical_download_filename(
+            document_name=source_document_name or output_file.name,
+            version_filename=output_version.filename_at_upload,
+            artifact_filename=output_file.name,
+            content_type=output_version.content_type,
+            default=_OUTPUT_FALLBACK_FILENAME,
+        )
+
+    def _resolve_output_source_document_name(self, *, output_file: File) -> str | None:
+        source_file_id = output_file.source_file_id
+        if source_file_id is None:
+            return None
+        source_document = self._session.get(File, source_file_id)
+        if (
+            source_document is None
+            or source_document.workspace_id != output_file.workspace_id
+            or source_document.kind != FileKind.INPUT
+        ):
+            return None
+        return source_document.name
 
     def get_run_output_preview(
         self,
