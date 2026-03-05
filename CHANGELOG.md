@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.1](https://github.com/clac-ca/automatic-data-extractor/compare/v1.9.0...v1.9.1) (2026-03-05)
+
+
+### Bug Fixes
+
+* **api:** canonicalize download filenames across documents and runs ([#323](https://github.com/clac-ca/automatic-data-extractor/issues/323)) ([#324](https://github.com/clac-ca/automatic-data-extractor/issues/324)) ([33f2555](https://github.com/clac-ca/automatic-data-extractor/commit/33f25554f20bbdfd99ea8c4e3ab40924fded40b5))
+
 ## [1.9.0](https://github.com/clac-ca/automatic-data-extractor/compare/v1.8.0...v1.9.0) (2026-02-23)
 
 
