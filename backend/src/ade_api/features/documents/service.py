@@ -33,6 +33,7 @@ from ade_api.common.cursor_listing import (
     parse_str,
     resolve_cursor_sort,
 )
+from ade_api.common.downloads import build_canonical_download_filename
 from ade_api.common.ids import generate_uuid7
 from ade_api.common.list_filters import FilterItem, FilterJoinOperator
 from ade_api.common.logging import log_context
@@ -1194,10 +1195,12 @@ class DocumentsService:
         self._attach_last_runs(workspace_id, [payload])
         self._apply_derived_fields(payload)
 
-        if selected_source == "output":
-            filename = target_version.filename_at_upload or target_file.name
-        else:
-            filename = document.name
+        filename = build_canonical_download_filename(
+            document_name=document.name,
+            version_filename=target_version.filename_at_upload,
+            artifact_filename=target_file.name,
+            content_type=target_version.content_type,
+        )
 
         logger.info(
             "document.stream.ready",
@@ -1217,8 +1220,8 @@ class DocumentsService:
         workspace_id: UUID,
         document_id: UUID,
         version_no: int,
-    ) -> tuple[DocumentOut, FileVersion, Iterator[bytes]]:
-        """Return a document record, version metadata, and iterator for its bytes."""
+    ) -> tuple[DocumentOut, str, FileVersion, Iterator[bytes]]:
+        """Return a document record, filename, version metadata, and bytes iterator."""
 
         logger.debug(
             "document.stream_version.start",
@@ -1276,6 +1279,12 @@ class DocumentsService:
         payload = DocumentOut.model_validate(document)
         self._attach_last_runs(workspace_id, [payload])
         self._apply_derived_fields(payload)
+        filename = build_canonical_download_filename(
+            document_name=document.name,
+            version_filename=version.filename_at_upload,
+            artifact_filename=document.name,
+            content_type=version.content_type,
+        )
 
         logger.info(
             "document.stream_version.ready",
@@ -1286,7 +1295,7 @@ class DocumentsService:
                 byte_size=version.byte_size,
             ),
         )
-        return payload, version, _guarded()
+        return payload, filename, version, _guarded()
 
     def delete_document(
         self,

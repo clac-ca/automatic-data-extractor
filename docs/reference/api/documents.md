@@ -60,6 +60,16 @@ All document endpoints are protected and require workspace document permissions.
 - Uploads a new version for an existing document identity.
 - Use this when replacing file content while preserving document metadata history.
 
+### Download Filename Behavior
+
+- Applies to:
+  - `GET /api/v1/workspaces/{workspaceId}/documents/{documentId}/download`
+  - `GET /api/v1/workspaces/{workspaceId}/documents/{documentId}/original/download`
+  - `GET /api/v1/workspaces/{workspaceId}/documents/{documentId}/versions/{versionNo}/download`
+- Download filenames use the current document display-name stem.
+- Download filename extensions are derived from the artifact being streamed (version filename, artifact filename, then content-type fallback).
+- If no extension can be derived, the current document extension is used; if none exists, a safe default name is used.
+
 ## Error Handling
 
 - `400 Bad Request`: invalid JSON metadata/run options or invalid filters.

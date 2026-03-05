@@ -564,9 +564,8 @@ def download_workspace_run_input_endpoint(
                 settings=settings,
                 blob_storage=blob_storage,
             )
-            _, document, version, stream = local_service.stream_run_input(run_id=run_id)
+            _, _, version, filename, stream = local_service.stream_run_input(run_id=run_id)
             media_type = version.content_type or "application/octet-stream"
-            filename = version.filename_at_upload or document.name
     except RunNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except (RunDocumentMissingError, RunInputMissingError) as exc:
@@ -756,7 +755,7 @@ def download_workspace_run_output_endpoint(
                 blob_storage=blob_storage,
             )
             try:
-                _, output_file, output_version, stream = local_service.stream_run_output(
+                _, _, output_version, filename, stream = local_service.stream_run_output(
                     run_id=run_id
                 )
             except RunOutputNotReadyError as exc:
@@ -771,7 +770,6 @@ def download_workspace_run_output_endpoint(
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
     media_type = output_version.content_type or "application/octet-stream"
-    filename = output_version.filename_at_upload or output_file.name
     response = StreamingResponse(stream, media_type=media_type)
     response.headers["Content-Disposition"] = build_content_disposition(filename)
     return response

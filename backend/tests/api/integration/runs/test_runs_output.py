@@ -32,7 +32,7 @@ async def test_run_output_endpoint_serves_file(
     db_session.add(configuration)
     await anyio.to_thread.run_sync(db_session.flush)
 
-    document = make_document(workspace_id=workspace_id, filename="input.csv")
+    document = make_document(workspace_id=workspace_id, filename="Quarterly Intake.csv")
     db_session.add_all([document])
     await anyio.to_thread.run_sync(db_session.flush)
 
@@ -94,7 +94,7 @@ async def test_run_output_endpoint_serves_file(
     payload = metadata.json()
     assert payload["has_output"] is True
     assert payload["ready"] is True
-    assert payload["filename"] == "normalized.xlsx"
+    assert payload["filename"] == "Quarterly Intake.xlsx"
     assert payload["fileVersionId"] == str(output_version.id)
     assert payload["download_url"].endswith(
         f"/api/v1/workspaces/{workspace_id}/runs/{run.id}/output/download"
@@ -103,3 +103,47 @@ async def test_run_output_endpoint_serves_file(
     download = await async_client.get(payload["download_url"], headers=headers)
     assert download.status_code == 200
     assert download.text == "demo-output"
+    assert 'filename="Quarterly Intake.xlsx"' in download.headers["content-disposition"]
+
+
+async def test_run_input_download_uses_current_document_stem(
+    async_client,
+    seed_identity,
+    db_session,
+    settings: Settings,
+) -> None:
+    workspace_id = seed_identity.workspace_id
+    configuration = make_configuration(
+        workspace_id=workspace_id,
+        name="Input Config",
+    )
+    db_session.add(configuration)
+    await anyio.to_thread.run_sync(db_session.flush)
+
+    document = make_document(workspace_id=workspace_id, filename="Quarterly Intake.csv")
+    assert document.current_version is not None
+    document.current_version.filename_at_upload = "source.csv"
+    storage = build_storage_adapter(settings)
+    stored_input = storage.write(document.blob_name, io.BytesIO(b"demo-input"))
+    document.current_version.storage_version_id = stored_input.version_id or stored_input.sha256
+    db_session.add_all([document])
+    await anyio.to_thread.run_sync(db_session.flush)
+
+    run = make_run(
+        workspace_id=workspace_id,
+        configuration_id=configuration.id,
+        file_version_id=document.current_version_id,
+        status=RunStatus.SUCCEEDED,
+    )
+    run.completed_at = utc_now()
+    db_session.add(run)
+    await anyio.to_thread.run_sync(db_session.commit)
+
+    headers = await auth_headers(async_client, seed_identity.workspace_owner)
+    download = await async_client.get(
+        f"/api/v1/workspaces/{workspace_id}/runs/{run.id}/input/download",
+        headers=headers,
+    )
+    assert download.status_code == 200
+    assert download.text == "demo-input"
+    assert 'filename="Quarterly Intake.csv"' in download.headers["content-disposition"]
