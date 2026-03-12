@@ -4,17 +4,20 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import String, case, cast
+from sqlalchemy import String, case, cast, func
 from sqlalchemy.sql.elements import ColumnElement
 
 from ade_api.common.search import SearchField, SearchRegistry, build_like_predicate
 from ade_db.models import (
     ApiKey,
+    AssignmentScopeType,
     Configuration,
     File,
     FileTag,
     FileVersion,
+    Group,
     Permission,
+    PrincipalType,
     Role,
     RoleAssignment,
     Run,
@@ -52,6 +55,30 @@ def _any_field(field_id: str, relationship: Any, column: ColumnElement[Any]) -> 
 
 _ASSIGNMENT_SCOPE_TYPE = case(
     (UserRoleAssignment.workspace_id.is_(None), "global"),
+    else_="workspace",
+)
+
+_PRINCIPAL_ASSIGNMENT_DISPLAY_NAME = case(
+    (
+        RoleAssignment.principal_type == PrincipalType.USER,
+        func.coalesce(User.display_name, User.email),
+    ),
+    (
+        RoleAssignment.principal_type == PrincipalType.GROUP,
+        Group.display_name,
+    ),
+    else_=None,
+)
+_PRINCIPAL_ASSIGNMENT_EMAIL = case(
+    (RoleAssignment.principal_type == PrincipalType.USER, User.email),
+    else_=None,
+)
+_PRINCIPAL_ASSIGNMENT_SLUG = case(
+    (RoleAssignment.principal_type == PrincipalType.GROUP, Group.slug),
+    else_=None,
+)
+_PRINCIPAL_ASSIGNMENT_SCOPE_TYPE = case(
+    (RoleAssignment.scope_type == AssignmentScopeType.ORGANIZATION, "organization"),
     else_="workspace",
 )
 
@@ -109,9 +136,12 @@ SEARCH_REGISTRY = SearchRegistry({
     "principalroleassignments": [
         _field_cast("principalType", RoleAssignment.principal_type),
         _field_cast("principalId", RoleAssignment.principal_id),
+        _field("principalDisplayName", _PRINCIPAL_ASSIGNMENT_DISPLAY_NAME),
+        _field("principalEmail", _PRINCIPAL_ASSIGNMENT_EMAIL),
+        _field("principalSlug", _PRINCIPAL_ASSIGNMENT_SLUG),
         _field_cast("roleId", RoleAssignment.role_id),
         _field("roleSlug", Role.slug),
-        _field_cast("scopeType", RoleAssignment.scope_type),
+        _field("scopeType", _PRINCIPAL_ASSIGNMENT_SCOPE_TYPE),
         _field_cast("scopeId", RoleAssignment.scope_id),
     ],
 })
