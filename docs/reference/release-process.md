@@ -18,6 +18,12 @@ Explain how ADE versions and container images are produced, including rebuild re
 3. Merging the release PR updates `VERSION`/`CHANGELOG` and creates GitHub release tag `vX.Y.Z`.
 4. Publishing that release triggers `docker-image.yaml` and publishes images.
 
+### Conventional commit requirement on `main`
+
+Release Please only increments versions from parseable Conventional Commit messages on `main`.
+If a squash-merged PR lands with a non-conventional title, Release Please can skip release creation for that push.
+When needed, add a follow-up commit with a valid Conventional Commit type (`fix:`, `feat:`, `deps:`), or force a specific version with a `Release-As: X.Y.Z` footer.
+
 ## Current Workflow Targets
 
 - `release-please.yaml` runs on pushes to `main`.
