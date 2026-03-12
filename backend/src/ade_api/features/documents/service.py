@@ -46,6 +46,7 @@ from ade_api.features.runs.schemas import RunColumnResource, RunFieldResource, R
 from ade_api.settings import Settings
 from ade_db import utc_now
 from ade_db.models import (
+    AssignmentScopeType,
     DocumentActivityThread,
     DocumentActivityThreadAnchorType,
     DocumentView,
@@ -57,6 +58,8 @@ from ade_db.models import (
     FileTag,
     FileVersion,
     FileVersionOrigin,
+    PrincipalType,
+    RoleAssignment,
     Run,
     RunField,
     RunMetrics,
@@ -2198,14 +2201,25 @@ class DocumentsService:
             last_end = mention.end
 
         unique_ids = list(dict.fromkeys(UUID(str(mention.user_id)) for mention in ordered_mentions))
+        workspace_membership_ids = (
+            select(WorkspaceMembership.user_id)
+            .where(WorkspaceMembership.workspace_id == workspace_id)
+        )
+        workspace_principal_ids = (
+            select(RoleAssignment.principal_id)
+            .where(RoleAssignment.scope_type == AssignmentScopeType.WORKSPACE)
+            .where(RoleAssignment.scope_id == workspace_id)
+            .where(RoleAssignment.principal_type == PrincipalType.USER)
+        )
         stmt = (
             select(User)
-            .join(
-                WorkspaceMembership,
-                WorkspaceMembership.user_id == User.id,
-            )
-            .where(WorkspaceMembership.workspace_id == workspace_id)
             .where(User.id.in_(unique_ids))
+            .where(
+                or_(
+                    User.id.in_(workspace_membership_ids),
+                    User.id.in_(workspace_principal_ids),
+                )
+            )
         )
         users = list(self._session.execute(stmt).scalars())
         found = {user.id for user in users}
