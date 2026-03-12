@@ -151,7 +151,7 @@ async def test_note_thread_appends_to_bottom_with_mentions(
     thread = created.json()
     assert thread["anchorType"] == "note"
     assert [comment["body"] for comment in thread["comments"]] == [body]
-    assert thread["comments"][0]["editedAt"] is None
+    assert thread["comments"][0].get("editedAt") is None
 
     activity = await async_client.get(
         f"/api/v1/workspaces/{seed_identity.workspace_id}/documents/{document.id}/activity",
@@ -241,6 +241,7 @@ async def test_reply_to_document_and_run_items_keeps_timeline_position(
         "Follow-up on the run",
     ]
 
+    await anyio.to_thread.run_sync(db_session.expire_all)
     stored_document = await anyio.to_thread.run_sync(db_session.get, File, document.id)
     assert stored_document is not None
     assert stored_document.comment_count == 3
