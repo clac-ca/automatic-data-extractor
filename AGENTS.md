@@ -228,6 +228,9 @@ gh workflow run .github/workflows/ghcr-package-cleanup.yaml \
 - Never overwrite existing `vX.Y.Z` or `vX.Y.Z-rN` tags.
 - PR-first workflow is default for merges to `development`.
 - Keep releases aligned with Release Please; avoid ad-hoc custom versioning.
+- For `development` -> `main` promotion PRs that will be squash-merged, ensure Release Please can see releasable metadata:
+  - use a releasable PR title (`fix:`, `feat:`, `deps:`), or
+  - add a `BEGIN_COMMIT_OVERRIDE` / `END_COMMIT_OVERRIDE` block to the PR body with releasable conventional commit lines.
 
 ## 🤖 Agent rules
 
