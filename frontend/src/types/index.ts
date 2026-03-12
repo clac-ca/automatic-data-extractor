@@ -26,10 +26,19 @@ export type RunBatchCreateOptions = GeneratedComponents["schemas"]["RunBatchCrea
 export type RunBatchCreateResponse = GeneratedComponents["schemas"]["RunBatchCreateResponse"];
 export type { RunSummary } from "./runSummary";
 
-// Document comments
-export type DocumentCommentCreate = GeneratedComponents["schemas"]["DocumentCommentCreate"];
+// Document activity and comments
+export type DocumentActivityResponse = GeneratedComponents["schemas"]["DocumentActivityResponse"];
+export type DocumentActivityThreadCreate = GeneratedComponents["schemas"]["DocumentActivityThreadCreate"];
+export type DocumentActivityCommentCreate = GeneratedComponents["schemas"]["DocumentActivityCommentCreate"];
+export type DocumentActivityThreadOut = GeneratedComponents["schemas"]["DocumentActivityThreadOut"];
+export type DocumentActivityDocumentItemOut = GeneratedComponents["schemas"]["DocumentActivityDocumentItemOut"];
+export type DocumentActivityRunItemOut = GeneratedComponents["schemas"]["DocumentActivityRunItemOut"];
+export type DocumentActivityNoteItemOut = GeneratedComponents["schemas"]["DocumentActivityNoteItemOut"];
+export type DocumentActivityRunOut = GeneratedComponents["schemas"]["DocumentActivityRunOut"];
+export type DocumentCommentMentionIn = GeneratedComponents["schemas"]["DocumentCommentMentionIn"];
+export type DocumentCommentMentionOut = GeneratedComponents["schemas"]["DocumentCommentMentionOut"];
 export type DocumentCommentOut = GeneratedComponents["schemas"]["DocumentCommentOut"];
-export type DocumentCommentPage = GeneratedComponents["schemas"]["DocumentCommentPage"];
+export type DocumentCommentUpdate = GeneratedComponents["schemas"]["DocumentCommentUpdate"];
 
 // RBAC and workspace types
 export type ScopeType = GeneratedComponents["schemas"]["ScopeType"];

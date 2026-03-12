@@ -64,6 +64,10 @@ from .changes import (
 )
 from .events import get_document_changes_hub
 from .exceptions import (
+    DocumentActivityThreadConflictError,
+    DocumentActivityThreadNotFoundError,
+    DocumentCommentEditForbiddenError,
+    DocumentCommentNotFoundError,
     DocumentFileMissingError,
     DocumentNameConflictError,
     DocumentNotFoundError,
@@ -77,11 +81,16 @@ from .exceptions import (
     DocumentViewImmutableError,
     DocumentViewNotFoundError,
     DocumentWorksheetParseError,
+    InvalidDocumentActivityThreadAnchorError,
     InvalidDocumentCommentMentionsError,
     InvalidDocumentRenameError,
     InvalidDocumentTagsError,
 )
 from .schemas import (
+    DocumentActivityCommentCreate,
+    DocumentActivityResponse,
+    DocumentActivityThreadCreate,
+    DocumentActivityThreadOut,
     DocumentBatchDeleteRequest,
     DocumentBatchDeleteResponse,
     DocumentBatchRestoreConflict,
@@ -91,9 +100,8 @@ from .schemas import (
     DocumentBatchTagsResponse,
     DocumentChangeDeltaResponse,
     DocumentChangeEntry,
-    DocumentCommentCreate,
     DocumentCommentOut,
-    DocumentCommentPage,
+    DocumentCommentUpdate,
     DocumentConflictMode,
     DocumentListLifecycle,
     DocumentListPage,
@@ -113,10 +121,6 @@ from .schemas import (
 )
 from .service import DocumentsService
 from .sorting import (
-    COMMENT_CURSOR_FIELDS,
-    COMMENT_DEFAULT_SORT,
-    COMMENT_ID_FIELD,
-    COMMENT_SORT_FIELDS,
     CURSOR_FIELDS,
     DEFAULT_SORT,
     ID_FIELD,
@@ -994,15 +998,14 @@ def read_document_list_row(
 
 
 @router.get(
-    "/{documentId}/comments",
-    response_model=DocumentCommentPage,
+    "/{documentId}/activity",
+    response_model=DocumentActivityResponse,
     status_code=status.HTTP_200_OK,
-    summary="List document comments",
+    summary="Get document activity timeline",
     response_model_exclude_none=False,
-    dependencies=[Depends(strict_cursor_query_guard())],
     responses={
         status.HTTP_401_UNAUTHORIZED: {
-            "description": "Authentication required to access comments.",
+            "description": "Authentication required to access document activity.",
         },
         status.HTTP_403_FORBIDDEN: {
             "description": "Workspace permissions do not allow document access.",
@@ -1012,43 +1015,31 @@ def read_document_list_row(
         },
     },
 )
-def list_document_comments(
+def get_document_activity(
     workspace_id: WorkspacePath,
     document_id: DocumentPath,
-    list_query: Annotated[CursorQueryParams, Depends(cursor_query_params)],
     service: DocumentsServiceReadDep,
     _actor: DocumentReader,
-) -> DocumentCommentPage:
+) -> DocumentActivityResponse:
     try:
-        resolved_sort = resolve_cursor_sort(
-            list_query.sort,
-            allowed=COMMENT_SORT_FIELDS,
-            cursor_fields=COMMENT_CURSOR_FIELDS,
-            default=COMMENT_DEFAULT_SORT,
-            id_field=COMMENT_ID_FIELD,
-        )
-        return service.list_document_comments(
+        return service.get_document_activity(
             workspace_id=workspace_id,
             document_id=document_id,
-            limit=list_query.limit,
-            cursor=list_query.cursor,
-            resolved_sort=resolved_sort,
-            include_total=list_query.include_total,
         )
     except DocumentNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
 @router.post(
-    "/{documentId}/comments",
+    "/{documentId}/threads",
     dependencies=[Security(require_csrf)],
-    response_model=DocumentCommentOut,
+    response_model=DocumentActivityThreadOut,
     status_code=status.HTTP_201_CREATED,
-    summary="Create a document comment",
+    summary="Create a document activity thread",
     response_model_exclude_none=True,
     responses={
         status.HTTP_401_UNAUTHORIZED: {
-            "description": "Authentication required to create comments.",
+            "description": "Authentication required to create activity threads.",
         },
         status.HTTP_403_FORBIDDEN: {
             "description": "Workspace permissions do not allow document access.",
@@ -1061,23 +1052,125 @@ def list_document_comments(
         },
     },
 )
-def create_document_comment(
+def create_document_activity_thread(
     workspace_id: WorkspacePath,
     document_id: DocumentPath,
-    payload: DocumentCommentCreate,
+    payload: DocumentActivityThreadCreate,
     service: DocumentsServiceDep,
     actor: DocumentReader,
-) -> DocumentCommentOut:
+) -> DocumentActivityThreadOut:
     try:
-        return service.create_document_comment(
+        return service.create_document_activity_thread(
             workspace_id=workspace_id,
             document_id=document_id,
+            anchor_type=payload.anchor_type,
+            anchor_id=payload.anchor_id,
             body=payload.body,
             mentions=payload.mentions,
             actor=actor,
         )
     except DocumentNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except DocumentActivityThreadConflictError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except InvalidDocumentCommentMentionsError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
+    except InvalidDocumentActivityThreadAnchorError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
+
+
+@router.post(
+    "/{documentId}/threads/{threadId}/comments",
+    dependencies=[Security(require_csrf)],
+    response_model=DocumentCommentOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="Reply in a document activity thread",
+    response_model_exclude_none=True,
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {
+            "description": "Authentication required to create comments.",
+        },
+        status.HTTP_403_FORBIDDEN: {
+            "description": "Workspace permissions do not allow document access.",
+        },
+        status.HTTP_404_NOT_FOUND: {
+            "description": "Document or thread not found within the workspace.",
+        },
+        status.HTTP_422_UNPROCESSABLE_CONTENT: {
+            "description": "Comment payload is invalid.",
+        },
+    },
+)
+def create_document_activity_comment(
+    workspace_id: WorkspacePath,
+    document_id: DocumentPath,
+    thread_id: Annotated[UUID, Path(alias="threadId")],
+    payload: DocumentActivityCommentCreate,
+    service: DocumentsServiceDep,
+    actor: DocumentReader,
+) -> DocumentCommentOut:
+    try:
+        return service.create_document_activity_comment(
+            workspace_id=workspace_id,
+            document_id=document_id,
+            thread_id=thread_id,
+            body=payload.body,
+            mentions=payload.mentions,
+            actor=actor,
+        )
+    except DocumentNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except DocumentActivityThreadNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except InvalidDocumentCommentMentionsError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
+
+
+@router.patch(
+    "/{documentId}/comments/{commentId}",
+    dependencies=[Security(require_csrf)],
+    response_model=DocumentCommentOut,
+    status_code=status.HTTP_200_OK,
+    summary="Edit a document comment",
+    response_model_exclude_none=True,
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {
+            "description": "Authentication required to edit comments.",
+        },
+        status.HTTP_403_FORBIDDEN: {
+            "description": "Only the comment author can edit this comment.",
+        },
+        status.HTTP_404_NOT_FOUND: {
+            "description": "Document or comment not found within the workspace.",
+        },
+        status.HTTP_422_UNPROCESSABLE_CONTENT: {
+            "description": "Comment payload is invalid.",
+        },
+    },
+)
+def update_document_comment(
+    workspace_id: WorkspacePath,
+    document_id: DocumentPath,
+    comment_id: Annotated[UUID, Path(alias="commentId")],
+    payload: DocumentCommentUpdate,
+    service: DocumentsServiceDep,
+    actor: DocumentReader,
+) -> DocumentCommentOut:
+    try:
+        return service.update_document_comment(
+            workspace_id=workspace_id,
+            document_id=document_id,
+            comment_id=comment_id,
+            body=payload.body,
+            mentions=payload.mentions,
+            actor=actor,
+        )
+    except DocumentNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except DocumentCommentNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except DocumentCommentEditForbiddenError as exc:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
     except InvalidDocumentCommentMentionsError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
 

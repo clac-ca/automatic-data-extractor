@@ -22,7 +22,7 @@ export function useDocumentDetailLiveSync({
       queryKey: ["documents-detail", workspaceId, documentId],
     });
     queryClient.invalidateQueries({
-      queryKey: ["document-activity-runs", workspaceId, documentId],
+      queryKey: ["document-activity", workspaceId, documentId],
     });
   }, [documentId, queryClient, workspaceId]);
 

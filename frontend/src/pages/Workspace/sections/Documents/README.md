@@ -51,8 +51,11 @@ Only canonical keys above are supported.
 ## Data sources
 
 - Activity tab:
-  - Comments: `/documents/{documentId}/comments` (list + create)
-  - Run history: `fetchWorkspaceRunsForDocument`
+  - Unified timeline: `/documents/{documentId}/activity`
+  - Discussion mutations:
+    - `POST /documents/{documentId}/threads`
+    - `POST /documents/{documentId}/threads/{threadId}/comments`
+    - `PATCH /documents/{documentId}/comments/{commentId}`
 - Preview tab:
   - Original: `fetchDocumentSheets` + `fetchDocumentPreview`
   - Normalized: `fetchRunOutputSheets` + `fetchRunOutputPreview`

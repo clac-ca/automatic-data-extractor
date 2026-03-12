@@ -17,7 +17,7 @@ from ade_api.common.cursor_listing import (
     parse_uuid,
 )
 from ade_api.common.sql import nulls_last
-from ade_db.models import File, FileComment, FileVersion, FileVersionOrigin, Run
+from ade_db.models import File, FileVersion, FileVersionOrigin, Run
 
 
 def _current_version_byte_size_expr() -> ColumnElement[Any]:
@@ -111,24 +111,3 @@ CURSOR_FIELDS: dict[str, CursorFieldSpec[File]] = {
 }
 
 __all__ = ["CURSOR_FIELDS", "DEFAULT_SORT", "ID_FIELD", "SORT_FIELDS"]
-
-
-COMMENT_SORT_FIELDS = {
-    "id": (FileComment.id.asc(), FileComment.id.desc()),
-    "createdAt": (FileComment.created_at.asc(), FileComment.created_at.desc()),
-}
-
-COMMENT_DEFAULT_SORT = ["createdAt"]
-COMMENT_ID_FIELD = (FileComment.id.asc(), FileComment.id.desc())
-
-COMMENT_CURSOR_FIELDS: dict[str, CursorFieldSpec[FileComment]] = {
-    "id": cursor_field(lambda comment: comment.id, parse_uuid),
-    "createdAt": cursor_field(lambda comment: comment.created_at, parse_datetime),
-}
-
-__all__ += [
-    "COMMENT_CURSOR_FIELDS",
-    "COMMENT_DEFAULT_SORT",
-    "COMMENT_ID_FIELD",
-    "COMMENT_SORT_FIELDS",
-]

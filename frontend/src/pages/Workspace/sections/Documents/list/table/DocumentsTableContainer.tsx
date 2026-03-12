@@ -294,7 +294,8 @@ export function DocumentsTableContainer({
     removeRow,
     setUploadProgress,
   } = documentsView;
-  const [updatesAvailable, setUpdatesAvailable] = useState(false);
+  const [staleViewKey, setStaleViewKey] = useState<string | null>(null);
+  const updatesAvailable = staleViewKey === viewKey;
 
   const openDocument = useCallback(
     (
@@ -337,14 +338,10 @@ export function DocumentsTableContainer({
     resetBulkActions();
     setSelectionResetToken(0);
     setInlineRenameRequest(null);
-    setUpdatesAvailable(false);
+    setStaleViewKey(null);
     handledUploadsRef.current.clear();
     completedUploadsRef.current.clear();
   }, [resetBulkActions, resetRowMutations, workspaceId]);
-
-  useEffect(() => {
-    setUpdatesAvailable(false);
-  }, [viewKey]);
 
   const documentsParticipants = useMemo(
     () => filterParticipantsByPage(presence.participants, "documents"),
@@ -481,6 +478,7 @@ export function DocumentsTableContainer({
         fileType: deriveFileType(updated.name),
         updatedAt: updated.updatedAt,
         activityAt,
+        commentCount: updated.commentCount,
         deletedAt: updated.deletedAt ?? null,
         tags: updated.tags,
         assignee: updated.assignee ?? null,
@@ -1450,9 +1448,9 @@ export function DocumentsTableContainer({
 
   const markStale = useCallback(() => {
     if (page > 1) {
-      setUpdatesAvailable(true);
+      setStaleViewKey(viewKey);
     }
-  }, [page]);
+  }, [page, viewKey]);
 
   const applyChangeEntries = useCallback(
     async (changes: DocumentChangeNotification[]) => {
@@ -1607,7 +1605,7 @@ export function DocumentsTableContainer({
   const showInitialLoading = isLoading && !hasDocuments;
   const showInitialError = Boolean(error) && !hasDocuments;
   const handleUpdatesRefresh = useCallback(() => {
-    setUpdatesAvailable(false);
+    setStaleViewKey(null);
     void refreshSnapshot();
   }, [refreshSnapshot]);
 

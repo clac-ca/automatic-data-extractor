@@ -4,7 +4,9 @@ import type { DocumentRow } from "@/pages/Workspace/sections/Documents/shared/ty
 import { DocumentActivityComposer } from "./components/DocumentActivityComposer";
 import { DocumentActivityFeed } from "./components/DocumentActivityFeed";
 import { DocumentActivityHeader } from "./components/DocumentActivityHeader";
-import { useDocumentActivityFeed } from "./hooks/useDocumentActivityFeed";
+import { useDocumentActivityTimeline } from "./hooks/useDocumentActivityTimeline";
+import { useDocumentActivityUiState } from "./hooks/useDocumentActivityUiState";
+import { filterActivityItems } from "./model";
 
 export function DocumentActivityTab({
   workspaceId,
@@ -17,35 +19,50 @@ export function DocumentActivityTab({
   filter: DocumentActivityFilter;
   onFilterChange: (filter: DocumentActivityFilter) => void;
 }) {
-  const model = useDocumentActivityFeed({
+  const timeline = useDocumentActivityTimeline({
     workspaceId,
     document,
-    filter,
   });
+  const ui = useDocumentActivityUiState({
+    createNote: timeline.createNote,
+    replyToItem: timeline.replyToItem,
+    editComment: timeline.editComment,
+  });
+  const visibleItems = filterActivityItems(timeline.items, filter);
 
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-muted/20">
+    <div className="flex h-full flex-col overflow-hidden bg-background">
       <DocumentActivityHeader
         filter={filter}
-        counts={model.counts}
         onFilterChange={onFilterChange}
       />
 
       <DocumentActivityFeed
-        items={model.visibleItems}
-        isLoading={model.isLoading}
-        hasError={model.hasError}
-        hasNextPage={model.hasNextPage}
-        isFetchingNextPage={model.isFetchingNextPage}
-        onLoadMore={model.fetchNextPage}
+        workspaceId={workspaceId}
+        currentUser={timeline.currentUser}
+        items={visibleItems}
+        isLoading={timeline.isLoading}
+        hasError={timeline.hasError}
+        activeReplyTargetKey={ui.activeReplyTarget?.targetKey ?? null}
+        submittingReplyTargetKey={timeline.replyingTargetKey}
+        replyErrorTargetKey={ui.replyErrorTargetKey}
+        activeEditCommentId={ui.activeEditCommentId}
+        submittingEditCommentId={timeline.editingCommentId}
+        editErrorCommentId={ui.editErrorCommentId}
+        editErrorMessage={ui.editErrorMessage}
+        onStartReply={ui.startReply}
+        onCancelReply={ui.cancelReply}
+        onSubmitReply={ui.submitReply}
+        onStartEdit={ui.startEdit}
+        onCancelEdit={ui.cancelEdit}
+        onSubmitEdit={ui.submitEdit}
       />
 
       <DocumentActivityComposer
         workspaceId={workspaceId}
-        currentUser={model.currentUser}
-        isSubmitting={model.isSubmitting}
-        submitError={model.submitError}
-        onSubmit={model.submitComment}
+        isCreatingNote={timeline.isCreatingNote}
+        noteError={ui.noteError}
+        onCreateNote={ui.submitNote}
       />
     </div>
   );

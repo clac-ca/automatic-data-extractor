@@ -1294,7 +1294,7 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/workspaces/{workspaceId}/documents/{documentId}/comments": {
+    "/api/v1/workspaces/{workspaceId}/documents/{documentId}/activity": {
         parameters: {
             query?: never;
             header?: never;
@@ -1302,20 +1302,76 @@ export type paths = {
             cookie?: never;
         };
         /**
-         * List document comments
-         * @description List document comments.
+         * Get document activity timeline
+         * @description Get document activity timeline.
          */
-        get: operations["list_document_comments_api_v1_workspaces__workspaceId__documents__documentId__comments_get"];
+        get: operations["get_document_activity_api_v1_workspaces__workspaceId__documents__documentId__activity_get"];
         put?: never;
-        /**
-         * Create a document comment
-         * @description Create a document comment.
-         */
-        post: operations["create_document_comment_api_v1_workspaces__workspaceId__documents__documentId__comments_post"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspaceId}/documents/{documentId}/threads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create a document activity thread
+         * @description Create a document activity thread.
+         */
+        post: operations["create_document_activity_thread_api_v1_workspaces__workspaceId__documents__documentId__threads_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspaceId}/documents/{documentId}/threads/{threadId}/comments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reply in a document activity thread
+         * @description Reply in a document activity thread.
+         */
+        post: operations["create_document_activity_comment_api_v1_workspaces__workspaceId__documents__documentId__threads__threadId__comments_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspaceId}/documents/{documentId}/comments/{commentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Edit a document comment
+         * @description Edit a document comment.
+         */
+        patch: operations["update_document_comment_api_v1_workspaces__workspaceId__documents__documentId__comments__commentId__patch"];
         trace?: never;
     };
     "/api/v1/workspaces/{workspaceId}/documents/{documentId}/download": {
@@ -3050,6 +3106,184 @@ export type components = {
             created: boolean;
         };
         /**
+         * DocumentActivityCommentCreate
+         * @description Payload for creating a comment in an existing document activity thread.
+         */
+        DocumentActivityCommentCreate: {
+            /** Body */
+            body: string;
+            /**
+             * Mentions
+             * @description Optional mention ranges within the comment body.
+             */
+            mentions?: components["schemas"]["DocumentCommentMentionIn"][] | null;
+        };
+        /**
+         * DocumentActivityDocumentItemOut
+         * @description Upload event inside the document activity timeline.
+         */
+        DocumentActivityDocumentItemOut: {
+            /** Id */
+            id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "document";
+            /**
+             * Activityat
+             * Format: date-time
+             */
+            activityAt: string;
+            /**
+             * Title
+             * @default Document uploaded
+             */
+            title: string;
+            uploader?: components["schemas"]["UserSummary"] | null;
+            thread?: components["schemas"]["DocumentActivityThreadOut"] | null;
+        };
+        /**
+         * DocumentActivityNoteItemOut
+         * @description Freeform note thread inside the document activity timeline.
+         */
+        DocumentActivityNoteItemOut: {
+            /** Id */
+            id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "note";
+            /**
+             * Activityat
+             * Format: date-time
+             */
+            activityAt: string;
+            thread: components["schemas"]["DocumentActivityThreadOut"];
+        };
+        /**
+         * DocumentActivityResponse
+         * @description Full document activity timeline.
+         */
+        DocumentActivityResponse: {
+            /** Items */
+            items: (components["schemas"]["DocumentActivityDocumentItemOut"] | components["schemas"]["DocumentActivityRunItemOut"] | components["schemas"]["DocumentActivityNoteItemOut"])[];
+        };
+        /**
+         * DocumentActivityRunItemOut
+         * @description Run event inside the document activity timeline.
+         */
+        DocumentActivityRunItemOut: {
+            /** Id */
+            id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "run";
+            /**
+             * Activityat
+             * Format: date-time
+             */
+            activityAt: string;
+            run: components["schemas"]["DocumentActivityRunOut"];
+            thread?: components["schemas"]["DocumentActivityThreadOut"] | null;
+        };
+        /**
+         * DocumentActivityRunOut
+         * @description Run summary embedded in the document activity timeline.
+         */
+        DocumentActivityRunOut: {
+            /**
+             * Id
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
+             */
+            id: string;
+            /** Operation */
+            operation: string;
+            status: components["schemas"]["RunStatus"];
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /** Startedat */
+            startedAt?: string | null;
+            /** Completedat */
+            completedAt?: string | null;
+            /** Durationseconds */
+            durationSeconds?: number | null;
+            /** Exitcode */
+            exitCode?: number | null;
+            /** Errormessage */
+            errorMessage?: string | null;
+        };
+        /**
+         * DocumentActivityThreadCreate
+         * @description Payload for creating a new document activity thread.
+         */
+        DocumentActivityThreadCreate: {
+            /**
+             * Anchortype
+             * @enum {string}
+             */
+            anchorType: "note" | "document" | "run";
+            /** Anchorid */
+            anchorId?: string | null;
+            /** Body */
+            body: string;
+            /**
+             * Mentions
+             * @description Optional mention ranges within the comment body.
+             */
+            mentions?: components["schemas"]["DocumentCommentMentionIn"][] | null;
+        };
+        /**
+         * DocumentActivityThreadOut
+         * @description Serialized document activity thread.
+         */
+        DocumentActivityThreadOut: {
+            /**
+             * Id
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
+             */
+            id: string;
+            /**
+             * Workspaceid
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
+             */
+            workspaceId: string;
+            /**
+             * Documentid
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
+             */
+            documentId: string;
+            /**
+             * Anchortype
+             * @enum {string}
+             */
+            anchorType: "note" | "document" | "run";
+            /** Anchorid */
+            anchorId?: string | null;
+            /**
+             * Activityat
+             * Format: date-time
+             */
+            activityAt: string;
+            /** Comments */
+            comments?: components["schemas"]["DocumentCommentOut"][];
+            /**
+             * Commentcount
+             * @default 0
+             */
+            commentCount: number;
+        };
+        /**
          * DocumentBatchDeleteRequest
          * @description Payload for soft-deleting multiple documents.
          */
@@ -3176,17 +3410,31 @@ export type components = {
             documentId: string;
         };
         /**
-         * DocumentCommentCreate
-         * @description Payload for creating a document comment.
+         * DocumentCommentMentionIn
+         * @description Range-aware mention metadata for a draft comment.
          */
-        DocumentCommentCreate: {
-            /** Body */
-            body: string;
+        DocumentCommentMentionIn: {
             /**
-             * Mentions
-             * @description Optional list of mentioned user IDs.
+             * Userid
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
              */
-            mentions?: string[] | null;
+            userId: string;
+            /** Start */
+            start: number;
+            /** End */
+            end: number;
+        };
+        /**
+         * DocumentCommentMentionOut
+         * @description Resolved mention payload for comment rendering.
+         */
+        DocumentCommentMentionOut: {
+            user: components["schemas"]["UserSummary"];
+            /** Start */
+            start: number;
+            /** End */
+            end: number;
         };
         /**
          * DocumentCommentOut
@@ -3211,11 +3459,17 @@ export type components = {
              * @description UUIDv7 (RFC 9562) generated in the application layer.
              */
             documentId: string;
+            /**
+             * Threadid
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
+             */
+            threadId: string;
             /** Body */
             body: string;
             author?: components["schemas"]["UserSummary"] | null;
             /** Mentions */
-            mentions?: components["schemas"]["UserSummary"][];
+            mentions?: components["schemas"]["DocumentCommentMentionOut"][];
             /**
              * Createdat
              * Format: date-time
@@ -3226,19 +3480,21 @@ export type components = {
              * Format: date-time
              */
             updatedAt: string;
+            /** Editedat */
+            editedAt?: string | null;
         };
         /**
-         * DocumentCommentPage
-         * @description Cursor-based envelope of document comments.
+         * DocumentCommentUpdate
+         * @description Payload for editing an existing document comment.
          */
-        DocumentCommentPage: {
-            /** Items */
-            items: components["schemas"]["DocumentCommentOut"][];
-            meta: components["schemas"]["CursorMeta"];
-            /** Facets */
-            facets?: {
-                [key: string]: unknown;
-            } | null;
+        DocumentCommentUpdate: {
+            /** Body */
+            body: string;
+            /**
+             * Mentions
+             * @description Optional mention ranges within the edited comment body.
+             */
+            mentions?: components["schemas"]["DocumentCommentMentionIn"][] | null;
         };
         /**
          * DocumentConflictMode
@@ -9966,26 +10222,9 @@ export interface operations {
             default: components["responses"]["ProblemDetails"];
         };
     };
-    list_document_comments_api_v1_workspaces__workspaceId__documents__documentId__comments_get: {
+    get_document_activity_api_v1_workspaces__workspaceId__documents__documentId__activity_get: {
         parameters: {
-            query?: {
-                /** @description Items per page (max 200) */
-                limit?: number;
-                /** @description Opaque cursor token for pagination. */
-                cursor?: string | null;
-                /** @description JSON array of {id, desc}. */
-                sort?: string | null;
-                /** @description URL-encoded JSON array of filter objects. */
-                filters?: string | null;
-                /** @description Logical operator to join filters (and/or). */
-                joinOperator?: components["schemas"]["FilterJoinOperator"];
-                /** @description Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored. */
-                q?: string | null;
-                /** @description Include totalCount in the response. */
-                includeTotal?: boolean;
-                /** @description Include facet counts in the response. */
-                includeFacets?: boolean;
-            };
+            query?: never;
             header?: never;
             path: {
                 /** @description Workspace identifier */
@@ -10004,10 +10243,10 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DocumentCommentPage"];
+                    "application/json": components["schemas"]["DocumentActivityResponse"];
                 };
             };
-            /** @description Authentication required to access comments. */
+            /** @description Authentication required to access document activity. */
             401: {
                 headers: {
                     "X-Request-Id": components["headers"]["X-Request-Id"];
@@ -10044,7 +10283,7 @@ export interface operations {
             default: components["responses"]["ProblemDetails"];
         };
     };
-    create_document_comment_api_v1_workspaces__workspaceId__documents__documentId__comments_post: {
+    create_document_activity_thread_api_v1_workspaces__workspaceId__documents__documentId__threads_post: {
         parameters: {
             query?: never;
             header?: {
@@ -10060,7 +10299,73 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["DocumentCommentCreate"];
+                "application/json": components["schemas"]["DocumentActivityThreadCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentActivityThreadOut"];
+                };
+            };
+            /** @description Authentication required to create activity threads. */
+            401: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Workspace permissions do not allow document access. */
+            403: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Document not found within the workspace. */
+            404: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Comment payload is invalid. */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    create_document_activity_comment_api_v1_workspaces__workspaceId__documents__documentId__threads__threadId__comments_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Workspace identifier */
+                workspaceId: string;
+                /** @description Document identifier */
+                documentId: string;
+                threadId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DocumentActivityCommentCreate"];
             };
         };
         responses: {
@@ -10090,7 +10395,73 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Document not found within the workspace. */
+            /** @description Document or thread not found within the workspace. */
+            404: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Comment payload is invalid. */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    update_document_comment_api_v1_workspaces__workspaceId__documents__documentId__comments__commentId__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Workspace identifier */
+                workspaceId: string;
+                /** @description Document identifier */
+                documentId: string;
+                commentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DocumentCommentUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentCommentOut"];
+                };
+            };
+            /** @description Authentication required to edit comments. */
+            401: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Only the comment author can edit this comment. */
+            403: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Document or comment not found within the workspace. */
             404: {
                 headers: {
                     "X-Request-Id": components["headers"]["X-Request-Id"];
