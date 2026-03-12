@@ -142,6 +142,7 @@ logger = logging.getLogger(__name__)
 _FALLBACK_FILENAME = "upload"
 _MAX_FILENAME_LENGTH = 255
 _FILES_NAME_KEY_CONSTRAINT = "files_workspace_kind_name_key"
+_DOCUMENT_ACTIVITY_THREADS_ANCHOR_CONSTRAINT = "uq_document_activity_threads_anchor"
 _PUBLIC_VIEW_MANAGE_PERMISSION = "workspace.documents.views.public.manage"
 _VIEW_NAME_PATTERN = re.compile(r"[^a-z0-9]+")
 _VIRTUAL_VIEW_TIMESTAMP = datetime(1970, 1, 1, tzinfo=UTC)
@@ -867,7 +868,13 @@ class DocumentsService:
         self._touch_document(document)
 
         self._session.add(thread)
-        self._session.flush()
+        try:
+            self._session.flush()
+        except IntegrityError as exc:
+            constraint_name = self._extract_constraint_name(exc)
+            if constraint_name != _DOCUMENT_ACTIVITY_THREADS_ANCHOR_CONSTRAINT:
+                raise
+            raise DocumentActivityThreadConflictError() from exc
 
         serialized_thread = self._serialize_activity_thread(thread)
         assert serialized_thread is not None
