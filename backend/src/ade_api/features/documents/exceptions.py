@@ -190,6 +190,13 @@ class DocumentCommentEditForbiddenError(Exception):
         super().__init__(message)
 
 
+class DocumentCommentDeleteForbiddenError(Exception):
+    """Raised when someone tries to delete another user's comment."""
+
+    def __init__(self, message: str = "Only the comment author can delete this comment.") -> None:
+        super().__init__(message)
+
+
 class DocumentActivityThreadNotFoundError(Exception):
     """Raised when a requested document activity thread does not exist."""
 
@@ -252,6 +259,7 @@ __all__ = [
     "InvalidDocumentCommentMentionsError",
     "DocumentCommentNotFoundError",
     "DocumentCommentEditForbiddenError",
+    "DocumentCommentDeleteForbiddenError",
     "DocumentActivityThreadNotFoundError",
     "DocumentActivityThreadConflictError",
     "InvalidDocumentActivityThreadAnchorError",

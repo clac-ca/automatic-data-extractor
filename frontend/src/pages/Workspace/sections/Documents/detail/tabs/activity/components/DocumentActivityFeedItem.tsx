@@ -30,6 +30,7 @@ import {
   ACTIVITY_ICON,
   formatRunStatus,
   RUN_TONE,
+  type ActivityComment,
   type ActivityItem,
 } from "../model";
 import { DocumentCommentThreadCard } from "./DocumentCommentThreadCard";
@@ -145,6 +146,7 @@ export function DocumentActivityFeedItem({
   onCancelEdit,
   onEditDraftChange,
   onSubmitEdit,
+  onRequestDelete,
 }: {
   item: ActivityItem;
   workspaceId: string;
@@ -167,6 +169,7 @@ export function DocumentActivityFeedItem({
   onCancelEdit: () => void;
   onEditDraftChange: (commentId: string, draft: NoteDraft) => void;
   onSubmitEdit: (draft: CommentEditDraft) => Promise<unknown> | void;
+  onRequestDelete: (comment: ActivityComment) => void;
 }) {
   const replyTarget = buildReplyTarget(item);
   const isReplyOpen = activeReplyTargetKey === item.replyTargetKey;
@@ -210,6 +213,7 @@ export function DocumentActivityFeedItem({
             onCancelEdit={onCancelEdit}
             onEditDraftChange={onEditDraftChange}
             onSubmitEdit={onSubmitEdit}
+            onRequestDelete={onRequestDelete}
           />
         </TimelineContent>
       </TimelineItem>
@@ -265,6 +269,7 @@ export function DocumentActivityFeedItem({
             onCancelEdit={onCancelEdit}
             onEditDraftChange={onEditDraftChange}
             onSubmitEdit={onSubmitEdit}
+            onRequestDelete={onRequestDelete}
           />
         ) : null}
       </ActivityEventShell>
@@ -325,6 +330,7 @@ export function DocumentActivityFeedItem({
           onCancelEdit={onCancelEdit}
           onEditDraftChange={onEditDraftChange}
           onSubmitEdit={onSubmitEdit}
+          onRequestDelete={onRequestDelete}
         />
       ) : null}
     </ActivityEventShell>

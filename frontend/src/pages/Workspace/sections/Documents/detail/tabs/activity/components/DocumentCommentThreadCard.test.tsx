@@ -85,6 +85,7 @@ describe("DocumentCommentThreadCard", () => {
         onCancelEdit={vi.fn()}
         onEditDraftChange={vi.fn()}
         onSubmitEdit={vi.fn()}
+        onRequestDelete={vi.fn()}
       />,
     );
 
@@ -115,6 +116,7 @@ describe("DocumentCommentThreadCard", () => {
         onCancelEdit={vi.fn()}
         onEditDraftChange={vi.fn()}
         onSubmitEdit={vi.fn()}
+        onRequestDelete={vi.fn()}
       />,
     );
 
@@ -153,6 +155,7 @@ describe("DocumentCommentThreadCard", () => {
         onCancelEdit={vi.fn()}
         onEditDraftChange={vi.fn()}
         onSubmitEdit={vi.fn()}
+        onRequestDelete={vi.fn()}
       />,
     );
 
@@ -181,6 +184,7 @@ describe("DocumentCommentThreadCard", () => {
         onCancelEdit={vi.fn()}
         onEditDraftChange={vi.fn()}
         onSubmitEdit={vi.fn()}
+        onRequestDelete={vi.fn()}
       />,
     );
 
@@ -212,9 +216,40 @@ describe("DocumentCommentThreadCard", () => {
         onCancelEdit={vi.fn()}
         onEditDraftChange={vi.fn()}
         onSubmitEdit={vi.fn()}
+        onRequestDelete={vi.fn()}
       />,
     );
 
     expect(screen.getByLabelText("Reply to this activity...")).toHaveValue("Unsaved reply");
+  });
+
+  it("shows Delete only for the current user's comments", () => {
+    renderWithQuery(
+      <DocumentCommentThreadCard
+        variant="note"
+        workspaceId="ws-1"
+        currentUser={currentUser}
+        thread={thread}
+        isReplyOpen={false}
+        replyDraft={null}
+        activeEditCommentId={null}
+        activeEditDraft={null}
+        submittingEditCommentId={null}
+        editErrorCommentId={null}
+        editErrorMessage={null}
+        onStartReply={vi.fn()}
+        onCancelReply={vi.fn()}
+        onReplyDraftChange={vi.fn()}
+        onSubmitReply={vi.fn()}
+        onStartEdit={vi.fn()}
+        onCancelEdit={vi.fn()}
+        onEditDraftChange={vi.fn()}
+        onSubmitEdit={vi.fn()}
+        onRequestDelete={vi.fn()}
+      />,
+    );
+
+    expect(screen.getAllByRole("button", { name: "Edit" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Delete" })).toHaveLength(1);
   });
 });

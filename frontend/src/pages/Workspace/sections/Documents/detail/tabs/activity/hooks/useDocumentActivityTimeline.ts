@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createDocumentActivityComment,
   createDocumentActivityThread,
+  deleteDocumentComment,
   getDocumentActivity,
   updateDocumentComment,
 } from "@/api/documents";
@@ -29,6 +30,7 @@ import {
   buildOptimisticComment,
   buildOptimisticThread,
   ensureActivityData,
+  removeCommentFromActivity,
   updateCommentInActivity,
 } from "./activityTimelineCache";
 
@@ -52,6 +54,24 @@ function serializeMentions(body: string, mentions: NoteDraft["mentions"]) {
   }));
 }
 
+function decrementCommentCount(document: DocumentRow | undefined): DocumentRow | undefined {
+  if (!document) {
+    return document;
+  }
+
+  return {
+    ...document,
+    commentCount: Math.max(0, (document.commentCount ?? 0) - 1),
+  };
+}
+
+function toMutationMessage(error: unknown) {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  return "Unable to delete that comment right now.";
+}
+
 export function useDocumentActivityTimeline({
   workspaceId,
   document,
@@ -62,6 +82,8 @@ export function useDocumentActivityTimeline({
   const session = useSession();
   const queryClient = useQueryClient();
   const queryKey = ["document-activity", workspaceId, document.id] as const;
+  const detailQueryKey = ["documents-detail", workspaceId, document.id] as const;
+  const documentsListQueryKey = ["documents", workspaceId] as const;
 
   const currentUser = useMemo<ActivityCurrentUser>(
     () => ({
@@ -247,6 +269,51 @@ export function useDocumentActivityTimeline({
     },
   });
 
+  const deleteCommentMutation = useMutation<
+    void,
+    Error,
+    { commentId: string },
+    {
+      previousActivity?: ActivityResponseData;
+      previousDetail?: DocumentRow;
+    }
+  >({
+    mutationFn: async ({ commentId }) => deleteDocumentComment(workspaceId, document.id, commentId),
+    onMutate: async ({ commentId }) => {
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey }),
+        queryClient.cancelQueries({ queryKey: detailQueryKey }),
+      ]);
+
+      const previousActivity = queryClient.getQueryData<ActivityResponseData>(queryKey);
+      const previousDetail = queryClient.getQueryData<DocumentRow>(detailQueryKey);
+
+      queryClient.setQueryData<ActivityResponseData>(queryKey, (current) =>
+        removeCommentFromActivity(current, commentId),
+      );
+      queryClient.setQueryData<DocumentRow | undefined>(detailQueryKey, (current) =>
+        decrementCommentCount(current),
+      );
+
+      return { previousActivity, previousDetail };
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previousActivity) {
+        queryClient.setQueryData(queryKey, context.previousActivity);
+      }
+      if (context?.previousDetail) {
+        queryClient.setQueryData(detailQueryKey, context.previousDetail);
+      }
+    },
+    onSettled: () => {
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey }),
+        queryClient.invalidateQueries({ queryKey: detailQueryKey }),
+        queryClient.invalidateQueries({ queryKey: documentsListQueryKey }),
+      ]);
+    },
+  });
+
   const createNote = useCallback(
     async (draft: NoteDraft) => {
       await createThreadMutation.mutateAsync({
@@ -291,6 +358,13 @@ export function useDocumentActivityTimeline({
     [updateCommentMutation],
   );
 
+  const removeComment = useCallback(
+    async (commentId: string) => {
+      await deleteCommentMutation.mutateAsync({ commentId });
+    },
+    [deleteCommentMutation],
+  );
+
   const items = useMemo(
     () => buildActivityItems(activityQuery.data ?? { items: [] }),
     [activityQuery.data],
@@ -305,6 +379,13 @@ export function useDocumentActivityTimeline({
 
   const editingCommentId =
     updateCommentMutation.isPending ? updateCommentMutation.variables?.commentId ?? null : null;
+  const deletingCommentId =
+    deleteCommentMutation.isPending ? deleteCommentMutation.variables?.commentId ?? null : null;
+  const deleteErrorCommentId =
+    deleteCommentMutation.isError ? deleteCommentMutation.variables?.commentId ?? null : null;
+  const deleteErrorMessage = deleteCommentMutation.isError
+    ? toMutationMessage(deleteCommentMutation.error)
+    : null;
 
   return {
     currentUser,
@@ -314,9 +395,13 @@ export function useDocumentActivityTimeline({
     createNote,
     replyToItem,
     editComment,
+    removeComment,
     isCreatingNote:
       createThreadMutation.isPending && createThreadMutation.variables?.anchorType === "note",
     replyingTargetKey,
     editingCommentId,
+    deletingCommentId,
+    deleteErrorCommentId,
+    deleteErrorMessage,
   };
 }

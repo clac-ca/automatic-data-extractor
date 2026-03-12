@@ -211,3 +211,48 @@ export function updateCommentInActivity(
     }),
   };
 }
+
+export function removeCommentFromActivity(
+  current: ActivityResponseData | undefined,
+  commentId: string,
+): ActivityResponseData {
+  const safeCurrent = ensureActivityData(current);
+
+  return {
+    ...safeCurrent,
+    items: safeCurrent.items.flatMap((item) => {
+      if (!item.thread) {
+        return [item];
+      }
+
+      const comments = item.thread.comments.filter((comment) => comment.id !== commentId);
+      if (comments.length === item.thread.comments.length) {
+        return [item];
+      }
+
+      if (comments.length === 0) {
+        if (item.type === "note") {
+          return [];
+        }
+
+        return [
+          {
+            ...item,
+            thread: null,
+          },
+        ];
+      }
+
+      return [
+        {
+          ...item,
+          thread: {
+            ...item.thread,
+            commentCount: comments.length,
+            comments,
+          },
+        },
+      ];
+    }),
+  };
+}

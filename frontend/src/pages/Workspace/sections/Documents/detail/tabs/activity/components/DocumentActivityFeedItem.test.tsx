@@ -84,6 +84,7 @@ describe("DocumentActivityFeedItem", () => {
         onCancelEdit={vi.fn()}
         onEditDraftChange={vi.fn()}
         onSubmitEdit={vi.fn()}
+        onRequestDelete={vi.fn()}
       />,
     );
 

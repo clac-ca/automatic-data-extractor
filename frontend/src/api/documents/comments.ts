@@ -89,3 +89,13 @@ export async function updateDocumentComment(
 
   return data;
 }
+
+export async function deleteDocumentComment(
+  workspaceId: string,
+  documentId: string,
+  commentId: string,
+): Promise<void> {
+  await client.DELETE("/api/v1/workspaces/{workspaceId}/documents/{documentId}/comments/{commentId}", {
+    params: { path: { workspaceId, documentId, commentId } },
+  });
+}

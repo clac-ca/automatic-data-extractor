@@ -75,6 +75,7 @@ from .changes import (
 from .exceptions import (
     DocumentActivityThreadConflictError,
     DocumentActivityThreadNotFoundError,
+    DocumentCommentDeleteForbiddenError,
     DocumentCommentEditForbiddenError,
     DocumentCommentNotFoundError,
     DocumentFileMissingError,
@@ -949,6 +950,35 @@ class DocumentsService:
         self._session.flush()
 
         return DocumentCommentOut.model_validate(comment)
+
+    def delete_document_comment(
+        self,
+        *,
+        workspace_id: UUID,
+        document_id: UUID,
+        comment_id: UUID,
+        actor: User,
+    ) -> None:
+        document = self._get_document(workspace_id, document_id)
+        comment = self._get_document_comment(
+            workspace_id=workspace_id,
+            document_id=document_id,
+            comment_id=comment_id,
+        )
+        if comment.author_user_id != actor.id:
+            raise DocumentCommentDeleteForbiddenError()
+
+        thread = comment.thread
+        should_delete_thread = len(thread.comments) <= 1
+        document.comment_count = max(0, (document.comment_count or 0) - 1)
+        self._touch_document(document)
+
+        if should_delete_thread:
+            self._session.delete(thread)
+        else:
+            self._session.delete(comment)
+
+        self._session.flush()
 
     def build_list_row_for_document(
         self,

@@ -418,3 +418,176 @@ async def test_existing_note_thread_rows_appear_in_activity(
     note_item = activity.json()["items"][1]
     assert note_item["type"] == "note"
     assert note_item["thread"]["comments"][0]["body"] == "Stored note"
+
+
+async def test_delete_comment_restricts_to_author_and_removes_empty_note_thread(
+    async_client: AsyncClient,
+    seed_identity,
+    db_session,
+) -> None:
+    author = seed_identity.member
+    other_user = seed_identity.member_with_manage
+    document = await _create_document(
+        db_session,
+        workspace_id=seed_identity.workspace_id,
+        user_id=author.id,
+    )
+
+    created = await async_client.post(
+        f"/api/v1/workspaces/{seed_identity.workspace_id}/documents/{document.id}/threads",
+        headers=await _auth_headers(async_client, author),
+        json={"anchorType": "note", "body": "Delete me", "mentions": []},
+    )
+    assert created.status_code == 201, created.text
+    comment_id = created.json()["comments"][0]["id"]
+
+    forbidden = await async_client.delete(
+        f"/api/v1/workspaces/{seed_identity.workspace_id}/documents/{document.id}/comments/{comment_id}",
+        headers=await _auth_headers(async_client, other_user),
+    )
+    assert forbidden.status_code == 403, forbidden.text
+
+    deleted = await async_client.delete(
+        f"/api/v1/workspaces/{seed_identity.workspace_id}/documents/{document.id}/comments/{comment_id}",
+        headers=await _auth_headers(async_client, author),
+    )
+    assert deleted.status_code == 204, deleted.text
+
+    activity = await async_client.get(
+        f"/api/v1/workspaces/{seed_identity.workspace_id}/documents/{document.id}/activity",
+        headers=await _auth_headers(async_client, author),
+    )
+    assert activity.status_code == 200, activity.text
+    assert [item["type"] for item in activity.json()["items"]] == ["document"]
+
+    await anyio.to_thread.run_sync(db_session.expire_all)
+    stored_document = await anyio.to_thread.run_sync(db_session.get, File, document.id)
+    assert stored_document is not None
+    assert stored_document.comment_count == 0
+
+
+async def test_delete_root_comment_from_note_thread_promotes_next_reply(
+    async_client: AsyncClient,
+    seed_identity,
+    db_session,
+) -> None:
+    author = seed_identity.member
+    document = await _create_document(
+        db_session,
+        workspace_id=seed_identity.workspace_id,
+        user_id=author.id,
+    )
+    headers = await _auth_headers(async_client, author)
+
+    created = await async_client.post(
+        f"/api/v1/workspaces/{seed_identity.workspace_id}/documents/{document.id}/threads",
+        headers=headers,
+        json={"anchorType": "note", "body": "Original note", "mentions": []},
+    )
+    assert created.status_code == 201, created.text
+    thread_id = created.json()["id"]
+    root_comment_id = created.json()["comments"][0]["id"]
+
+    reply = await async_client.post(
+        f"/api/v1/workspaces/{seed_identity.workspace_id}/documents/{document.id}/threads/{thread_id}/comments",
+        headers=headers,
+        json={"body": "Reply takes over", "mentions": []},
+    )
+    assert reply.status_code == 201, reply.text
+
+    deleted = await async_client.delete(
+        f"/api/v1/workspaces/{seed_identity.workspace_id}/documents/{document.id}/comments/{root_comment_id}",
+        headers=headers,
+    )
+    assert deleted.status_code == 204, deleted.text
+
+    activity = await async_client.get(
+        f"/api/v1/workspaces/{seed_identity.workspace_id}/documents/{document.id}/activity",
+        headers=headers,
+    )
+    assert activity.status_code == 200, activity.text
+    items = activity.json()["items"]
+    assert [item["type"] for item in items] == ["document", "note"]
+    assert [comment["body"] for comment in items[1]["thread"]["comments"]] == ["Reply takes over"]
+
+    await anyio.to_thread.run_sync(db_session.expire_all)
+    stored_document = await anyio.to_thread.run_sync(db_session.get, File, document.id)
+    assert stored_document is not None
+    assert stored_document.comment_count == 1
+
+
+async def test_delete_reply_and_last_comment_from_anchored_thread_keeps_event_row(
+    async_client: AsyncClient,
+    seed_identity,
+    db_session,
+) -> None:
+    author = seed_identity.member
+    document = await _create_document(
+        db_session,
+        workspace_id=seed_identity.workspace_id,
+        user_id=author.id,
+    )
+    run = await _seed_run(
+        db_session,
+        workspace_id=seed_identity.workspace_id,
+        document=document,
+        user_id=author.id,
+    )
+    headers = await _auth_headers(async_client, author)
+
+    created = await async_client.post(
+        f"/api/v1/workspaces/{seed_identity.workspace_id}/documents/{document.id}/threads",
+        headers=headers,
+        json={
+            "anchorType": "run",
+            "anchorId": str(run.id),
+            "body": "Anchored root",
+            "mentions": [],
+        },
+    )
+    assert created.status_code == 201, created.text
+    thread_id = created.json()["id"]
+    root_comment_id = created.json()["comments"][0]["id"]
+
+    reply = await async_client.post(
+        f"/api/v1/workspaces/{seed_identity.workspace_id}/documents/{document.id}/threads/{thread_id}/comments",
+        headers=headers,
+        json={"body": "Anchored reply", "mentions": []},
+    )
+    assert reply.status_code == 201, reply.text
+    reply_comment_id = reply.json()["id"]
+
+    deleted_reply = await async_client.delete(
+        f"/api/v1/workspaces/{seed_identity.workspace_id}/documents/{document.id}/comments/{reply_comment_id}",
+        headers=headers,
+    )
+    assert deleted_reply.status_code == 204, deleted_reply.text
+
+    activity_after_reply_delete = await async_client.get(
+        f"/api/v1/workspaces/{seed_identity.workspace_id}/documents/{document.id}/activity",
+        headers=headers,
+    )
+    assert activity_after_reply_delete.status_code == 200, activity_after_reply_delete.text
+    items = activity_after_reply_delete.json()["items"]
+    assert [item["type"] for item in items] == ["document", "run"]
+    assert [comment["body"] for comment in items[1]["thread"]["comments"]] == ["Anchored root"]
+
+    deleted_root = await async_client.delete(
+        f"/api/v1/workspaces/{seed_identity.workspace_id}/documents/{document.id}/comments/{root_comment_id}",
+        headers=headers,
+    )
+    assert deleted_root.status_code == 204, deleted_root.text
+
+    final_activity = await async_client.get(
+        f"/api/v1/workspaces/{seed_identity.workspace_id}/documents/{document.id}/activity",
+        headers=headers,
+    )
+    assert final_activity.status_code == 200, final_activity.text
+    final_items = final_activity.json()["items"]
+    assert [item["type"] for item in final_items] == ["document", "run"]
+    assert final_items[1]["thread"] is None
+
+    await anyio.to_thread.run_sync(db_session.expire_all)
+    stored_document = await anyio.to_thread.run_sync(db_session.get, File, document.id)
+    assert stored_document is not None
+    assert stored_document.comment_count == 0
