@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.10.1](https://github.com/clac-ca/automatic-data-extractor/compare/v1.10.0...v1.10.1) (2026-03-12)
+
+
+### Bug Fixes
+
+* **api:** align workspace mention search and validation ([#334](https://github.com/clac-ca/automatic-data-extractor/issues/334)) ([fabeacd](https://github.com/clac-ca/automatic-data-extractor/commit/fabeacd78527365922d04520d5fd7c75c027f2ec))
+
 ## [1.10.0](https://github.com/clac-ca/automatic-data-extractor/compare/v1.9.1...v1.10.0) (2026-03-12)
 
 
