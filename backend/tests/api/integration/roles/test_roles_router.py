@@ -9,7 +9,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ade_db.models import GroupMembership, GroupOwner, Role
+from ade_db.models import GroupMembership, GroupOwner, Role, User
 from tests.api.utils import login
 
 pytestmark = pytest.mark.asyncio
@@ -172,6 +172,35 @@ async def test_workspace_role_assignment_listing_admin(
     )
 
 
+async def test_workspace_role_assignment_listing_supports_q_on_principal_identity(
+    async_client: AsyncClient,
+    seed_identity,
+    db_session: Session,
+) -> None:
+    admin = seed_identity.admin
+    token, _ = await login(async_client, email=admin.email, password=admin.password)
+    target = db_session.get(User, seed_identity.member_with_manage.id)
+    assert target is not None
+    target.display_name = "Mention Search Target"
+    db_session.commit()
+
+    for query in ("Mention Search Target", target.email):
+        response = await async_client.get(
+            f"/api/v1/workspaces/{seed_identity.workspace_id}/roleAssignments",
+            params={"q": query},
+            headers={"X-API-Key": token},
+        )
+
+        assert response.status_code == 200, response.text
+        assignments = _items(response.json())
+        assert any(
+            str(item["principal_id"]) == str(target.id)
+            and item["principal_type"] == "user"
+            and item["principal_email"] == target.email
+            for item in assignments
+        )
+
+
 async def test_organization_role_assignment_listing_supports_pagination_and_filters(
     async_client: AsyncClient,
     seed_identity,
@@ -273,7 +302,11 @@ async def test_workspace_role_assignment_listing_supports_pagination_and_filters
         f"/api/v1/workspaces/{seed_identity.workspace_id}/roleAssignments",
         params={
             "filters": json.dumps([
-                {"id": "principalId", "operator": "eq", "value": str(seed_identity.workspace_owner.id)},
+                {
+                    "id": "principalId",
+                    "operator": "eq",
+                    "value": str(seed_identity.workspace_owner.id),
+                },
                 {"id": "scopeType", "operator": "eq", "value": "workspace"},
             ]),
             "includeTotal": "true",
@@ -283,7 +316,10 @@ async def test_workspace_role_assignment_listing_supports_pagination_and_filters
     assert filtered.status_code == 200, filtered.text
     filtered_items = _items(filtered.json())
     assert filtered_items
-    assert all(str(item["principal_id"]) == str(seed_identity.workspace_owner.id) for item in filtered_items)
+    assert all(
+        str(item["principal_id"]) == str(seed_identity.workspace_owner.id)
+        for item in filtered_items
+    )
     assert all(item["scope_type"] == "workspace" for item in filtered_items)
 
 
@@ -541,7 +577,8 @@ async def test_idp_group_assignments_require_scim_mode(
     assert blocked.status_code == 422, blocked.text
     assert (
         blocked.json()["detail"]
-        == "Provider-managed groups are SCIM-managed and can only be used for role assignment when provisioning mode is SCIM."
+        == "Provider-managed groups are SCIM-managed and can only be used for role "
+        "assignment when provisioning mode is SCIM."
     )
 
     await _set_provisioning_mode(async_client, admin_token=admin_token, mode="scim")
