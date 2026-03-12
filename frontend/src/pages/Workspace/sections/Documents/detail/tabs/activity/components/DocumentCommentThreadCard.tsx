@@ -79,6 +79,7 @@ function CommentRow({
   isSubmittingEdit,
   editErrorMessage,
   onEdit,
+  onRequestDelete,
   onSubmitEdit,
   onEditDraftChange,
   onCancelEdit,
@@ -91,12 +92,13 @@ function CommentRow({
   isSubmittingEdit: boolean;
   editErrorMessage?: string | null;
   onEdit: () => void;
+  onRequestDelete: () => void;
   onSubmitEdit: (draft: CommentEditDraft) => Promise<unknown> | void;
   onEditDraftChange: (draft: NoteDraft) => void;
   onCancelEdit: () => void;
 }) {
   const authorName = comment.author?.name || comment.author?.email || "Unknown";
-  const canEdit = comment.author?.id === currentUser.id;
+  const canManage = comment.author?.id === currentUser.id && !comment.optimistic;
 
   if (isEditing) {
     return (
@@ -139,16 +141,27 @@ function CommentRow({
               ) : null}
             </div>
           </div>
-          {canEdit ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-6 px-2 text-[11px] text-muted-foreground opacity-100 md:opacity-0 md:group-hover/comment:opacity-100 md:group-focus-within/comment:opacity-100"
-              onClick={onEdit}
-            >
-              Edit
-            </Button>
+          {canManage ? (
+            <div className="flex items-center gap-1 opacity-100 md:opacity-0 md:group-hover/comment:opacity-100 md:group-focus-within/comment:opacity-100">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-[11px] text-muted-foreground"
+                onClick={onEdit}
+              >
+                Edit
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-[11px] text-muted-foreground"
+                onClick={onRequestDelete}
+              >
+                Delete
+              </Button>
+            </div>
           ) : null}
         </div>
         <div className="mt-1.5 text-sm leading-6 text-foreground">{renderCommentBody(comment)}</div>
@@ -179,6 +192,7 @@ export function DocumentCommentThreadCard({
   onCancelEdit,
   onEditDraftChange,
   onSubmitEdit,
+  onRequestDelete,
 }: {
   variant: "note" | "attached";
   workspaceId: string;
@@ -201,6 +215,7 @@ export function DocumentCommentThreadCard({
   onCancelEdit: () => void;
   onEditDraftChange: (commentId: string, draft: NoteDraft) => void;
   onSubmitEdit: (draft: CommentEditDraft) => Promise<unknown> | void;
+  onRequestDelete: (comment: ActivityComment) => void;
 }) {
   const comments = thread?.comments ?? [];
 
@@ -230,6 +245,7 @@ export function DocumentCommentThreadCard({
                   isSubmittingEdit={submittingEditCommentId === comment.id}
                   editErrorMessage={editErrorCommentId === comment.id ? editErrorMessage : null}
                   onEdit={() => onStartEdit(comment.id)}
+                  onRequestDelete={() => onRequestDelete(comment)}
                   onEditDraftChange={(draft) => onEditDraftChange(comment.id, draft)}
                   onCancelEdit={onCancelEdit}
                   onSubmitEdit={onSubmitEdit}

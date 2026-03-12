@@ -1,3 +1,6 @@
+import { useState } from "react";
+
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Timeline } from "@/components/ui/timeline";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -8,7 +11,7 @@ import type {
   NoteDraft,
   ThreadReplyDraft,
 } from "../activityTypes";
-import type { ActivityItem } from "../model";
+import type { ActivityComment, ActivityItem } from "../model";
 import { DocumentActivityFeedItem } from "./DocumentActivityFeedItem";
 
 export function DocumentActivityFeed({
@@ -27,6 +30,9 @@ export function DocumentActivityFeed({
   submittingEditCommentId,
   editErrorCommentId,
   editErrorMessage,
+  deletingCommentId,
+  deleteErrorCommentId,
+  deleteErrorMessage,
   onStartReply,
   onCancelReply,
   onReplyDraftChange,
@@ -35,6 +41,7 @@ export function DocumentActivityFeed({
   onCancelEdit,
   onEditDraftChange,
   onSubmitEdit,
+  onDeleteComment,
 }: {
   workspaceId: string;
   currentUser: ActivityCurrentUser;
@@ -51,6 +58,9 @@ export function DocumentActivityFeed({
   submittingEditCommentId: string | null;
   editErrorCommentId: string | null;
   editErrorMessage?: string | null;
+  deletingCommentId: string | null;
+  deleteErrorCommentId: string | null;
+  deleteErrorMessage?: string | null;
   onStartReply: (target: ActivityReplyTarget) => void;
   onCancelReply: () => void;
   onReplyDraftChange: (targetKey: string, draft: NoteDraft) => void;
@@ -59,50 +69,110 @@ export function DocumentActivityFeed({
   onCancelEdit: () => void;
   onEditDraftChange: (commentId: string, draft: NoteDraft) => void;
   onSubmitEdit: (draft: CommentEditDraft) => Promise<unknown> | void;
+  onDeleteComment: (commentId: string) => Promise<unknown>;
 }) {
-  return (
-    <div className="min-h-0 flex-1 overflow-auto px-4 py-3">
-      {hasError && !isLoading ? (
-        <div className="mb-4 rounded-lg border border-border bg-background p-3 text-sm text-muted-foreground">
-          Activity could not be fully loaded right now.
-        </div>
-      ) : null}
+  const [deleteTarget, setDeleteTarget] = useState<{
+    commentId: string;
+    authorName: string;
+    body: string;
+  } | null>(null);
+  const isDeletingActiveTarget = deleteTarget?.commentId === deletingCommentId;
+  const deleteDialogError =
+    deleteTarget && deleteErrorCommentId === deleteTarget.commentId ? deleteErrorMessage : null;
 
-      {isLoading ? <LoadingState /> : null}
-      {!isLoading && items.length === 0 ? <EmptyState /> : null}
-      {!isLoading && items.length > 0 ? (
-        <Timeline className="gap-4">
-          {items.map((item) => (
-            <DocumentActivityFeedItem
-              key={item.key}
-              item={item}
-              workspaceId={workspaceId}
-              currentUser={currentUser}
-              showDiscussions={showDiscussions}
-              activeReplyTargetKey={activeReplyTargetKey}
-              replyDraft={replyDraftsByTargetKey[item.replyTargetKey] ?? null}
-              submittingReplyTargetKey={submittingReplyTargetKey}
-              replyErrorTargetKey={replyErrorTargetKey}
-              activeEditCommentId={activeEditCommentId}
-              activeEditDraft={
-                activeEditCommentId ? (editDraftsByCommentId[activeEditCommentId] ?? null) : null
-              }
-              submittingEditCommentId={submittingEditCommentId}
-              editErrorCommentId={editErrorCommentId}
-              editErrorMessage={editErrorMessage}
-              onStartReply={onStartReply}
-              onCancelReply={onCancelReply}
-              onReplyDraftChange={onReplyDraftChange}
-              onSubmitReply={onSubmitReply}
-              onStartEdit={onStartEdit}
-              onCancelEdit={onCancelEdit}
-              onEditDraftChange={onEditDraftChange}
-              onSubmitEdit={onSubmitEdit}
-            />
-          ))}
-        </Timeline>
-      ) : null}
-    </div>
+  return (
+    <>
+      <div className="min-h-0 flex-1 overflow-auto px-4 py-3">
+        {hasError && !isLoading ? (
+          <div className="mb-4 rounded-lg border border-border bg-background p-3 text-sm text-muted-foreground">
+            Activity could not be fully loaded right now.
+          </div>
+        ) : null}
+
+        {isLoading ? <LoadingState /> : null}
+        {!isLoading && items.length === 0 ? <EmptyState /> : null}
+        {!isLoading && items.length > 0 ? (
+          <Timeline className="gap-4">
+            {items.map((item) => (
+              <DocumentActivityFeedItem
+                key={item.key}
+                item={item}
+                workspaceId={workspaceId}
+                currentUser={currentUser}
+                showDiscussions={showDiscussions}
+                activeReplyTargetKey={activeReplyTargetKey}
+                replyDraft={replyDraftsByTargetKey[item.replyTargetKey] ?? null}
+                submittingReplyTargetKey={submittingReplyTargetKey}
+                replyErrorTargetKey={replyErrorTargetKey}
+                activeEditCommentId={activeEditCommentId}
+                activeEditDraft={
+                  activeEditCommentId ? (editDraftsByCommentId[activeEditCommentId] ?? null) : null
+                }
+                submittingEditCommentId={submittingEditCommentId}
+                editErrorCommentId={editErrorCommentId}
+                editErrorMessage={editErrorMessage}
+                onStartReply={onStartReply}
+                onCancelReply={onCancelReply}
+                onReplyDraftChange={onReplyDraftChange}
+                onSubmitReply={onSubmitReply}
+                onStartEdit={onStartEdit}
+                onCancelEdit={onCancelEdit}
+                onEditDraftChange={onEditDraftChange}
+                onSubmitEdit={onSubmitEdit}
+                onRequestDelete={(comment: ActivityComment) =>
+                  setDeleteTarget({
+                    commentId: comment.id,
+                    authorName: comment.author?.name || comment.author?.email || "Unknown",
+                    body: comment.body,
+                  })
+                }
+              />
+            ))}
+          </Timeline>
+        ) : null}
+      </div>
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title="Delete comment?"
+        description="This permanently removes the comment from the document activity timeline."
+        confirmLabel="Delete comment"
+        cancelLabel="Cancel"
+        tone="danger"
+        isConfirming={isDeletingActiveTarget}
+        onCancel={() => {
+          if (!isDeletingActiveTarget) {
+            setDeleteTarget(null);
+          }
+        }}
+        onConfirm={() => {
+          if (!deleteTarget) {
+            return;
+          }
+
+          void onDeleteComment(deleteTarget.commentId)
+            .then(() => {
+              setDeleteTarget(null);
+            })
+            .catch(() => {
+              // Keep the dialog open so the inline error remains visible.
+            });
+        }}
+      >
+        {deleteTarget ? (
+          <div className="rounded-lg border border-border/70 bg-muted/30 px-3 py-2">
+            <p className="text-sm font-medium text-foreground">{deleteTarget.authorName}</p>
+            <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">
+              {deleteTarget.body}
+            </p>
+          </div>
+        ) : null}
+        {deleteDialogError ? (
+          <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+            {deleteDialogError}
+          </div>
+        ) : null}
+      </ConfirmDialog>
+    </>
   );
 }
 

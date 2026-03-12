@@ -5,6 +5,7 @@ import {
   appendCommentToThread,
   appendOptimisticNote,
   attachThreadToActivityItem,
+  removeCommentFromActivity,
 } from "./activityTimelineCache";
 
 function makeActivityData(): ActivityResponseData {
@@ -144,5 +145,106 @@ describe("activityTimelineCache", () => {
     });
 
     expect(updated.items.at(-1)?.key).toBe("note:thread-note");
+  });
+
+  it("removes a reply from an existing thread without moving the parent activity", () => {
+    const initial = attachThreadToActivityItem(
+      makeActivityData(),
+      "run",
+      "run-1",
+      {
+        ...makeThread(),
+        comments: [
+          ...makeThread().comments,
+          {
+            id: "comment-2",
+            workspaceId: "ws-1",
+            documentId: "doc-1",
+            threadId: "thread-run",
+            body: "Reply",
+            author: {
+              id: "user-2",
+              name: "Reviewer",
+              email: "reviewer@example.com",
+            },
+            mentions: [],
+            createdAt: "2026-01-02T00:20:00Z",
+            updatedAt: "2026-01-02T00:20:00Z",
+            editedAt: null,
+          },
+        ],
+        commentCount: 2,
+      },
+    );
+
+    const updated = removeCommentFromActivity(initial, "comment-2");
+
+    expect(updated.items.map((item) => item.key)).toEqual([
+      "document:doc-1",
+      "run:run-1",
+    ]);
+    expect(updated.items[1].thread?.comments.map((comment) => comment.id)).toEqual(["comment-1"]);
+    expect(updated.items[1].thread?.commentCount).toBe(1);
+  });
+
+  it("removes a note item when its only comment is deleted", () => {
+    const withNote = appendOptimisticNote(makeActivityData(), {
+      key: "note:thread-note",
+      replyTargetKey: "note:thread-note",
+      id: "thread-note",
+      type: "note",
+      activityAt: "2026-01-03T00:00:00Z",
+      thread: {
+        id: "thread-note",
+        workspaceId: "ws-1",
+        documentId: "doc-1",
+        anchorType: "note",
+        anchorId: null,
+        activityAt: "2026-01-03T00:00:00Z",
+        commentCount: 1,
+        comments: [
+          {
+            id: "comment-note",
+            workspaceId: "ws-1",
+            documentId: "doc-1",
+            threadId: "thread-note",
+            body: "Note",
+            author: {
+              id: "user-1",
+              name: "Owner",
+              email: "owner@example.com",
+            },
+            mentions: [],
+            createdAt: "2026-01-03T00:00:00Z",
+            updatedAt: "2026-01-03T00:00:00Z",
+            editedAt: null,
+          },
+        ],
+      },
+    });
+
+    const updated = removeCommentFromActivity(withNote, "comment-note");
+
+    expect(updated.items.map((item) => item.key)).toEqual([
+      "document:doc-1",
+      "run:run-1",
+    ]);
+  });
+
+  it("clears the thread from an anchored item when its last comment is deleted", () => {
+    const initial = attachThreadToActivityItem(
+      makeActivityData(),
+      "run",
+      "run-1",
+      makeThread(),
+    );
+
+    const updated = removeCommentFromActivity(initial, "comment-1");
+
+    expect(updated.items[1].thread).toBeNull();
+    expect(updated.items.map((item) => item.key)).toEqual([
+      "document:doc-1",
+      "run:run-1",
+    ]);
   });
 });

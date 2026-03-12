@@ -54,6 +54,9 @@ export function DocumentActivityTab({
         submittingEditCommentId={timeline.editingCommentId}
         editErrorCommentId={ui.editErrorCommentId}
         editErrorMessage={ui.editErrorMessage}
+        deletingCommentId={timeline.deletingCommentId}
+        deleteErrorCommentId={timeline.deleteErrorCommentId}
+        deleteErrorMessage={timeline.deleteErrorMessage}
         onStartReply={ui.startReply}
         onCancelReply={ui.cancelReply}
         onReplyDraftChange={ui.setReplyDraft}
@@ -62,6 +65,7 @@ export function DocumentActivityTab({
         onCancelEdit={ui.cancelEdit}
         onEditDraftChange={ui.setEditDraft}
         onSubmitEdit={ui.submitEdit}
+        onDeleteComment={timeline.removeComment}
       />
 
       <DocumentActivityComposer

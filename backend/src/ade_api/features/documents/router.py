@@ -17,6 +17,7 @@ from fastapi import (
     Path,
     Query,
     Request,
+    Response,
     Security,
     UploadFile,
     status,
@@ -66,6 +67,7 @@ from .events import get_document_changes_hub
 from .exceptions import (
     DocumentActivityThreadConflictError,
     DocumentActivityThreadNotFoundError,
+    DocumentCommentDeleteForbiddenError,
     DocumentCommentEditForbiddenError,
     DocumentCommentNotFoundError,
     DocumentFileMissingError,
@@ -1173,6 +1175,47 @@ def update_document_comment(
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
     except InvalidDocumentCommentMentionsError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
+
+
+@router.delete(
+    "/{documentId}/comments/{commentId}",
+    dependencies=[Security(require_csrf)],
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete a document comment",
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {
+            "description": "Authentication required to delete comments.",
+        },
+        status.HTTP_403_FORBIDDEN: {
+            "description": "Only the comment author can delete this comment.",
+        },
+        status.HTTP_404_NOT_FOUND: {
+            "description": "Document or comment not found within the workspace.",
+        },
+    },
+)
+def delete_document_comment(
+    workspace_id: WorkspacePath,
+    document_id: DocumentPath,
+    comment_id: Annotated[UUID, Path(alias="commentId")],
+    service: DocumentsServiceDep,
+    actor: DocumentReader,
+) -> Response:
+    try:
+        service.delete_document_comment(
+            workspace_id=workspace_id,
+            document_id=document_id,
+            comment_id=comment_id,
+            actor=actor,
+        )
+    except DocumentNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except DocumentCommentNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except DocumentCommentDeleteForbiddenError as exc:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get(
