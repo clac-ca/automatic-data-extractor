@@ -21,6 +21,7 @@ import {
   normalizeActivityResponse,
   type ActivityResponseData,
 } from "../model";
+import { codePointIndexFromCodeUnitIndex } from "../../comments/utils/mentions";
 import {
   appendCommentToThread,
   appendOptimisticNote,
@@ -43,11 +44,11 @@ type CreateCommentMutationInput = ThreadReplyDraft & {
   threadId: string;
 };
 
-function serializeMentions(mentions: NoteDraft["mentions"]) {
+function serializeMentions(body: string, mentions: NoteDraft["mentions"]) {
   return mentions.map((mention) => ({
     userId: mention.user.id,
-    start: mention.start,
-    end: mention.end,
+    start: codePointIndexFromCodeUnitIndex(body, mention.start),
+    end: codePointIndexFromCodeUnitIndex(body, mention.end),
   }));
 }
 
@@ -91,7 +92,7 @@ export function useDocumentActivityTimeline({
         anchorType: draft.anchorType,
         anchorId: draft.anchorId ?? null,
         body: draft.body,
-        mentions: serializeMentions(draft.mentions),
+        mentions: serializeMentions(draft.body, draft.mentions),
       }),
     onMutate: async (draft) => {
       await queryClient.cancelQueries({ queryKey });
@@ -168,7 +169,7 @@ export function useDocumentActivityTimeline({
     mutationFn: async (draft) =>
       createDocumentActivityComment(workspaceId, document.id, draft.threadId, {
         body: draft.body,
-        mentions: serializeMentions(draft.mentions),
+        mentions: serializeMentions(draft.body, draft.mentions),
       }),
     onMutate: async (draft) => {
       await queryClient.cancelQueries({ queryKey });
@@ -211,7 +212,7 @@ export function useDocumentActivityTimeline({
     mutationFn: async (draft) =>
       updateDocumentComment(workspaceId, document.id, draft.commentId, {
         body: draft.body,
-        mentions: serializeMentions(draft.mentions),
+        mentions: serializeMentions(draft.body, draft.mentions),
       }),
     onMutate: async (draft) => {
       await queryClient.cancelQueries({ queryKey });

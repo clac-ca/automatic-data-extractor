@@ -87,6 +87,31 @@ export function sortMentions(mentions: CommentComposerMention[]): CommentCompose
   });
 }
 
+export function codePointIndexFromCodeUnitIndex(
+  body: string,
+  codeUnitIndex: number,
+): number {
+  const safeIndex = Math.max(0, Math.min(codeUnitIndex, body.length));
+  return Array.from(body.slice(0, safeIndex)).length;
+}
+
+export function codeUnitIndexFromCodePointIndex(
+  body: string,
+  codePointIndex: number,
+): number {
+  const safeIndex = Math.max(0, codePointIndex);
+  let currentCodePoint = 0;
+  let currentCodeUnit = 0;
+
+  while (currentCodeUnit < body.length && currentCodePoint < safeIndex) {
+    const codePoint = body.codePointAt(currentCodeUnit);
+    currentCodeUnit += codePoint !== undefined && codePoint > 0xffff ? 2 : 1;
+    currentCodePoint += 1;
+  }
+
+  return currentCodeUnit;
+}
+
 export function getActiveMentionQuery(body: string, caret: number): ActiveMentionQuery | null {
   const safeCaret = Math.max(0, Math.min(caret, body.length));
   const beforeCaret = body.slice(0, safeCaret);
@@ -113,16 +138,21 @@ export function reconcileCommentDraft(
 
   const change = getChangeWindow(previousDraft.body, nextBody);
   const mentions = previousDraft.mentions.flatMap((mention) => {
+    const expectedText = previousDraft.body.slice(mention.start, mention.end);
+
     if (mention.end <= change.start) {
-      return [mention];
+      return [{ mention, expectedText }];
     }
 
     if (mention.start >= change.previousEnd) {
       return [
         {
-          ...mention,
-          start: mention.start + change.delta,
-          end: mention.end + change.delta,
+          mention: {
+            ...mention,
+            start: mention.start + change.delta,
+            end: mention.end + change.delta,
+          },
+          expectedText,
         },
       ];
     }
@@ -133,7 +163,9 @@ export function reconcileCommentDraft(
   return {
     body: nextBody,
     mentions: sortMentions(
-      mentions.filter((mention) => nextBody.slice(mention.start, mention.end) === getMentionText(mention)),
+      mentions.flatMap(({ mention, expectedText }) =>
+        nextBody.slice(mention.start, mention.end) === expectedText ? [mention] : [],
+      ),
     ),
   };
 }

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  codePointIndexFromCodeUnitIndex,
+  codeUnitIndexFromCodePointIndex,
   getActiveMentionQuery,
   insertMentionIntoDraft,
   reconcileCommentDraft,
@@ -91,6 +93,41 @@ describe("comment mention utilities", () => {
       body: "Hi @Ada Lovel",
       mentions: [],
     });
+  });
+
+  it("preserves mention ranges when unrelated edits keep the original mention text intact", () => {
+    const previousDraft: CommentComposerDraft = {
+      body: "Hi @Ada Lovelace",
+      mentions: [
+        {
+          ...USER,
+          name: "Ada Byron",
+          start: 3,
+          end: 16,
+        },
+      ],
+    };
+
+    expect(reconcileCommentDraft(previousDraft, "Hi team, @Ada Lovelace")).toEqual({
+      body: "Hi team, @Ada Lovelace",
+      mentions: [
+        {
+          ...USER,
+          name: "Ada Byron",
+          start: 9,
+          end: 22,
+        },
+      ],
+    });
+  });
+
+  it("converts mention offsets between code units and code points", () => {
+    const body = "😀 hi @Ada";
+
+    expect(codePointIndexFromCodeUnitIndex(body, 5)).toBe(4);
+    expect(codePointIndexFromCodeUnitIndex(body, 9)).toBe(8);
+    expect(codeUnitIndexFromCodePointIndex(body, 4)).toBe(5);
+    expect(codeUnitIndexFromCodePointIndex(body, 8)).toBe(9);
   });
 
   it("trims whitespace and adjusts mention ranges before submit", () => {

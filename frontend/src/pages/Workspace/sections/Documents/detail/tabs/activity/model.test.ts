@@ -142,4 +142,61 @@ describe("activity model", () => {
     expect(filterActivityItems(items, "events").map((item) => item.type)).toEqual(["document", "run"]);
     expect(filterActivityItems(items, "all")).toHaveLength(3);
   });
+
+  it("normalizes API mention ranges from code points into browser string offsets", () => {
+    const normalized = normalizeActivityResponse({
+      items: [
+        {
+          id: "note:thread-emoji",
+          type: "note",
+          activityAt: "2026-01-04T00:00:00Z",
+          thread: {
+            id: "thread-emoji",
+            workspaceId: "ws-1",
+            documentId: "doc-1",
+            anchorType: "note",
+            anchorId: null,
+            activityAt: "2026-01-04T00:00:00Z",
+            commentCount: 1,
+            comments: [
+              {
+                id: "comment-emoji",
+                workspaceId: "ws-1",
+                documentId: "doc-1",
+                threadId: "thread-emoji",
+                body: "😀 hi @Ada",
+                author: {
+                  id: "user-1",
+                  name: "Ada",
+                  email: "ada@example.com",
+                },
+                mentions: [
+                  {
+                    user: {
+                      id: "user-1",
+                      name: "Ada",
+                      email: "ada@example.com",
+                    },
+                    start: 4,
+                    end: 8,
+                  },
+                ],
+                createdAt: "2026-01-04T00:00:00Z",
+                updatedAt: "2026-01-04T00:00:00Z",
+                editedAt: null,
+              },
+            ],
+          },
+        },
+      ],
+    });
+
+    const [item] = buildActivityItems(normalized);
+    const mention = item.type === "note" ? item.thread.comments[0].mentions?.[0] : undefined;
+
+    expect(mention).toMatchObject({
+      start: 5,
+      end: 9,
+    });
+  });
 });

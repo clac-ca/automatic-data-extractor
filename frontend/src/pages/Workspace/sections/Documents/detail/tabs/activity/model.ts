@@ -15,6 +15,7 @@ import type {
   DocumentComment,
 } from "@/api/documents";
 import type { DocumentActivityFilter } from "@/pages/Workspace/sections/Documents/shared/navigation";
+import { codeUnitIndexFromCodePointIndex } from "@/pages/Workspace/sections/Documents/detail/tabs/comments/utils/mentions";
 import type { RunStatus } from "@/types";
 
 export type ActivityPendingAction = "create" | "reply" | "edit";
@@ -145,7 +146,13 @@ function sortItems(items: ActivityRecord[]) {
 function normalizeComment(comment: DocumentComment): ActivityComment {
   return {
     ...comment,
-    mentions: [...(comment.mentions ?? [])].sort((left, right) => left.start - right.start),
+    mentions: [...(comment.mentions ?? [])]
+      .map((mention) => ({
+        ...mention,
+        start: codeUnitIndexFromCodePointIndex(comment.body, mention.start),
+        end: codeUnitIndexFromCodePointIndex(comment.body, mention.end),
+      }))
+      .sort((left, right) => left.start - right.start),
   };
 }
 
