@@ -1,0 +1,52 @@
+name: Main Promotion Release Guardrail
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, edited, reopened, synchronize]
+
+permissions: {}
+
+jobs:
+  validate-main-promotion-release-metadata:
+    name: Validate main promotion release metadata
+    if: github.event.pull_request.head.ref == 'development'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate release metadata for development to main promotion
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body || '' }}
+        run: |
+          set -euo pipefail
+
+          title_pattern='^(feat|fix|deps)(\([^)]+\))?(!)?: .+'
+          body_file="$(mktemp)"
+          trap 'rm -f "$body_file"' EXIT
+          printf '%s' "$PR_BODY" > "$body_file"
+
+          if printf '%s\n' "$PR_TITLE" | grep -Eq "$title_pattern"; then
+            echo "Found releasable conventional PR title."
+            exit 0
+          fi
+
+          if grep -q 'BEGIN_COMMIT_OVERRIDE' "$body_file" && grep -q 'END_COMMIT_OVERRIDE' "$body_file"; then
+            override_lines="$(
+              awk '
+                /BEGIN_COMMIT_OVERRIDE/ { capture = 1; next }
+                /END_COMMIT_OVERRIDE/ { capture = 0; exit }
+                capture { print }
+              ' "$body_file"
+            )"
+
+            if printf '%s\n' "$override_lines" | grep -Eq "$title_pattern"; then
+              echo "Found Release Please commit override block with releasable content."
+              exit 0
+            fi
+
+            echo "::error::Found a BEGIN_COMMIT_OVERRIDE / END_COMMIT_OVERRIDE block, but it does not contain a releasable conventional commit line."
+            exit 1
+          fi
+
+          echo "::error::development -> main promotion PRs must include either a releasable conventional PR title or a BEGIN_COMMIT_OVERRIDE/END_COMMIT_OVERRIDE block so Release Please can create a version tag after squash merge."
+          exit 1

@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.10.0](https://github.com/clac-ca/automatic-data-extractor/compare/v1.9.1...v1.10.0) (2026-03-12)
+
+
+### Features
+
+* **documents:** redesign activity threads ([#329](https://github.com/clac-ca/automatic-data-extractor/issues/329)) ([f02b31d](https://github.com/clac-ca/automatic-data-extractor/commit/f02b31d41ef395254f4f1450a01e7c0fa860f70e))
+* **documents:** support deleting activity comments ([#330](https://github.com/clac-ca/automatic-data-extractor/issues/330)) ([f02b31d](https://github.com/clac-ca/automatic-data-extractor/commit/f02b31d41ef395254f4f1450a01e7c0fa860f70e))
+
 ## [1.9.1](https://github.com/clac-ca/automatic-data-extractor/compare/v1.9.0...v1.9.1) (2026-03-05)
 
 
