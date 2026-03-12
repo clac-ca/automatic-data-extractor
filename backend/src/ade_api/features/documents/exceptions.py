@@ -174,6 +174,45 @@ class InvalidDocumentCommentMentionsError(Exception):
         super().__init__(message)
 
 
+class DocumentCommentNotFoundError(Exception):
+    """Raised when a requested document comment does not exist."""
+
+    def __init__(self, comment_id: UUID | str) -> None:
+        identifier = str(comment_id)
+        super().__init__(f"Document comment {identifier!r} not found")
+        self.comment_id = identifier
+
+
+class DocumentCommentEditForbiddenError(Exception):
+    """Raised when someone tries to edit another user's comment."""
+
+    def __init__(self, message: str = "Only the comment author can edit this comment.") -> None:
+        super().__init__(message)
+
+
+class DocumentActivityThreadNotFoundError(Exception):
+    """Raised when a requested document activity thread does not exist."""
+
+    def __init__(self, thread_id: UUID | str) -> None:
+        identifier = str(thread_id)
+        super().__init__(f"Document activity thread {identifier!r} not found")
+        self.thread_id = identifier
+
+
+class DocumentActivityThreadConflictError(Exception):
+    """Raised when attempting to create a duplicate anchored document activity thread."""
+
+    def __init__(self, message: str = "A thread already exists for this activity item.") -> None:
+        super().__init__(message)
+
+
+class InvalidDocumentActivityThreadAnchorError(Exception):
+    """Raised when a document activity thread anchor is invalid."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+
+
 class DocumentViewNotFoundError(Exception):
     """Raised when a document view cannot be found or is not visible."""
 
@@ -211,6 +250,11 @@ __all__ = [
     "DocumentVersionNotFoundError",
     "InvalidDocumentTagsError",
     "InvalidDocumentCommentMentionsError",
+    "DocumentCommentNotFoundError",
+    "DocumentCommentEditForbiddenError",
+    "DocumentActivityThreadNotFoundError",
+    "DocumentActivityThreadConflictError",
+    "InvalidDocumentActivityThreadAnchorError",
     "DocumentViewNotFoundError",
     "DocumentViewConflictError",
     "DocumentViewImmutableError",

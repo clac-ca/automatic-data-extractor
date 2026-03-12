@@ -45,7 +45,7 @@ export function WorkspaceDocumentsStreamProvider({ children }: { readonly childr
     if (!workspace.id) return;
     queryClient.invalidateQueries({ queryKey: ["documents", workspace.id] });
     queryClient.invalidateQueries({ queryKey: ["documents-detail", workspace.id] });
-    queryClient.invalidateQueries({ queryKey: ["document-activity-runs", workspace.id] });
+    queryClient.invalidateQueries({ queryKey: ["document-activity", workspace.id] });
     queryClient.invalidateQueries({ queryKey: ["sidebar", "assigned-documents", workspace.id] });
     queryClient.invalidateQueries({ queryKey: ["documents-preview-row", workspace.id] });
     queryClient.invalidateQueries({ queryKey: ["documents-preview-details", workspace.id] });

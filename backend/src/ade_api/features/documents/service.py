@@ -44,7 +44,10 @@ from ade_api.common.workbook_preview import (
 )
 from ade_api.features.runs.schemas import RunColumnResource, RunFieldResource, RunMetricsResource
 from ade_api.settings import Settings
+from ade_db import utc_now
 from ade_db.models import (
+    DocumentActivityThread,
+    DocumentActivityThreadAnchorType,
     DocumentView,
     DocumentViewVisibility,
     File,
@@ -70,6 +73,10 @@ from .changes import (
     get_latest_document_change_id,
 )
 from .exceptions import (
+    DocumentActivityThreadConflictError,
+    DocumentActivityThreadNotFoundError,
+    DocumentCommentEditForbiddenError,
+    DocumentCommentNotFoundError,
     DocumentFileMissingError,
     DocumentNameConflictError,
     DocumentNotFoundError,
@@ -83,6 +90,7 @@ from .exceptions import (
     DocumentViewImmutableError,
     DocumentViewNotFoundError,
     DocumentWorksheetParseError,
+    InvalidDocumentActivityThreadAnchorError,
     InvalidDocumentCommentMentionsError,
     InvalidDocumentRenameError,
     InvalidDocumentTagsError,
@@ -90,8 +98,14 @@ from .exceptions import (
 from .filters import apply_document_filters
 from .repository import DocumentsRepository
 from .schemas import (
+    DocumentActivityDocumentItemOut,
+    DocumentActivityNoteItemOut,
+    DocumentActivityResponse,
+    DocumentActivityRunItemOut,
+    DocumentActivityRunOut,
+    DocumentActivityThreadOut,
+    DocumentCommentMentionIn,
     DocumentCommentOut,
-    DocumentCommentPage,
     DocumentConflictMode,
     DocumentFileType,
     DocumentListLifecycle,
@@ -128,6 +142,7 @@ logger = logging.getLogger(__name__)
 _FALLBACK_FILENAME = "upload"
 _MAX_FILENAME_LENGTH = 255
 _FILES_NAME_KEY_CONSTRAINT = "files_workspace_kind_name_key"
+_DOCUMENT_ACTIVITY_THREADS_ANCHOR_CONSTRAINT = "uq_document_activity_threads_anchor"
 _PUBLIC_VIEW_MANAGE_PERMISSION = "workspace.documents.views.public.manage"
 _VIEW_NAME_PATTERN = re.compile(r"[^a-z0-9]+")
 _VIRTUAL_VIEW_TIMESTAMP = datetime(1970, 1, 1, tzinfo=UTC)
@@ -146,6 +161,10 @@ def _map_document_row(row: Mapping[str, Any]) -> File:
     document = row[File]
     document._last_run_at = row.get("last_run_at")
     return document
+
+
+def _run_activity_at(run: Run) -> datetime:
+    return run.completed_at or run.started_at or run.created_at
 
 
 @dataclass(slots=True)
@@ -700,70 +719,233 @@ class DocumentsService:
             limit=limit,
         )
 
-    def list_document_comments(
+    def get_document_activity(
         self,
         *,
         workspace_id: UUID,
         document_id: UUID,
-        limit: int,
-        cursor: str | None,
-        resolved_sort: ResolvedCursorSort[FileComment],
-        include_total: bool,
-    ) -> DocumentCommentPage:
-        self._get_document(workspace_id, document_id)
+    ) -> DocumentActivityResponse:
+        document = self._get_document(workspace_id, document_id)
 
-        stmt = (
-            select(FileComment)
-            .where(FileComment.workspace_id == workspace_id)
-            .where(FileComment.file_id == document_id)
+        threads_stmt = (
+            select(DocumentActivityThread)
+            .where(DocumentActivityThread.workspace_id == workspace_id)
+            .where(DocumentActivityThread.file_id == document_id)
             .options(
-                selectinload(FileComment.author_user),
-                selectinload(FileComment.mentions).selectinload(FileCommentMention.mentioned_user),
+                selectinload(DocumentActivityThread.comments).selectinload(FileComment.author_user),
+                selectinload(DocumentActivityThread.comments)
+                .selectinload(FileComment.mentions)
+                .selectinload(FileCommentMention.mentioned_user),
+            )
+            .order_by(
+                DocumentActivityThread.activity_at.asc(),
+                DocumentActivityThread.created_at.asc(),
+                DocumentActivityThread.id.asc(),
             )
         )
+        threads = list(self._session.execute(threads_stmt).scalars())
 
-        page_result = paginate_query_cursor(
-            self._session,
-            stmt,
-            resolved_sort=resolved_sort,
-            limit=limit,
-            cursor=cursor,
-            include_total=include_total,
-            changes_cursor="0",
+        thread_by_anchor: dict[
+            tuple[DocumentActivityThreadAnchorType, UUID],
+            DocumentActivityThread,
+        ] = {}
+        note_threads: list[DocumentActivityThread] = []
+        for thread in threads:
+            if (
+                thread.anchor_type == DocumentActivityThreadAnchorType.NOTE
+                or thread.anchor_id is None
+            ):
+                note_threads.append(thread)
+                continue
+            thread_by_anchor[(thread.anchor_type, thread.anchor_id)] = thread
+
+        runs_stmt = (
+            select(Run)
+            .join(FileVersion, Run.input_file_version_id == FileVersion.id)
+            .where(FileVersion.file_id == document_id)
+            .where(Run.workspace_id == workspace_id)
+            .order_by(Run.created_at.asc(), Run.id.asc())
         )
+        runs = list(self._session.execute(runs_stmt).scalars())
 
-        items = [DocumentCommentOut.model_validate(item) for item in page_result.items]
-        return DocumentCommentPage(items=items, meta=page_result.meta, facets=page_result.facets)
+        items: list[
+            DocumentActivityDocumentItemOut
+            | DocumentActivityRunItemOut
+            | DocumentActivityNoteItemOut
+        ] = [
+            DocumentActivityDocumentItemOut(
+                id=f"document:{document.id}",
+                activity_at=document.created_at,
+                uploader=document.uploaded_by_user,
+                thread=self._serialize_activity_thread(
+                    thread_by_anchor.get((DocumentActivityThreadAnchorType.DOCUMENT, document.id))
+                ),
+            )
+        ]
 
-    def create_document_comment(
+        for run in runs:
+            items.append(
+                DocumentActivityRunItemOut(
+                    id=f"run:{run.id}",
+                    activity_at=_run_activity_at(run),
+                    run=self._serialize_activity_run(run),
+                    thread=self._serialize_activity_thread(
+                        thread_by_anchor.get((DocumentActivityThreadAnchorType.RUN, run.id))
+                    ),
+                )
+            )
+
+        for thread in note_threads:
+            items.append(
+                DocumentActivityNoteItemOut(
+                    id=f"note:{thread.id}",
+                    activity_at=thread.activity_at,
+                    thread=self._serialize_activity_thread(thread),
+                )
+            )
+
+        items.sort(
+            key=lambda item: (
+                item.activity_at,
+                {"document": 0, "run": 1, "note": 2}[item.type],
+                item.id,
+            )
+        )
+        return DocumentActivityResponse(items=items)
+
+    def create_document_activity_thread(
         self,
         *,
         workspace_id: UUID,
         document_id: UUID,
+        anchor_type: str,
+        anchor_id: UUID | str | None,
         body: str,
-        mentions: Sequence[UUID] | None,
+        mentions: Sequence[DocumentCommentMentionIn] | None,
+        actor: User,
+    ) -> DocumentActivityThreadOut:
+        document = self._get_document(workspace_id, document_id)
+        resolved_anchor_type = DocumentActivityThreadAnchorType(anchor_type)
+        resolved_anchor_id, activity_at = self._resolve_thread_anchor(
+            workspace_id=workspace_id,
+            document=document,
+            anchor_type=resolved_anchor_type,
+            anchor_id=anchor_id,
+        )
+
+        if resolved_anchor_id is not None:
+            existing_thread = self._find_document_activity_thread_by_anchor(
+                workspace_id=workspace_id,
+                document_id=document_id,
+                anchor_type=resolved_anchor_type,
+                anchor_id=resolved_anchor_id,
+            )
+            if existing_thread is not None:
+                raise DocumentActivityThreadConflictError()
+
+        thread = DocumentActivityThread(
+            workspace_id=workspace_id,
+            file_id=document_id,
+            anchor_type=resolved_anchor_type,
+            anchor_id=resolved_anchor_id,
+            activity_at=activity_at,
+        )
+        comment = FileComment(
+            workspace_id=workspace_id,
+            file_id=document_id,
+            thread=thread,
+            author_user_id=actor.id,
+            body=body,
+        )
+        comment.author_user = self._session.merge(actor, load=False)
+        comment.mentions = self._build_comment_mentions(
+            workspace_id=workspace_id,
+            body=body,
+            mentions=mentions,
+        )
+
+        document.comment_count = (document.comment_count or 0) + 1
+        self._touch_document(document)
+
+        self._session.add(thread)
+        try:
+            self._session.flush()
+        except IntegrityError as exc:
+            constraint_name = self._extract_constraint_name(exc)
+            if constraint_name != _DOCUMENT_ACTIVITY_THREADS_ANCHOR_CONSTRAINT:
+                raise
+            raise DocumentActivityThreadConflictError() from exc
+
+        serialized_thread = self._serialize_activity_thread(thread)
+        assert serialized_thread is not None
+        return serialized_thread
+
+    def create_document_activity_comment(
+        self,
+        *,
+        workspace_id: UUID,
+        document_id: UUID,
+        thread_id: UUID,
+        body: str,
+        mentions: Sequence[DocumentCommentMentionIn] | None,
         actor: User,
     ) -> DocumentCommentOut:
         document = self._get_document(workspace_id, document_id)
-
-        mention_users = self._resolve_comment_mentions(
+        thread = self._get_document_activity_thread(
             workspace_id=workspace_id,
-            mentions=mentions,
+            document_id=document_id,
+            thread_id=thread_id,
         )
 
         comment = FileComment(
             workspace_id=workspace_id,
             file_id=document_id,
+            thread_id=thread.id,
             author_user_id=actor.id,
             body=body,
         )
-        # ``actor`` may come from a different SQLAlchemy session via auth deps.
         comment.author_user = self._session.merge(actor, load=False)
-        comment.mentions = [FileCommentMention(mentioned_user=user) for user in mention_users]
+        comment.mentions = self._build_comment_mentions(
+            workspace_id=workspace_id,
+            body=body,
+            mentions=mentions,
+        )
 
         document.comment_count = (document.comment_count or 0) + 1
+        self._touch_document(document)
 
         self._session.add(comment)
+        self._session.flush()
+
+        return DocumentCommentOut.model_validate(comment)
+
+    def update_document_comment(
+        self,
+        *,
+        workspace_id: UUID,
+        document_id: UUID,
+        comment_id: UUID,
+        body: str,
+        mentions: Sequence[DocumentCommentMentionIn] | None,
+        actor: User,
+    ) -> DocumentCommentOut:
+        document = self._get_document(workspace_id, document_id)
+        comment = self._get_document_comment(
+            workspace_id=workspace_id,
+            document_id=document_id,
+            comment_id=comment_id,
+        )
+        if comment.author_user_id != actor.id:
+            raise DocumentCommentEditForbiddenError()
+
+        comment.body = body
+        comment.mentions = self._build_comment_mentions(
+            workspace_id=workspace_id,
+            body=body,
+            mentions=mentions,
+        )
+        comment.updated_at = utc_now()
+        self._touch_document(document)
         self._session.flush()
 
         return DocumentCommentOut.model_validate(comment)
@@ -1775,15 +1957,217 @@ class DocumentsService:
         result = self._session.execute(stmt)
         return result.scalar_one_or_none()
 
+    def _get_document_comment(
+        self,
+        *,
+        workspace_id: UUID,
+        document_id: UUID,
+        comment_id: UUID,
+    ) -> FileComment:
+        stmt = (
+            select(FileComment)
+            .options(
+                selectinload(FileComment.author_user),
+                selectinload(FileComment.mentions).selectinload(FileCommentMention.mentioned_user),
+            )
+            .where(FileComment.workspace_id == workspace_id)
+            .where(FileComment.file_id == document_id)
+            .where(FileComment.id == comment_id)
+        )
+        comment = self._session.execute(stmt).scalar_one_or_none()
+        if comment is None:
+            raise DocumentCommentNotFoundError(comment_id)
+        return comment
+
+    def _get_document_activity_thread(
+        self,
+        *,
+        workspace_id: UUID,
+        document_id: UUID,
+        thread_id: UUID,
+    ) -> DocumentActivityThread:
+        stmt = (
+            select(DocumentActivityThread)
+            .options(
+                selectinload(DocumentActivityThread.comments).selectinload(FileComment.author_user),
+                selectinload(DocumentActivityThread.comments)
+                .selectinload(FileComment.mentions)
+                .selectinload(FileCommentMention.mentioned_user),
+            )
+            .where(DocumentActivityThread.workspace_id == workspace_id)
+            .where(DocumentActivityThread.file_id == document_id)
+            .where(DocumentActivityThread.id == thread_id)
+        )
+        thread = self._session.execute(stmt).scalar_one_or_none()
+        if thread is None:
+            raise DocumentActivityThreadNotFoundError(thread_id)
+        return thread
+
+    def _find_document_activity_thread_by_anchor(
+        self,
+        *,
+        workspace_id: UUID,
+        document_id: UUID,
+        anchor_type: DocumentActivityThreadAnchorType,
+        anchor_id: UUID,
+    ) -> DocumentActivityThread | None:
+        stmt = (
+            select(DocumentActivityThread)
+            .where(DocumentActivityThread.workspace_id == workspace_id)
+            .where(DocumentActivityThread.file_id == document_id)
+            .where(DocumentActivityThread.anchor_type == anchor_type)
+            .where(DocumentActivityThread.anchor_id == anchor_id)
+        )
+        return self._session.execute(stmt).scalar_one_or_none()
+
+    def _get_document_run(
+        self,
+        *,
+        workspace_id: UUID,
+        document_id: UUID,
+        run_id: UUID,
+    ) -> Run:
+        stmt = (
+            select(Run)
+            .join(FileVersion, Run.input_file_version_id == FileVersion.id)
+            .where(Run.workspace_id == workspace_id)
+            .where(FileVersion.file_id == document_id)
+            .where(Run.id == run_id)
+        )
+        run = self._session.execute(stmt).scalar_one_or_none()
+        if run is None:
+            raise InvalidDocumentActivityThreadAnchorError(
+                f"Run {run_id} is not part of document {document_id}."
+            )
+        return run
+
+    def _resolve_thread_anchor(
+        self,
+        *,
+        workspace_id: UUID,
+        document: File,
+        anchor_type: DocumentActivityThreadAnchorType,
+        anchor_id: UUID | str | None,
+    ) -> tuple[UUID | None, datetime]:
+        if anchor_type == DocumentActivityThreadAnchorType.NOTE:
+            if anchor_id is not None:
+                raise InvalidDocumentActivityThreadAnchorError(
+                    "Note threads cannot specify an anchorId."
+                )
+            return None, utc_now()
+
+        if anchor_id is None:
+            raise InvalidDocumentActivityThreadAnchorError(
+                "anchorId is required for anchored threads."
+            )
+
+        resolved_anchor_id = UUID(str(anchor_id))
+        if anchor_type == DocumentActivityThreadAnchorType.DOCUMENT:
+            if resolved_anchor_id != document.id:
+                raise InvalidDocumentActivityThreadAnchorError(
+                    f"Document anchorId must match document {document.id}."
+                )
+            return resolved_anchor_id, document.created_at
+
+        run = self._get_document_run(
+            workspace_id=workspace_id,
+            document_id=document.id,
+            run_id=resolved_anchor_id,
+        )
+        return resolved_anchor_id, _run_activity_at(run)
+
+    def _serialize_activity_thread(
+        self,
+        thread: DocumentActivityThread | None,
+    ) -> DocumentActivityThreadOut | None:
+        if thread is None:
+            return None
+        comments = sorted(
+            getattr(thread, "comments", []),
+            key=lambda comment: (comment.created_at, comment.id),
+        )
+        return DocumentActivityThreadOut(
+            id=thread.id,
+            workspace_id=thread.workspace_id,
+            document_id=thread.file_id,
+            anchor_type=thread.anchor_type.value,
+            anchor_id=thread.anchor_id,
+            activity_at=thread.activity_at,
+            comments=[DocumentCommentOut.model_validate(comment) for comment in comments],
+            comment_count=len(comments),
+        )
+
+    def _serialize_activity_run(self, run: Run) -> DocumentActivityRunOut:
+        started_at = run.started_at
+        completed_at = run.completed_at
+        duration_seconds = (
+            (completed_at - started_at).total_seconds()
+            if started_at is not None and completed_at is not None
+            else None
+        )
+        return DocumentActivityRunOut(
+            id=run.id,
+            operation=run.operation.value,
+            status=run.status,
+            created_at=run.created_at,
+            started_at=started_at,
+            completed_at=completed_at,
+            duration_seconds=duration_seconds,
+            exit_code=run.exit_code,
+            error_message=run.error_message,
+        )
+
+    def _touch_document(self, document: File) -> None:
+        document.updated_at = utc_now()
+
+    def _build_comment_mentions(
+        self,
+        *,
+        workspace_id: UUID,
+        body: str,
+        mentions: Sequence[DocumentCommentMentionIn] | None,
+    ) -> list[FileCommentMention]:
+        resolved = self._resolve_comment_mentions(
+            workspace_id=workspace_id,
+            body=body,
+            mentions=mentions,
+        )
+        return [
+            FileCommentMention(
+                mentioned_user=user,
+                start_index=mention.start,
+                end_index=mention.end,
+            )
+            for mention, user in resolved
+        ]
+
     def _resolve_comment_mentions(
         self,
         *,
         workspace_id: UUID,
-        mentions: Sequence[UUID] | None,
-    ) -> list[User]:
+        body: str,
+        mentions: Sequence[DocumentCommentMentionIn] | None,
+    ) -> list[tuple[DocumentCommentMentionIn, User]]:
         if not mentions:
             return []
-        unique_ids = list(dict.fromkeys(mentions))
+        body_length = len(body)
+        ordered_mentions = sorted(mentions, key=lambda mention: (mention.start, mention.end))
+        last_end = -1
+        for mention in ordered_mentions:
+            if mention.end > body_length:
+                raise InvalidDocumentCommentMentionsError(
+                    f"Mention range {mention.start}:{mention.end} exceeds the comment length."
+                )
+            if mention.start < last_end:
+                raise InvalidDocumentCommentMentionsError("Mention ranges must not overlap.")
+            snippet = body[mention.start:mention.end]
+            if not snippet.startswith("@"):
+                raise InvalidDocumentCommentMentionsError(
+                    f"Mention range {mention.start}:{mention.end} must start with '@'."
+                )
+            last_end = mention.end
+
+        unique_ids = list(dict.fromkeys(UUID(str(mention.user_id)) for mention in ordered_mentions))
         stmt = (
             select(User)
             .join(
@@ -1801,7 +2185,10 @@ class DocumentsService:
                 f"Unknown or non-member mentions: {', '.join(missing)}"
             )
         user_by_id = {user.id: user for user in users}
-        return [user_by_id[user_id] for user_id in unique_ids]
+        return [
+            (mention, user_by_id[UUID(str(mention.user_id))])
+            for mention in ordered_mentions
+        ]
 
     def _require_documents(
         self,

@@ -1,33 +1,34 @@
 import { Separator } from "@/components/ui/separator";
 
-import type { CommentDraft } from "../../comments/hooks/useDocumentComments";
-import { CommentComposer } from "../../comments/components/CommentComposer";
-import type { ActivityCurrentUser } from "../hooks/useDocumentActivityFeed";
+import type { NoteDraft } from "../activityTypes";
+import { DocumentCommentEditor } from "./DocumentCommentEditor";
 
 export function DocumentActivityComposer({
   workspaceId,
-  currentUser,
-  isSubmitting,
-  submitError,
-  onSubmit,
+  isCreatingNote,
+  noteError,
+  onCreateNote,
 }: {
   workspaceId: string;
-  currentUser: ActivityCurrentUser;
-  isSubmitting: boolean;
-  submitError: string | null;
-  onSubmit: (draft: CommentDraft) => void;
+  isCreatingNote: boolean;
+  noteError: string | null;
+  onCreateNote: (draft: NoteDraft) => Promise<void>;
 }) {
   return (
     <>
       <Separator />
-      <div className="bg-background px-4 py-3">
-        <CommentComposer
+      <div className="bg-background px-4 py-2.5">
+        <DocumentCommentEditor
           workspaceId={workspaceId}
-          currentUser={currentUser}
-          onSubmit={onSubmit}
-          isSubmitting={isSubmitting}
+          mode="new"
+          variant="compact"
+          isSubmitting={isCreatingNote}
+          errorMessage={noteError}
+          placeholder="Add a note, decision, or request..."
+          helperText="Add a note to the timeline. Enter sends, Shift+Enter adds a new line."
+          showHeading={false}
+          onSubmit={onCreateNote}
         />
-        {submitError ? <div className="mt-2 text-xs text-destructive">{submitError}</div> : null}
       </div>
     </>
   );

@@ -1,40 +1,75 @@
 import {
   CheckCircle2,
   Clock,
+  FileUp,
+  MessageSquareText,
   PlayCircle,
   XCircle,
 } from "lucide-react";
 
-import type { RunResource } from "@/api/runs/api";
+import type {
+  DocumentActivityDocumentItem,
+  DocumentActivityResponse,
+  DocumentActivityRun,
+  DocumentActivityThread,
+  DocumentComment,
+} from "@/api/documents";
 import type { DocumentActivityFilter } from "@/pages/Workspace/sections/Documents/shared/navigation";
-import type { DocumentRow } from "@/pages/Workspace/sections/Documents/shared/types";
+import { codeUnitIndexFromCodePointIndex } from "@/pages/Workspace/sections/Documents/detail/tabs/comments/utils/mentions";
 import type { RunStatus } from "@/types";
 
-import type { DocumentCommentItem } from "../comments/hooks/useDocumentComments";
+export type ActivityPendingAction = "create" | "reply" | "edit";
 
-export type ActivityItem =
+export type ActivityComment = DocumentComment & {
+  optimistic?: boolean;
+  pendingAction?: ActivityPendingAction;
+};
+
+export type ActivityThread = Omit<DocumentActivityThread, "comments"> & {
+  comments: ActivityComment[];
+  optimistic?: boolean;
+  pendingAction?: Exclude<ActivityPendingAction, "edit">;
+};
+
+export type ActivityRecord =
   | {
       key: string;
-      kind: "event";
-      type: "uploaded";
-      timestamp: string;
+      replyTargetKey: string;
+      id: string;
+      type: "document";
+      activityAt: string;
       title: string;
-      description?: string | null;
+      uploader: DocumentActivityDocumentItem["uploader"];
+      thread: ActivityThread | null;
     }
   | {
       key: string;
-      kind: "event";
+      replyTargetKey: string;
+      id: string;
       type: "run";
-      timestamp: string;
-      run: RunResource;
+      activityAt: string;
+      run: DocumentActivityRun;
+      thread: ActivityThread | null;
     }
   | {
       key: string;
-      kind: "comment";
-      type: "comment";
-      timestamp: string;
-      comment: DocumentCommentItem;
+      replyTargetKey: string;
+      id: string;
+      type: "note";
+      activityAt: string;
+      thread: ActivityThread;
     };
+
+export type ActivityItem = ActivityRecord;
+
+export type ActivityResponseData = {
+  items: ActivityRecord[];
+};
+
+export const ACTIVITY_ICON = {
+  document: FileUp,
+  note: MessageSquareText,
+} as const;
 
 export const RUN_TONE: Record<
   RunStatus,
@@ -72,6 +107,115 @@ function toEpoch(value: string) {
   return Number.isNaN(time) ? 0 : time;
 }
 
+function typePriority(type: ActivityItem["type"]) {
+  switch (type) {
+    case "document":
+      return 0;
+    case "run":
+      return 1;
+    case "note":
+      return 2;
+  }
+}
+
+function parseAnchorId(rawId: string, fallback: string) {
+  const [, parsed] = rawId.split(":", 2);
+  return parsed || fallback;
+}
+
+function sortComments(comments: ActivityComment[]) {
+  return [...comments].sort((left, right) => {
+    const timeDelta = toEpoch(left.createdAt) - toEpoch(right.createdAt);
+    if (timeDelta !== 0) return timeDelta;
+    return left.id.localeCompare(right.id);
+  });
+}
+
+function sortItems(items: ActivityRecord[]) {
+  return [...items].sort((left, right) => {
+    const timeDelta = toEpoch(left.activityAt) - toEpoch(right.activityAt);
+    if (timeDelta !== 0) return timeDelta;
+
+    const priorityDelta = typePriority(left.type) - typePriority(right.type);
+    if (priorityDelta !== 0) return priorityDelta;
+
+    return left.key.localeCompare(right.key);
+  });
+}
+
+function normalizeComment(comment: DocumentComment): ActivityComment {
+  return {
+    ...comment,
+    mentions: [...(comment.mentions ?? [])]
+      .map((mention) => ({
+        ...mention,
+        start: codeUnitIndexFromCodePointIndex(comment.body, mention.start),
+        end: codeUnitIndexFromCodePointIndex(comment.body, mention.end),
+      }))
+      .sort((left, right) => left.start - right.start),
+  };
+}
+
+function normalizeThread(thread: DocumentActivityThread): ActivityThread {
+  const comments = sortComments((thread.comments ?? []).map(normalizeComment));
+  return {
+    ...thread,
+    comments,
+    commentCount: thread.commentCount ?? comments.length,
+  };
+}
+
+export function normalizeActivityResponse(
+  response: DocumentActivityResponse,
+): ActivityResponseData {
+  const items = response.items.map<ActivityRecord>((item) => {
+    switch (item.type) {
+      case "document": {
+        const id = parseAnchorId(item.id, item.id);
+        return {
+          key: item.id,
+          replyTargetKey: item.id,
+          id,
+          type: "document",
+          activityAt: item.activityAt,
+          title: item.title,
+          uploader: item.uploader ?? null,
+          thread: item.thread ? normalizeThread(item.thread) : null,
+        };
+      }
+      case "run": {
+        const id = parseAnchorId(item.id, item.run.id);
+        return {
+          key: item.id,
+          replyTargetKey: item.id,
+          id,
+          type: "run",
+          activityAt: item.activityAt,
+          run: item.run,
+          thread: item.thread ? normalizeThread(item.thread) : null,
+        };
+      }
+      case "note":
+        return {
+          key: item.id,
+          replyTargetKey: item.id,
+          id: item.thread.id,
+          type: "note",
+          activityAt: item.activityAt,
+          thread: normalizeThread(item.thread),
+        };
+    }
+  });
+
+  return {
+    items: sortItems(items),
+  };
+}
+
+export function buildActivityItems(data: ActivityResponseData): ActivityItem[] {
+  return sortItems(data.items);
+}
+
 export function buildInitials(name: string) {
   const parts = name.split(/[\s_-]+/).filter(Boolean);
   if (parts.length === 0) return "??";
@@ -84,62 +228,13 @@ export function formatRunStatus(value: string) {
   return normalized[0]?.toUpperCase() + normalized.slice(1);
 }
 
-export function buildActivityItems(
-  document: DocumentRow,
-  runs: RunResource[],
-  comments: DocumentCommentItem[],
-): ActivityItem[] {
-  const items: ActivityItem[] = [
-    {
-      key: `uploaded:${document.id}`,
-      kind: "event",
-      type: "uploaded",
-      timestamp: document.createdAt,
-      title: "Document uploaded",
-      description: document.uploader?.name || document.uploader?.email || null,
-    },
-  ];
-
-  runs.forEach((run) => {
-    items.push({
-      key: `run:${run.id}`,
-      kind: "event",
-      type: "run",
-      timestamp: run.completed_at ?? run.started_at ?? run.created_at,
-      run,
-    });
-  });
-
-  comments.forEach((comment) => {
-    items.push({
-      key: `comment:${comment.id}`,
-      kind: "comment",
-      type: "comment",
-      timestamp: comment.createdAt,
-      comment,
-    });
-  });
-
-  return items.sort((a, b) => toEpoch(a.timestamp) - toEpoch(b.timestamp));
-}
-
 export function filterActivityItems(
   items: ActivityItem[],
   filter: DocumentActivityFilter,
 ): ActivityItem[] {
   if (filter === "all") return items;
   if (filter === "comments") {
-    return items.filter((item) => item.kind === "comment");
+    return items.filter((item) => item.type === "note" || Boolean(item.thread));
   }
-  return items.filter((item) => item.kind === "event");
-}
-
-export function getActivityCounts(items: ActivityItem[]) {
-  const comments = items.filter((item) => item.kind === "comment").length;
-  const events = items.length - comments;
-  return {
-    all: items.length,
-    comments,
-    events,
-  };
+  return items.filter((item) => item.type !== "note");
 }

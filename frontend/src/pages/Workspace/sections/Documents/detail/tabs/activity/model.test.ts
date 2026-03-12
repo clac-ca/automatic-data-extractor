@@ -1,94 +1,202 @@
 import { describe, expect, it } from "vitest";
 
-import type { RunResource } from "@/api/runs/api";
-import type { DocumentRow } from "@/pages/Workspace/sections/Documents/shared/types";
+import type { DocumentActivityResponse } from "@/api/documents";
 
-import type { DocumentCommentItem } from "../comments/hooks/useDocumentComments";
 import {
   buildActivityItems,
   filterActivityItems,
-  getActivityCounts,
+  normalizeActivityResponse,
 } from "./model";
 
-function makeDocument(): DocumentRow {
+function makeActivity(): DocumentActivityResponse {
   return {
-    id: "doc_1",
-    workspaceId: "ws_1",
-    name: "sample.xlsx",
-    fileType: "xlsx",
-    byteSize: 100,
-    commentCount: 1,
-    createdAt: "2026-01-01T00:00:00Z",
-    updatedAt: "2026-01-01T00:00:00Z",
-    activityAt: "2026-01-03T00:00:00Z",
-    tags: [],
-    uploader: { id: "user_1", name: "Uploader", email: "uploader@example.com" },
-    lastRun: null,
-  } as DocumentRow;
-}
-
-function makeRun(): RunResource {
-  return {
-    id: "run_1",
-    object: "ade.run",
-    workspace_id: "ws_1",
-    configuration_id: "config_1",
-    operation: "process",
-    status: "succeeded",
-    created_at: "2026-01-02T00:00:00Z",
-    started_at: "2026-01-02T00:00:05Z",
-    completed_at: "2026-01-02T00:00:12Z",
-    duration_seconds: 7,
-    failure_message: null,
-    exit_code: 0,
-    links: {
-      self: "/api/v1/workspaces/ws_1/runs/run_1",
-      events_stream: "/api/v1/workspaces/ws_1/runs/run_1/events/stream",
-      events_download: "/api/v1/workspaces/ws_1/runs/run_1/events/download",
-      input_download: "/api/v1/workspaces/ws_1/runs/run_1/input/download",
-      output_download: "/api/v1/workspaces/ws_1/runs/run_1/output/download",
-      output_metadata: "/api/v1/workspaces/ws_1/runs/run_1/output",
-    },
-  } as RunResource;
-}
-
-function makeComment(): DocumentCommentItem {
-  return {
-    id: "comment_1",
-    workspaceId: "ws_1",
-    documentId: "doc_1",
-    body: "Looks good",
-    createdAt: "2026-01-03T00:00:00Z",
-    updatedAt: "2026-01-03T00:00:00Z",
-    author: {
-      id: "user_2",
-      name: "Reviewer",
-      email: "reviewer@example.com",
-    },
-    mentions: [],
+    items: [
+      {
+        id: "document:doc-1",
+        type: "document",
+        activityAt: "2026-01-01T00:00:00Z",
+        title: "Document uploaded",
+        uploader: {
+          id: "user-1",
+          name: "Uploader",
+          email: "uploader@example.com",
+        },
+        thread: null,
+      },
+      {
+        id: "run:run-1",
+        type: "run",
+        activityAt: "2026-01-02T00:00:00Z",
+        run: {
+          id: "run-1",
+          operation: "process",
+          status: "succeeded",
+          createdAt: "2026-01-02T00:00:00Z",
+          startedAt: "2026-01-02T00:00:05Z",
+          completedAt: "2026-01-02T00:00:12Z",
+          durationSeconds: 7,
+          exitCode: 0,
+          errorMessage: null,
+        },
+        thread: {
+          id: "thread-run",
+          workspaceId: "ws-1",
+          documentId: "doc-1",
+          anchorType: "run",
+          anchorId: "run-1",
+          activityAt: "2026-01-02T00:00:00Z",
+          commentCount: 1,
+          comments: [
+            {
+              id: "comment-2",
+              workspaceId: "ws-1",
+              documentId: "doc-1",
+              threadId: "thread-run",
+              body: "Run discussion",
+              author: {
+                id: "user-2",
+                name: "Reviewer",
+                email: "reviewer@example.com",
+              },
+              mentions: [],
+              createdAt: "2026-01-02T01:00:00Z",
+              updatedAt: "2026-01-02T01:00:00Z",
+              editedAt: null,
+            },
+          ],
+        },
+      },
+      {
+        id: "note:thread-note",
+        type: "note",
+        activityAt: "2026-01-03T00:00:00Z",
+        thread: {
+          id: "thread-note",
+          workspaceId: "ws-1",
+          documentId: "doc-1",
+          anchorType: "note",
+          anchorId: null,
+          activityAt: "2026-01-03T00:00:00Z",
+          commentCount: 2,
+          comments: [
+            {
+              id: "comment-3",
+              workspaceId: "ws-1",
+              documentId: "doc-1",
+              threadId: "thread-note",
+              body: "First note",
+              author: {
+                id: "user-3",
+                name: "Owner",
+                email: "owner@example.com",
+              },
+              mentions: [],
+              createdAt: "2026-01-03T00:00:00Z",
+              updatedAt: "2026-01-03T00:00:00Z",
+              editedAt: null,
+            },
+            {
+              id: "comment-4",
+              workspaceId: "ws-1",
+              documentId: "doc-1",
+              threadId: "thread-note",
+              body: "Follow-up",
+              author: {
+                id: "user-4",
+                name: "Teammate",
+                email: "teammate@example.com",
+              },
+              mentions: [],
+              createdAt: "2026-01-03T02:00:00Z",
+              updatedAt: "2026-01-03T02:00:00Z",
+              editedAt: null,
+            },
+          ],
+        },
+      },
+    ],
   };
 }
 
 describe("activity model", () => {
-  it("builds and sorts mixed activity items", () => {
-    const items = buildActivityItems(makeDocument(), [makeRun()], [makeComment()]);
+  it("normalizes activity into oldest-first timeline items", () => {
+    const normalized = normalizeActivityResponse(makeActivity());
+    const items = buildActivityItems(normalized);
 
     expect(items).toHaveLength(3);
-    expect(items[0].type).toBe("uploaded");
+    expect(items[0].type).toBe("document");
+    expect(items[0].id).toBe("doc-1");
+    expect(items[0].key).toBe("document:doc-1");
     expect(items[1].type).toBe("run");
-    expect(items[2].type).toBe("comment");
+    expect(items[1].id).toBe("run-1");
+    expect(items[1].key).toBe("run:run-1");
+    expect(items[2].type).toBe("note");
+    expect(items[2].id).toBe("thread-note");
+    expect(items[2].key).toBe("note:thread-note");
   });
 
-  it("filters activity items by comments and events", () => {
-    const items = buildActivityItems(makeDocument(), [makeRun()], [makeComment()]);
+  it("keeps discussion filters in timeline order", () => {
+    const items = buildActivityItems(normalizeActivityResponse(makeActivity()));
 
-    expect(filterActivityItems(items, "comments")).toHaveLength(1);
-    expect(filterActivityItems(items, "events")).toHaveLength(2);
+    expect(filterActivityItems(items, "comments").map((item) => item.type)).toEqual(["run", "note"]);
+    expect(filterActivityItems(items, "events").map((item) => item.type)).toEqual(["document", "run"]);
     expect(filterActivityItems(items, "all")).toHaveLength(3);
   });
 
-  it("calculates activity counts", () => {
-    const items = buildActivityItems(makeDocument(), [makeRun()], [makeComment()]);
-    expect(getActivityCounts(items)).toEqual({ all: 3, comments: 1, events: 2 });
+  it("normalizes API mention ranges from code points into browser string offsets", () => {
+    const normalized = normalizeActivityResponse({
+      items: [
+        {
+          id: "note:thread-emoji",
+          type: "note",
+          activityAt: "2026-01-04T00:00:00Z",
+          thread: {
+            id: "thread-emoji",
+            workspaceId: "ws-1",
+            documentId: "doc-1",
+            anchorType: "note",
+            anchorId: null,
+            activityAt: "2026-01-04T00:00:00Z",
+            commentCount: 1,
+            comments: [
+              {
+                id: "comment-emoji",
+                workspaceId: "ws-1",
+                documentId: "doc-1",
+                threadId: "thread-emoji",
+                body: "😀 hi @Ada",
+                author: {
+                  id: "user-1",
+                  name: "Ada",
+                  email: "ada@example.com",
+                },
+                mentions: [
+                  {
+                    user: {
+                      id: "user-1",
+                      name: "Ada",
+                      email: "ada@example.com",
+                    },
+                    start: 4,
+                    end: 8,
+                  },
+                ],
+                createdAt: "2026-01-04T00:00:00Z",
+                updatedAt: "2026-01-04T00:00:00Z",
+                editedAt: null,
+              },
+            ],
+          },
+        },
+      ],
+    });
+
+    const [item] = buildActivityItems(normalized);
+    const mention = item.type === "note" ? item.thread.comments[0].mentions?.[0] : undefined;
+
+    expect(mention).toMatchObject({
+      start: 5,
+      end: 9,
+    });
   });
 });

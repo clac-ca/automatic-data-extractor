@@ -30,6 +30,8 @@ from .document_view import (
 from .file import (
     FILE_KIND_VALUES,
     FILE_VERSION_ORIGIN_VALUES,
+    DocumentActivityThread,
+    DocumentActivityThreadAnchorType,
     File,
     FileComment,
     FileCommentMention,
@@ -71,6 +73,8 @@ __all__ = [
     "FILE_VERSION_ORIGIN_VALUES",
     "DocumentViewVisibility",
     "DocumentView",
+    "DocumentActivityThread",
+    "DocumentActivityThreadAnchorType",
     "FileKind",
     "FileVersionOrigin",
     "File",
