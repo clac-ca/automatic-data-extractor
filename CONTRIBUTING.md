@@ -52,6 +52,14 @@ We use **Conventional Commits**:
 3. Merge the release PR.
 4. GitHub release publish triggers container publish.
 
+### Promoting `development` to `main`
+1. Open a PR from `development` into `main`.
+2. If the PR will be squash-merged, make sure Release Please can still see releasable metadata:
+   - either use a releasable PR title such as `fix: ...`, `feat: ...`, or `deps: ...`
+   - or add a `BEGIN_COMMIT_OVERRIDE` / `END_COMMIT_OVERRIDE` block to the PR body with the releasable commit lines to publish
+3. Wait for checks to pass, then merge.
+4. Confirm Release Please opens the release PR for the new version.
+
 ### Rebuild release (`vX.Y.Z-rN`)
 1. Run the rebuild workflow (`.github/workflows/rebuild-release.yaml`) with:
    - `base_release_tag=vX.Y.Z`
