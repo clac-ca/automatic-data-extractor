@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from datetime import datetime
 from enum import Enum
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import Field, field_validator, model_validator
 
@@ -411,13 +411,60 @@ class DocumentChangeDeltaResponse(BaseSchema):
     has_more: bool = Field(alias="hasMore")
 
 
-class DocumentCommentCreate(BaseSchema):
-    """Payload for creating a document comment."""
+class DocumentCommentMentionIn(BaseSchema):
+    """Range-aware mention metadata for a draft comment."""
+
+    user_id: UUIDStr = Field(alias="userId")
+    start: int = Field(ge=0)
+    end: int = Field(gt=0)
+
+    @model_validator(mode="after")
+    def _validate_range(self) -> DocumentCommentMentionIn:
+        if self.end <= self.start:
+            raise ValueError("mention end must be greater than start")
+        return self
+
+
+DocumentActivityAnchorType = Literal["note", "document", "run"]
+
+
+class DocumentActivityThreadCreate(BaseSchema):
+    """Payload for creating a new document activity thread."""
+
+    anchor_type: DocumentActivityAnchorType = Field(alias="anchorType")
+    anchor_id: UUIDStr | None = Field(default=None, alias="anchorId")
+    body: str = Field(min_length=1, max_length=4000)
+    mentions: list[DocumentCommentMentionIn] | None = Field(
+        default=None,
+        description="Optional mention ranges within the comment body.",
+    )
+
+    @field_validator("body")
+    @classmethod
+    def _strip_body(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("body is required")
+        return stripped
+
+    @model_validator(mode="after")
+    def _validate_anchor(self) -> DocumentActivityThreadCreate:
+        if self.anchor_type == "note":
+            if self.anchor_id is not None:
+                raise ValueError("note threads cannot specify an anchorId")
+            return self
+        if self.anchor_id is None:
+            raise ValueError("anchorId is required for anchored threads")
+        return self
+
+
+class DocumentActivityCommentCreate(BaseSchema):
+    """Payload for creating a comment in an existing document activity thread."""
 
     body: str = Field(min_length=1, max_length=4000)
-    mentions: list[UUIDStr] | None = Field(
+    mentions: list[DocumentCommentMentionIn] | None = Field(
         default=None,
-        description="Optional list of mentioned user IDs.",
+        description="Optional mention ranges within the comment body.",
     )
 
     @field_validator("body")
@@ -429,29 +476,125 @@ class DocumentCommentCreate(BaseSchema):
         return stripped
 
 
+class DocumentCommentUpdate(BaseSchema):
+    """Payload for editing an existing document comment."""
+
+    body: str = Field(min_length=1, max_length=4000)
+    mentions: list[DocumentCommentMentionIn] | None = Field(
+        default=None,
+        description="Optional mention ranges within the edited comment body.",
+    )
+
+    @field_validator("body")
+    @classmethod
+    def _strip_body(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("body is required")
+        return stripped
+
+
+class DocumentCommentMentionOut(BaseSchema):
+    """Resolved mention payload for comment rendering."""
+
+    user: UserSummary = Field(alias="mentioned_user", serialization_alias="user")
+    start: int = Field(alias="start_index", serialization_alias="start")
+    end: int = Field(alias="end_index", serialization_alias="end")
+
+
 class DocumentCommentOut(BaseSchema):
     """Serialized representation of a document comment."""
 
     id: UUIDStr
     workspace_id: UUIDStr = Field(alias="workspaceId")
     document_id: UUIDStr = Field(alias="file_id", serialization_alias="documentId")
+    thread_id: UUIDStr = Field(alias="threadId")
     body: str
     author: UserSummary | None = Field(
         default=None,
         alias="author_user",
         serialization_alias="author",
     )
-    mentions: list[UserSummary] = Field(
+    mentions: list[DocumentCommentMentionOut] = Field(
         default_factory=list,
-        alias="mentioned_users",
+        alias="mention_ranges",
         serialization_alias="mentions",
     )
     created_at: datetime = Field(alias="createdAt")
     updated_at: datetime = Field(alias="updatedAt")
+    edited_at: datetime | None = Field(default=None, alias="editedAt")
+
+class DocumentActivityThreadOut(BaseSchema):
+    """Serialized document activity thread."""
+
+    id: UUIDStr
+    workspace_id: UUIDStr = Field(alias="workspaceId")
+    document_id: UUIDStr = Field(alias="file_id", serialization_alias="documentId")
+    anchor_type: DocumentActivityAnchorType = Field(alias="anchorType")
+    anchor_id: UUIDStr | None = Field(default=None, alias="anchorId")
+    activity_at: datetime = Field(alias="activityAt")
+    comments: list[DocumentCommentOut] = Field(default_factory=list)
+    comment_count: int = Field(default=0, alias="commentCount")
 
 
-class DocumentCommentPage(CursorPage[DocumentCommentOut]):
-    """Cursor-based envelope of document comments."""
+class DocumentActivityRunOut(BaseSchema):
+    """Run summary embedded in the document activity timeline."""
+
+    id: UUIDStr
+    operation: str
+    status: RunStatus
+    created_at: datetime = Field(alias="createdAt")
+    started_at: datetime | None = Field(default=None, alias="startedAt")
+    completed_at: datetime | None = Field(default=None, alias="completedAt")
+    duration_seconds: float | None = Field(default=None, alias="durationSeconds")
+    exit_code: int | None = Field(default=None, alias="exitCode")
+    error_message: str | None = Field(default=None, alias="errorMessage")
+
+
+class DocumentActivityDocumentItemOut(BaseSchema):
+    """Upload event inside the document activity timeline."""
+
+    id: str
+    type: Literal["document"] = "document"
+    activity_at: datetime = Field(alias="activityAt")
+    title: str = "Document uploaded"
+    uploader: UserSummary | None = Field(
+        default=None,
+        alias="uploaded_by_user",
+        serialization_alias="uploader",
+    )
+    thread: DocumentActivityThreadOut | None = None
+
+
+class DocumentActivityRunItemOut(BaseSchema):
+    """Run event inside the document activity timeline."""
+
+    id: str
+    type: Literal["run"] = "run"
+    activity_at: datetime = Field(alias="activityAt")
+    run: DocumentActivityRunOut
+    thread: DocumentActivityThreadOut | None = None
+
+
+class DocumentActivityNoteItemOut(BaseSchema):
+    """Freeform note thread inside the document activity timeline."""
+
+    id: str
+    type: Literal["note"] = "note"
+    activity_at: datetime = Field(alias="activityAt")
+    thread: DocumentActivityThreadOut
+
+
+DocumentActivityItemOut = Annotated[
+    DocumentActivityDocumentItemOut | DocumentActivityRunItemOut | DocumentActivityNoteItemOut,
+    Field(discriminator="type"),
+]
+
+
+class DocumentActivityResponse(BaseSchema):
+    """Full document activity timeline."""
+
+    items: list[DocumentActivityItemOut]
 
 
 class DocumentUploadRunOptions(BaseSchema):
@@ -591,9 +734,20 @@ __all__ = [
     "DocumentViewTableState",
     "DocumentViewUpdate",
     "DocumentViewVisibility",
-    "DocumentCommentCreate",
+    "DocumentActivityAnchorType",
+    "DocumentActivityCommentCreate",
+    "DocumentActivityDocumentItemOut",
+    "DocumentActivityItemOut",
+    "DocumentActivityNoteItemOut",
+    "DocumentActivityResponse",
+    "DocumentActivityRunItemOut",
+    "DocumentActivityRunOut",
+    "DocumentActivityThreadCreate",
+    "DocumentActivityThreadOut",
+    "DocumentCommentMentionIn",
+    "DocumentCommentMentionOut",
     "DocumentCommentOut",
-    "DocumentCommentPage",
+    "DocumentCommentUpdate",
     "DocumentRunSummary",
     "DocumentSheet",
     "DocumentTagsPatch",

@@ -3,11 +3,9 @@ import type { DocumentActivityFilter } from "@/pages/Workspace/sections/Document
 
 export function DocumentActivityHeader({
   filter,
-  counts,
   onFilterChange,
 }: {
   filter: DocumentActivityFilter;
-  counts: { all: number; comments: number; events: number };
   onFilterChange: (filter: DocumentActivityFilter) => void;
 }) {
   return (
@@ -16,24 +14,24 @@ export function DocumentActivityHeader({
         <div>
           <div className="text-sm font-semibold">Activity</div>
           <div className="text-xs text-muted-foreground">
-            Collaboration thread and processing history for this document.
+            Notes and processing events for this document.
           </div>
         </div>
         <div className="flex items-center gap-2">
           <FilterChip
             active={filter === "all"}
             onClick={() => onFilterChange("all")}
-            label={`All (${counts.all})`}
+            label="All"
           />
           <FilterChip
             active={filter === "comments"}
             onClick={() => onFilterChange("comments")}
-            label={`Comments (${counts.comments})`}
+            label="Discussions"
           />
           <FilterChip
             active={filter === "events"}
             onClick={() => onFilterChange("events")}
-            label={`Events (${counts.events})`}
+            label="Events"
           />
         </div>
       </div>

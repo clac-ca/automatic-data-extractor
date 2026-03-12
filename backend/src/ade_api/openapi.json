@@ -9091,13 +9091,13 @@
         "description": "Retrieve document list row."
       }
     },
-    "/api/v1/workspaces/{workspaceId}/documents/{documentId}/comments": {
+    "/api/v1/workspaces/{workspaceId}/documents/{documentId}/activity": {
       "get": {
         "tags": [
           "documents"
         ],
-        "summary": "List document comments",
-        "operationId": "list_document_comments_api_v1_workspaces__workspaceId__documents__documentId__comments_get",
+        "summary": "Get document activity timeline",
+        "operationId": "get_document_activity_api_v1_workspaces__workspaceId__documents__documentId__activity_get",
         "parameters": [
           {
             "name": "workspaceId",
@@ -9122,133 +9122,6 @@
               "title": "Documentid"
             },
             "description": "Document identifier"
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "maximum": 200,
-              "minimum": 1,
-              "description": "Items per page (max 200)",
-              "default": 50,
-              "title": "Limit"
-            },
-            "description": "Items per page (max 200)"
-          },
-          {
-            "name": "cursor",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Opaque cursor token for pagination.",
-              "title": "Cursor"
-            },
-            "description": "Opaque cursor token for pagination."
-          },
-          {
-            "name": "sort",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "JSON array of {id, desc}.",
-              "title": "Sort"
-            },
-            "description": "JSON array of {id, desc}."
-          },
-          {
-            "name": "filters",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "URL-encoded JSON array of filter objects.",
-              "examples": [
-                "[{\"id\":\"status\",\"operator\":\"in\",\"value\":[\"processing\",\"failed\"]}]"
-              ],
-              "title": "Filters"
-            },
-            "description": "URL-encoded JSON array of filter objects."
-          },
-          {
-            "name": "joinOperator",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "$ref": "#/components/schemas/FilterJoinOperator",
-              "description": "Logical operator to join filters (and/or).",
-              "default": "and"
-            },
-            "description": "Logical operator to join filters (and/or)."
-          },
-          {
-            "name": "q",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored.",
-              "examples": [
-                "acme invoice"
-              ],
-              "title": "Q"
-            },
-            "description": "Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored."
-          },
-          {
-            "name": "includeTotal",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "boolean",
-              "description": "Include totalCount in the response.",
-              "default": false,
-              "title": "Includetotal"
-            },
-            "description": "Include totalCount in the response."
-          },
-          {
-            "name": "includeFacets",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "boolean",
-              "description": "Include facet counts in the response.",
-              "default": false,
-              "title": "Includefacets"
-            },
-            "description": "Include facet counts in the response."
           }
         ],
         "responses": {
@@ -9257,7 +9130,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DocumentCommentPage"
+                  "$ref": "#/components/schemas/DocumentActivityResponse"
                 }
               }
             },
@@ -9268,7 +9141,7 @@
             }
           },
           "401": {
-            "description": "Authentication required to access comments.",
+            "description": "Authentication required to access document activity.",
             "headers": {
               "X-Request-Id": {
                 "$ref": "#/components/headers/X-Request-Id"
@@ -9318,14 +9191,16 @@
             "APIKeyHeader": []
           }
         ],
-        "description": "List document comments."
-      },
+        "description": "Get document activity timeline."
+      }
+    },
+    "/api/v1/workspaces/{workspaceId}/documents/{documentId}/threads": {
       "post": {
         "tags": [
           "documents"
         ],
-        "summary": "Create a document comment",
-        "operationId": "create_document_comment_api_v1_workspaces__workspaceId__documents__documentId__comments_post",
+        "summary": "Create a document activity thread",
+        "operationId": "create_document_activity_thread_api_v1_workspaces__workspaceId__documents__documentId__threads_post",
         "parameters": [
           {
             "name": "workspaceId",
@@ -9373,7 +9248,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/DocumentCommentCreate"
+                "$ref": "#/components/schemas/DocumentActivityThreadCreate"
               }
             }
           }
@@ -9384,7 +9259,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DocumentCommentOut"
+                  "$ref": "#/components/schemas/DocumentActivityThreadOut"
                 }
               }
             },
@@ -9395,7 +9270,7 @@
             }
           },
           "401": {
-            "description": "Authentication required to create comments.",
+            "description": "Authentication required to create activity threads.",
             "headers": {
               "X-Request-Id": {
                 "$ref": "#/components/headers/X-Request-Id"
@@ -9438,7 +9313,391 @@
             "APIKeyHeader": []
           }
         ],
-        "description": "Create a document comment."
+        "description": "Create a document activity thread."
+      }
+    },
+    "/api/v1/workspaces/{workspaceId}/documents/{documentId}/threads/{threadId}/comments": {
+      "post": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Reply in a document activity thread",
+        "operationId": "create_document_activity_comment_api_v1_workspaces__workspaceId__documents__documentId__threads__threadId__comments_post",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspaceid"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "documentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Document identifier",
+              "title": "Documentid"
+            },
+            "description": "Document identifier"
+          },
+          {
+            "name": "threadId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Threadid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentActivityCommentCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentCommentOut"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required to create comments.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Workspace permissions do not allow document access.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Document or thread not found within the workspace.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Comment payload is invalid.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "description": "Reply in a document activity thread."
+      }
+    },
+    "/api/v1/workspaces/{workspaceId}/documents/{documentId}/comments/{commentId}": {
+      "patch": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Edit a document comment",
+        "operationId": "update_document_comment_api_v1_workspaces__workspaceId__documents__documentId__comments__commentId__patch",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspaceid"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "documentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Document identifier",
+              "title": "Documentid"
+            },
+            "description": "Document identifier"
+          },
+          {
+            "name": "commentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Commentid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentCommentUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentCommentOut"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required to edit comments.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Only the comment author can edit this comment.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Document or comment not found within the workspace.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Comment payload is invalid.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "description": "Edit a document comment."
+      },
+      "delete": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Delete a document comment",
+        "operationId": "delete_document_comment_api_v1_workspaces__workspaceId__documents__documentId__comments__commentId__delete",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspaceid"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "documentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Document identifier",
+              "title": "Documentid"
+            },
+            "description": "Document identifier"
+          },
+          {
+            "name": "commentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Commentid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required to delete comments.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Only the comment author can delete this comment.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Document or comment not found within the workspace.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "description": "Delete a document comment."
       }
     },
     "/api/v1/workspaces/{workspaceId}/documents/{documentId}/download": {
@@ -18049,6 +18308,414 @@
         ],
         "title": "DirectoryWriteResponse"
       },
+      "DocumentActivityCommentCreate": {
+        "properties": {
+          "body": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Body"
+          },
+          "mentions": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/DocumentCommentMentionIn"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mentions",
+            "description": "Optional mention ranges within the comment body."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "body"
+        ],
+        "title": "DocumentActivityCommentCreate",
+        "description": "Payload for creating a comment in an existing document activity thread."
+      },
+      "DocumentActivityDocumentItemOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "type": {
+            "type": "string",
+            "const": "document",
+            "title": "Type",
+            "default": "document"
+          },
+          "activityAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Activityat"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "default": "Document uploaded"
+          },
+          "uploader": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UserSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "thread": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DocumentActivityThreadOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "activityAt"
+        ],
+        "title": "DocumentActivityDocumentItemOut",
+        "description": "Upload event inside the document activity timeline."
+      },
+      "DocumentActivityNoteItemOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "type": {
+            "type": "string",
+            "const": "note",
+            "title": "Type",
+            "default": "note"
+          },
+          "activityAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Activityat"
+          },
+          "thread": {
+            "$ref": "#/components/schemas/DocumentActivityThreadOut"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "activityAt",
+          "thread"
+        ],
+        "title": "DocumentActivityNoteItemOut",
+        "description": "Freeform note thread inside the document activity timeline."
+      },
+      "DocumentActivityResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/DocumentActivityDocumentItemOut"
+                },
+                {
+                  "$ref": "#/components/schemas/DocumentActivityRunItemOut"
+                },
+                {
+                  "$ref": "#/components/schemas/DocumentActivityNoteItemOut"
+                }
+              ],
+              "discriminator": {
+                "propertyName": "type",
+                "mapping": {
+                  "document": "#/components/schemas/DocumentActivityDocumentItemOut",
+                  "note": "#/components/schemas/DocumentActivityNoteItemOut",
+                  "run": "#/components/schemas/DocumentActivityRunItemOut"
+                }
+              }
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "DocumentActivityResponse",
+        "description": "Full document activity timeline."
+      },
+      "DocumentActivityRunItemOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "type": {
+            "type": "string",
+            "const": "run",
+            "title": "Type",
+            "default": "run"
+          },
+          "activityAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Activityat"
+          },
+          "run": {
+            "$ref": "#/components/schemas/DocumentActivityRunOut"
+          },
+          "thread": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DocumentActivityThreadOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "activityAt",
+          "run"
+        ],
+        "title": "DocumentActivityRunItemOut",
+        "description": "Run event inside the document activity timeline."
+      },
+      "DocumentActivityRunOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id",
+            "description": "UUIDv7 (RFC 9562) generated in the application layer."
+          },
+          "operation": {
+            "type": "string",
+            "title": "Operation"
+          },
+          "status": {
+            "$ref": "#/components/schemas/RunStatus"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat"
+          },
+          "startedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Startedat"
+          },
+          "completedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completedat"
+          },
+          "durationSeconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Durationseconds"
+          },
+          "exitCode": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exitcode"
+          },
+          "errorMessage": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Errormessage"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "operation",
+          "status",
+          "createdAt"
+        ],
+        "title": "DocumentActivityRunOut",
+        "description": "Run summary embedded in the document activity timeline."
+      },
+      "DocumentActivityThreadCreate": {
+        "properties": {
+          "anchorType": {
+            "type": "string",
+            "enum": [
+              "note",
+              "document",
+              "run"
+            ],
+            "title": "Anchortype"
+          },
+          "anchorId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "description": "UUIDv7 (RFC 9562) generated in the application layer."
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anchorid"
+          },
+          "body": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Body"
+          },
+          "mentions": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/DocumentCommentMentionIn"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mentions",
+            "description": "Optional mention ranges within the comment body."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "anchorType",
+          "body"
+        ],
+        "title": "DocumentActivityThreadCreate",
+        "description": "Payload for creating a new document activity thread."
+      },
+      "DocumentActivityThreadOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id",
+            "description": "UUIDv7 (RFC 9562) generated in the application layer."
+          },
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Workspaceid",
+            "description": "UUIDv7 (RFC 9562) generated in the application layer."
+          },
+          "documentId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Documentid",
+            "description": "UUIDv7 (RFC 9562) generated in the application layer."
+          },
+          "anchorType": {
+            "type": "string",
+            "enum": [
+              "note",
+              "document",
+              "run"
+            ],
+            "title": "Anchortype"
+          },
+          "anchorId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "description": "UUIDv7 (RFC 9562) generated in the application layer."
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anchorid"
+          },
+          "activityAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Activityat"
+          },
+          "comments": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentCommentOut"
+            },
+            "type": "array",
+            "title": "Comments"
+          },
+          "commentCount": {
+            "type": "integer",
+            "title": "Commentcount",
+            "default": 0
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "workspaceId",
+          "documentId",
+          "anchorType",
+          "activityAt"
+        ],
+        "title": "DocumentActivityThreadOut",
+        "description": "Serialized document activity thread."
+      },
       "DocumentBatchDeleteRequest": {
         "properties": {
           "documentIds": {
@@ -18308,39 +18975,58 @@
         "title": "DocumentChangeEntry",
         "description": "Single entry from the documents change feed."
       },
-      "DocumentCommentCreate": {
+      "DocumentCommentMentionIn": {
         "properties": {
-          "body": {
+          "userId": {
             "type": "string",
-            "maxLength": 4000,
-            "minLength": 1,
-            "title": "Body"
+            "format": "uuid",
+            "title": "Userid",
+            "description": "UUIDv7 (RFC 9562) generated in the application layer."
           },
-          "mentions": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string",
-                  "format": "uuid",
-                  "description": "UUIDv7 (RFC 9562) generated in the application layer."
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Mentions",
-            "description": "Optional list of mentioned user IDs."
+          "start": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Start"
+          },
+          "end": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "End"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "body"
+          "userId",
+          "start",
+          "end"
         ],
-        "title": "DocumentCommentCreate",
-        "description": "Payload for creating a document comment."
+        "title": "DocumentCommentMentionIn",
+        "description": "Range-aware mention metadata for a draft comment."
+      },
+      "DocumentCommentMentionOut": {
+        "properties": {
+          "user": {
+            "$ref": "#/components/schemas/UserSummary"
+          },
+          "start": {
+            "type": "integer",
+            "title": "Start"
+          },
+          "end": {
+            "type": "integer",
+            "title": "End"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "user",
+          "start",
+          "end"
+        ],
+        "title": "DocumentCommentMentionOut",
+        "description": "Resolved mention payload for comment rendering."
       },
       "DocumentCommentOut": {
         "properties": {
@@ -18362,6 +19048,12 @@
             "title": "Documentid",
             "description": "UUIDv7 (RFC 9562) generated in the application layer."
           },
+          "threadId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Threadid",
+            "description": "UUIDv7 (RFC 9562) generated in the application layer."
+          },
           "body": {
             "type": "string",
             "title": "Body"
@@ -18378,7 +19070,7 @@
           },
           "mentions": {
             "items": {
-              "$ref": "#/components/schemas/UserSummary"
+              "$ref": "#/components/schemas/DocumentCommentMentionOut"
             },
             "type": "array",
             "title": "Mentions"
@@ -18392,6 +19084,18 @@
             "type": "string",
             "format": "date-time",
             "title": "Updatedat"
+          },
+          "editedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Editedat"
           }
         },
         "additionalProperties": false,
@@ -18400,6 +19104,7 @@
           "id",
           "workspaceId",
           "documentId",
+          "threadId",
           "body",
           "createdAt",
           "updatedAt"
@@ -18407,39 +19112,37 @@
         "title": "DocumentCommentOut",
         "description": "Serialized representation of a document comment."
       },
-      "DocumentCommentPage": {
+      "DocumentCommentUpdate": {
         "properties": {
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/DocumentCommentOut"
-            },
-            "type": "array",
-            "title": "Items"
+          "body": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Body"
           },
-          "meta": {
-            "$ref": "#/components/schemas/CursorMeta"
-          },
-          "facets": {
+          "mentions": {
             "anyOf": [
               {
-                "additionalProperties": true,
-                "type": "object"
+                "items": {
+                  "$ref": "#/components/schemas/DocumentCommentMentionIn"
+                },
+                "type": "array"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Facets"
+            "title": "Mentions",
+            "description": "Optional mention ranges within the edited comment body."
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "items",
-          "meta"
+          "body"
         ],
-        "title": "DocumentCommentPage",
-        "description": "Cursor-based envelope of document comments."
+        "title": "DocumentCommentUpdate",
+        "description": "Payload for editing an existing document comment."
       },
       "DocumentConflictMode": {
         "type": "string",

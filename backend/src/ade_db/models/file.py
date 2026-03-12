@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import Enum
 from typing import TYPE_CHECKING
 from uuid import UUID
 
+from sqlalchemy import (
+    Enum as SAEnum,
+)
 from sqlalchemy import (
     ForeignKey,
     Index,
@@ -16,7 +19,6 @@ from sqlalchemy import (
     UniqueConstraint,
     text,
 )
-from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.mutable import MutableDict
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -51,6 +53,14 @@ class FileVersionOrigin(str, Enum):
 
 FILE_KIND_VALUES = tuple(kind.value for kind in FileKind)
 FILE_VERSION_ORIGIN_VALUES = tuple(origin.value for origin in FileVersionOrigin)
+
+
+class DocumentActivityThreadAnchorType(str, Enum):
+    """Supported anchor types for document activity threads."""
+
+    NOTE = "note"
+    DOCUMENT = "document"
+    RUN = "run"
 
 
 class File(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -281,8 +291,63 @@ class FileTag(UUIDPrimaryKeyMixin, Base):
     )
 
 
+class DocumentActivityThread(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    """Discussion thread attached to a document activity item."""
+
+    __tablename__ = "document_activity_threads"
+
+    workspace_id: Mapped[UUID] = mapped_column(
+        GUID(),
+        ForeignKey("workspaces.id", ondelete="NO ACTION"),
+        nullable=False,
+    )
+    file_id: Mapped[UUID] = mapped_column(
+        GUID(),
+        ForeignKey("files.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    anchor_type: Mapped[DocumentActivityThreadAnchorType] = mapped_column(
+        SAEnum(
+            DocumentActivityThreadAnchorType,
+            name="document_activity_thread_anchor_type",
+            native_enum=False,
+            length=20,
+            values_callable=_enum_values,
+        ),
+        nullable=False,
+    )
+    anchor_id: Mapped[UUID | None] = mapped_column(GUID(), nullable=True)
+    activity_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
+
+    file: Mapped[File] = relationship("File", lazy="selectin")
+    comments: Mapped[list[FileComment]] = relationship(
+        "FileComment",
+        back_populates="thread",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+        order_by=lambda: (FileComment.created_at.asc(), FileComment.id.asc()),
+    )
+
+    __table_args__ = (
+        Index("ix_document_activity_threads_file_activity", "file_id", "activity_at"),
+        Index("ix_document_activity_threads_workspace_activity", "workspace_id", "activity_at"),
+        Index(
+            "uq_document_activity_threads_anchor",
+            "file_id",
+            "anchor_type",
+            "anchor_id",
+            unique=True,
+            postgresql_where=text("anchor_id IS NOT NULL"),
+        ),
+    )
+
+    @property
+    def comment_count(self) -> int:
+        return len(getattr(self, "comments", []))
+
+
 class FileComment(UUIDPrimaryKeyMixin, TimestampMixin, Base):
-    """Threaded comments attached to a file (documents only)."""
+    """Comments attached to a document activity thread."""
 
     __tablename__ = "file_comments"
 
@@ -301,6 +366,11 @@ class FileComment(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         ForeignKey("users.id", ondelete="NO ACTION"),
         nullable=False,
     )
+    thread_id: Mapped[UUID] = mapped_column(
+        GUID(),
+        ForeignKey("document_activity_threads.id", ondelete="CASCADE"),
+        nullable=False,
+    )
     body: Mapped[str] = mapped_column(Text, nullable=False)
 
     author_user: Mapped[User] = relationship(
@@ -308,17 +378,24 @@ class FileComment(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         lazy="selectin",
         foreign_keys=[author_user_id],
     )
+    thread: Mapped[DocumentActivityThread] = relationship(
+        "DocumentActivityThread",
+        back_populates="comments",
+        lazy="selectin",
+    )
     file: Mapped[File] = relationship("File", lazy="selectin")
     mentions: Mapped[list[FileCommentMention]] = relationship(
         "FileCommentMention",
         back_populates="comment",
         cascade="all, delete-orphan",
         lazy="selectin",
+        order_by=lambda: (FileCommentMention.start_index.asc(), FileCommentMention.id.asc()),
     )
 
     __table_args__ = (
         Index("ix_file_comments_file_created", "file_id", "created_at"),
         Index("ix_file_comments_workspace_created", "workspace_id", "created_at"),
+        Index("ix_file_comments_thread_created", "thread_id", "created_at"),
     )
 
     @property
@@ -328,6 +405,28 @@ class FileComment(UUIDPrimaryKeyMixin, TimestampMixin, Base):
             for mention in getattr(self, "mentions", [])
             if mention.mentioned_user is not None
         ]
+
+    @property
+    def mention_ranges(self) -> list[FileCommentMention]:
+        body_length = len(self.body or "")
+        valid: list[FileCommentMention] = []
+        for mention in getattr(self, "mentions", []):
+            if (
+                mention.start_index < 0
+                or mention.end_index <= mention.start_index
+                or mention.end_index > body_length
+            ):
+                continue
+            valid.append(mention)
+        return valid
+
+    @property
+    def edited_at(self) -> datetime | None:
+        # `created_at` and `updated_at` are assigned independently on insert, so
+        # a brand-new row can differ by a few microseconds without being edited.
+        if self.updated_at - self.created_at < timedelta(milliseconds=1):
+            return None
+        return self.updated_at
 
 
 class FileCommentMention(UUIDPrimaryKeyMixin, Base):
@@ -345,6 +444,8 @@ class FileCommentMention(UUIDPrimaryKeyMixin, Base):
         ForeignKey("users.id", ondelete="NO ACTION"),
         nullable=False,
     )
+    start_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    end_index: Mapped[int] = mapped_column(Integer, nullable=False)
 
     comment: Mapped[FileComment] = relationship(
         "FileComment",
@@ -357,9 +458,12 @@ class FileCommentMention(UUIDPrimaryKeyMixin, Base):
         UniqueConstraint(
             "comment_id",
             "mentioned_user_id",
+            "start_index",
+            "end_index",
             name="file_comment_mentions_comment_user_key",
         ),
         Index("ix_file_comment_mentions_comment", "comment_id"),
+        Index("ix_file_comment_mentions_comment_start", "comment_id", "start_index"),
         Index("ix_file_comment_mentions_user", "mentioned_user_id"),
     )
 
@@ -368,6 +472,8 @@ __all__ = [
     "File",
     "FileVersion",
     "FileTag",
+    "DocumentActivityThread",
+    "DocumentActivityThreadAnchorType",
     "FileComment",
     "FileCommentMention",
     "FileKind",
