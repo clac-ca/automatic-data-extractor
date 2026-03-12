@@ -775,7 +775,7 @@ class DocumentsService:
             DocumentActivityDocumentItemOut(
                 id=f"document:{document.id}",
                 activity_at=document.created_at,
-                uploaded_by_user=document.uploaded_by_user,
+                uploader=document.uploaded_by_user,
                 thread=self._serialize_activity_thread(
                     thread_by_anchor.get((DocumentActivityThreadAnchorType.DOCUMENT, document.id))
                 ),
@@ -869,7 +869,9 @@ class DocumentsService:
         self._session.add(thread)
         self._session.flush()
 
-        return self._serialize_activity_thread(thread)
+        serialized_thread = self._serialize_activity_thread(thread)
+        assert serialized_thread is not None
+        return serialized_thread
 
     def create_document_activity_comment(
         self,
@@ -2080,7 +2082,7 @@ class DocumentsService:
         return DocumentActivityThreadOut(
             id=thread.id,
             workspace_id=thread.workspace_id,
-            file_id=thread.file_id,
+            document_id=thread.file_id,
             anchor_type=thread.anchor_type.value,
             anchor_id=thread.anchor_id,
             activity_at=thread.activity_at,

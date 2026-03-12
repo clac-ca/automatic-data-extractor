@@ -16,7 +16,9 @@ function useDebouncedValue<T>(value: T, delayMs: number) {
 }
 
 export function useCommentMentions(workspaceId: string, query: string | null) {
-  const debouncedQuery = useDebouncedValue(query?.trim() ?? "", 180);
+  const normalizedQuery = query?.trim() ?? "";
+  const debouncedQuery = useDebouncedValue(normalizedQuery, 180);
+  const hasFreshResults = query !== null && normalizedQuery === debouncedQuery;
 
   const membersQuery = useQuery({
     queryKey: ["comment-mentions", workspaceId, debouncedQuery],
@@ -28,21 +30,24 @@ export function useCommentMentions(workspaceId: string, query: string | null) {
       }),
     enabled: Boolean(workspaceId && query !== null),
     staleTime: 30_000,
-    placeholderData: (previous) => previous,
   });
 
   const mentionSuggestions = useMemo<CommentComposerUser[]>(() => {
+    if (!hasFreshResults) {
+      return [];
+    }
+
     const members = membersQuery.data?.items ?? [];
     return members.map((member) => ({
       id: member.user_id,
       name: member.user?.display_name ?? null,
       email: member.user?.email ?? `${member.user_id}@workspace.local`,
     }));
-  }, [membersQuery.data?.items]);
+  }, [hasFreshResults, membersQuery.data?.items]);
 
   return {
     mentionSuggestions,
-    isMentionLoading: membersQuery.isFetching,
+    isMentionLoading: query !== null && (!hasFreshResults || membersQuery.isFetching),
     hasMentionResults: mentionSuggestions.length > 0,
   };
 }

@@ -39,6 +39,8 @@ type CommentComposerProps = {
   mode?: CommentComposerMode;
   variant?: "default" | "compact" | "editing";
   initialDraft?: CommentComposerDraft;
+  draft?: CommentComposerDraft;
+  onDraftChange?: (draft: CommentComposerDraft) => void;
   mentionSuggestions?: CommentComposerUser[];
   isMentionLoading?: boolean;
   onMentionQueryChange?: (query: string | null) => void;
@@ -47,12 +49,13 @@ type CommentComposerProps = {
   isSubmitting?: boolean;
   placeholder?: string;
   helperText?: string;
-  autoFocus?: boolean;
+  shouldAutoFocus?: boolean;
   showHeading?: boolean;
   expandOnFocus?: boolean;
 };
 
 export function CommentComposer(props: CommentComposerProps) {
+  const isControlled = props.draft !== undefined;
   const resetKey = useMemo(
     () => JSON.stringify({
       mode: props.mode ?? "new",
@@ -62,6 +65,10 @@ export function CommentComposer(props: CommentComposerProps) {
     [props.initialDraft, props.mode],
   );
 
+  if (isControlled) {
+    return <CommentComposerInner {...props} />;
+  }
+
   return <CommentComposerInner key={resetKey} {...props} />;
 }
 
@@ -69,6 +76,8 @@ function CommentComposerInner({
   mode = "new",
   variant = "default",
   initialDraft,
+  draft: controlledDraft,
+  onDraftChange,
   mentionSuggestions = EMPTY_MENTION_SUGGESTIONS,
   isMentionLoading = false,
   onMentionQueryChange,
@@ -77,14 +86,16 @@ function CommentComposerInner({
   isSubmitting = false,
   placeholder,
   helperText,
-  autoFocus = false,
+  shouldAutoFocus = false,
   showHeading = variant === "default",
   expandOnFocus = variant === "compact",
 }: CommentComposerProps) {
   const anchorRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const pendingSelectionRef = useRef<{ start: number; end: number } | null>(null);
-  const [draft, setDraft] = useState<CommentComposerDraft>(initialDraft ?? createEmptyCommentDraft());
+  const [uncontrolledDraft, setUncontrolledDraft] = useState<CommentComposerDraft>(
+    initialDraft ?? createEmptyCommentDraft(),
+  );
   const [caret, setCaret] = useState(() => (initialDraft?.body.length ?? 0));
   const [isFocused, setIsFocused] = useState(false);
   const [highlightedSuggestion, setHighlightedSuggestion] = useState<{
@@ -95,6 +106,23 @@ function CommentComposerInner({
     index: 0,
   });
   const [dismissedMentionToken, setDismissedMentionToken] = useState<string | null>(null);
+  const draft = controlledDraft ?? uncontrolledDraft;
+
+  function updateDraft(
+    nextDraft:
+      | CommentComposerDraft
+      | ((currentDraft: CommentComposerDraft) => CommentComposerDraft),
+  ) {
+    const resolvedDraft =
+      typeof nextDraft === "function" ? nextDraft(draft) : nextDraft;
+
+    if (controlledDraft) {
+      onDraftChange?.(resolvedDraft);
+      return;
+    }
+
+    setUncontrolledDraft(resolvedDraft);
+  }
 
   useEffect(() => {
     const pendingSelection = pendingSelectionRef.current;
@@ -105,14 +133,14 @@ function CommentComposerInner({
   }, [draft.body]);
 
   useEffect(() => {
-    if (!autoFocus) return;
+    if (!shouldAutoFocus) return;
     const frame = window.requestAnimationFrame(() => {
       textareaRef.current?.focus();
       const selectionStart = textareaRef.current?.value.length ?? 0;
       textareaRef.current?.setSelectionRange(selectionStart, selectionStart);
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [autoFocus]);
+  }, [shouldAutoFocus]);
 
   const activeMention = useMemo(
     () => getActiveMentionQuery(draft.body, caret),
@@ -178,7 +206,7 @@ function CommentComposerInner({
     }
 
     if (mode === "new") {
-      setDraft(createEmptyCommentDraft());
+      updateDraft(createEmptyCommentDraft());
       setCaret(0);
       setHighlightedSuggestion({ token: null, index: 0 });
       setDismissedMentionToken(null);
@@ -193,7 +221,7 @@ function CommentComposerInner({
     if (!activeMention) return;
 
     const inserted = insertMentionIntoDraft(draft, activeMention, user);
-    setDraft(inserted.draft);
+    updateDraft(inserted.draft);
     setCaret(inserted.selectionStart);
     setHighlightedSuggestion({ token: null, index: 0 });
     setDismissedMentionToken(null);
@@ -293,7 +321,7 @@ function CommentComposerInner({
                     : "min-h-28 rounded-lg",
               )}
               onChange={(event) => {
-                setDraft((current) => reconcileCommentDraft(current, event.target.value));
+                updateDraft((current) => reconcileCommentDraft(current, event.target.value));
                 updateCaretFromTarget(event.target);
               }}
               onClick={(event) => updateCaretFromTarget(event.currentTarget)}

@@ -71,15 +71,19 @@ describe("DocumentCommentThreadCard", () => {
         currentUser={currentUser}
         thread={thread}
         isReplyOpen={false}
+        replyDraft={null}
         activeEditCommentId={null}
+        activeEditDraft={null}
         submittingEditCommentId={null}
         editErrorCommentId={null}
         editErrorMessage={null}
         onStartReply={vi.fn()}
         onCancelReply={vi.fn()}
+        onReplyDraftChange={vi.fn()}
         onSubmitReply={vi.fn()}
         onStartEdit={vi.fn()}
         onCancelEdit={vi.fn()}
+        onEditDraftChange={vi.fn()}
         onSubmitEdit={vi.fn()}
       />,
     );
@@ -97,15 +101,19 @@ describe("DocumentCommentThreadCard", () => {
         currentUser={currentUser}
         thread={thread}
         isReplyOpen={false}
+        replyDraft={null}
         activeEditCommentId="comment-1"
+        activeEditDraft={null}
         submittingEditCommentId={null}
         editErrorCommentId={null}
         editErrorMessage={null}
         onStartReply={vi.fn()}
         onCancelReply={vi.fn()}
+        onReplyDraftChange={vi.fn()}
         onSubmitReply={vi.fn()}
         onStartEdit={vi.fn()}
         onCancelEdit={vi.fn()}
+        onEditDraftChange={vi.fn()}
         onSubmitEdit={vi.fn()}
       />,
     );
@@ -131,19 +139,82 @@ describe("DocumentCommentThreadCard", () => {
           ],
         }}
         isReplyOpen={false}
+        replyDraft={null}
         activeEditCommentId={null}
+        activeEditDraft={null}
         submittingEditCommentId={null}
         editErrorCommentId={null}
         editErrorMessage={null}
         onStartReply={vi.fn()}
         onCancelReply={vi.fn()}
+        onReplyDraftChange={vi.fn()}
         onSubmitReply={vi.fn()}
         onStartEdit={vi.fn()}
         onCancelEdit={vi.fn()}
+        onEditDraftChange={vi.fn()}
         onSubmitEdit={vi.fn()}
       />,
     );
 
     expect(screen.queryByText("Edited")).not.toBeInTheDocument();
+  });
+
+  it("restores a saved reply draft and avoids a duplicate reply button for attached threads", () => {
+    const firstRender = renderWithQuery(
+      <DocumentCommentThreadCard
+        variant="attached"
+        workspaceId="ws-1"
+        currentUser={currentUser}
+        thread={thread}
+        isReplyOpen={false}
+        replyDraft={null}
+        activeEditCommentId={null}
+        activeEditDraft={null}
+        submittingEditCommentId={null}
+        editErrorCommentId={null}
+        editErrorMessage={null}
+        onStartReply={vi.fn()}
+        onCancelReply={vi.fn()}
+        onReplyDraftChange={vi.fn()}
+        onSubmitReply={vi.fn()}
+        onStartEdit={vi.fn()}
+        onCancelEdit={vi.fn()}
+        onEditDraftChange={vi.fn()}
+        onSubmitEdit={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: "Reply" })).not.toBeInTheDocument();
+
+    firstRender.unmount();
+
+    renderWithQuery(
+      <DocumentCommentThreadCard
+        variant="attached"
+        workspaceId="ws-1"
+        currentUser={currentUser}
+        thread={thread}
+        isReplyOpen={true}
+        replyDraft={{
+          body: "Unsaved reply",
+          mentions: [],
+        }}
+        activeEditCommentId={null}
+        activeEditDraft={null}
+        submittingEditCommentId={null}
+        editErrorCommentId={null}
+        editErrorMessage={null}
+        onStartReply={vi.fn()}
+        onCancelReply={vi.fn()}
+        onReplyDraftChange={vi.fn()}
+        onSubmitReply={vi.fn()}
+        onStartEdit={vi.fn()}
+        onCancelEdit={vi.fn()}
+        onEditDraftChange={vi.fn()}
+        onSubmitEdit={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByLabelText("Reply to this activity...")).toHaveValue("Unsaved reply");
   });
 });

@@ -40,6 +40,7 @@ function ActivityEventShell({
   iconClassName,
   title,
   description,
+  showReplyAction,
   isReplyOpen,
   onReplyToggle,
   children,
@@ -49,6 +50,7 @@ function ActivityEventShell({
   iconClassName?: string;
   title: ReactNode;
   description?: ReactNode;
+  showReplyAction: boolean;
   isReplyOpen: boolean;
   onReplyToggle: () => void;
   children?: ReactNode;
@@ -67,15 +69,17 @@ function ActivityEventShell({
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <TimelineTime dateTime={item.activityAt}>{formatTimestamp(item.activityAt)}</TimelineTime>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-7 px-2 text-xs text-muted-foreground"
-              onClick={onReplyToggle}
-            >
-              {isReplyOpen ? "Cancel" : "Reply"}
-            </Button>
+            {showReplyAction ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-xs text-muted-foreground"
+                onClick={onReplyToggle}
+              >
+                {isReplyOpen ? "Cancel" : "Reply"}
+              </Button>
+            ) : null}
           </div>
         </div>
         {children}
@@ -123,35 +127,45 @@ export function DocumentActivityFeedItem({
   item,
   workspaceId,
   currentUser,
+  showDiscussions,
   activeReplyTargetKey,
+  replyDraft,
   submittingReplyTargetKey,
   replyErrorTargetKey,
   activeEditCommentId,
+  activeEditDraft,
   submittingEditCommentId,
   editErrorCommentId,
   editErrorMessage,
   onStartReply,
   onCancelReply,
+  onReplyDraftChange,
   onSubmitReply,
   onStartEdit,
   onCancelEdit,
+  onEditDraftChange,
   onSubmitEdit,
 }: {
   item: ActivityItem;
   workspaceId: string;
   currentUser: ActivityCurrentUser;
+  showDiscussions: boolean;
   activeReplyTargetKey: string | null;
+  replyDraft?: NoteDraft | null;
   submittingReplyTargetKey: string | null;
   replyErrorTargetKey: string | null;
   activeEditCommentId: string | null;
+  activeEditDraft?: NoteDraft | null;
   submittingEditCommentId: string | null;
   editErrorCommentId: string | null;
   editErrorMessage?: string | null;
   onStartReply: (target: ActivityReplyTarget) => void;
   onCancelReply: () => void;
+  onReplyDraftChange: (targetKey: string, draft: NoteDraft) => void;
   onSubmitReply: (draft: ThreadReplyDraft) => Promise<unknown> | void;
   onStartEdit: (commentId: string) => void;
   onCancelEdit: () => void;
+  onEditDraftChange: (commentId: string, draft: NoteDraft) => void;
   onSubmitEdit: (draft: CommentEditDraft) => Promise<unknown> | void;
 }) {
   const replyTarget = buildReplyTarget(item);
@@ -173,14 +187,17 @@ export function DocumentActivityFeedItem({
             currentUser={currentUser}
             thread={item.thread}
             isReplyOpen={isReplyOpen}
+            replyDraft={replyDraft}
             isReplySubmitting={submittingReplyTargetKey === item.replyTargetKey}
             replyErrorMessage={replyErrorMessage}
             activeEditCommentId={activeEditCommentId}
+            activeEditDraft={activeEditDraft}
             submittingEditCommentId={submittingEditCommentId}
             editErrorCommentId={editErrorCommentId}
             editErrorMessage={editErrorMessage}
             onStartReply={() => onStartReply(replyTarget)}
             onCancelReply={onCancelReply}
+            onReplyDraftChange={(draft) => onReplyDraftChange(item.replyTargetKey, draft)}
             onSubmitReply={(draft: NoteDraft) =>
               onSubmitReply({
                 targetKey: item.replyTargetKey,
@@ -191,6 +208,7 @@ export function DocumentActivityFeedItem({
             }
             onStartEdit={onStartEdit}
             onCancelEdit={onCancelEdit}
+            onEditDraftChange={onEditDraftChange}
             onSubmitEdit={onSubmitEdit}
           />
         </TimelineContent>
@@ -211,24 +229,28 @@ export function DocumentActivityFeedItem({
             Uploaded by <span className="font-medium text-foreground">{uploaderName}</span>
           </span>
         }
+        showReplyAction={showDiscussions}
         isReplyOpen={isReplyOpen}
         onReplyToggle={() => (isReplyOpen ? onCancelReply() : onStartReply(replyTarget))}
       >
-        {(item.thread || isReplyOpen) ? (
+        {showDiscussions && (item.thread || isReplyOpen) ? (
           <DocumentCommentThreadCard
             variant="attached"
             workspaceId={workspaceId}
             currentUser={currentUser}
             thread={item.thread}
             isReplyOpen={isReplyOpen}
+            replyDraft={replyDraft}
             isReplySubmitting={submittingReplyTargetKey === item.replyTargetKey}
             replyErrorMessage={replyErrorMessage}
             activeEditCommentId={activeEditCommentId}
+            activeEditDraft={activeEditDraft}
             submittingEditCommentId={submittingEditCommentId}
             editErrorCommentId={editErrorCommentId}
             editErrorMessage={editErrorMessage}
             onStartReply={() => onStartReply(replyTarget)}
             onCancelReply={onCancelReply}
+            onReplyDraftChange={(draft) => onReplyDraftChange(item.replyTargetKey, draft)}
             onSubmitReply={(draft: NoteDraft) =>
               onSubmitReply({
                 targetKey: item.replyTargetKey,
@@ -241,6 +263,7 @@ export function DocumentActivityFeedItem({
             }
             onStartEdit={onStartEdit}
             onCancelEdit={onCancelEdit}
+            onEditDraftChange={onEditDraftChange}
             onSubmitEdit={onSubmitEdit}
           />
         ) : null}
@@ -266,24 +289,28 @@ export function DocumentActivityFeedItem({
         </div>
       }
       description={<RunDescription item={item} />}
+      showReplyAction={showDiscussions}
       isReplyOpen={isReplyOpen}
       onReplyToggle={() => (isReplyOpen ? onCancelReply() : onStartReply(replyTarget))}
     >
-      {(item.thread || isReplyOpen) ? (
+      {showDiscussions && (item.thread || isReplyOpen) ? (
         <DocumentCommentThreadCard
           variant="attached"
           workspaceId={workspaceId}
           currentUser={currentUser}
           thread={item.thread}
           isReplyOpen={isReplyOpen}
+          replyDraft={replyDraft}
           isReplySubmitting={submittingReplyTargetKey === item.replyTargetKey}
           replyErrorMessage={replyErrorMessage}
           activeEditCommentId={activeEditCommentId}
+          activeEditDraft={activeEditDraft}
           submittingEditCommentId={submittingEditCommentId}
           editErrorCommentId={editErrorCommentId}
           editErrorMessage={editErrorMessage}
           onStartReply={() => onStartReply(replyTarget)}
           onCancelReply={onCancelReply}
+          onReplyDraftChange={(draft) => onReplyDraftChange(item.replyTargetKey, draft)}
           onSubmitReply={(draft: NoteDraft) =>
             onSubmitReply({
               targetKey: item.replyTargetKey,
@@ -296,6 +323,7 @@ export function DocumentActivityFeedItem({
           }
           onStartEdit={onStartEdit}
           onCancelEdit={onCancelEdit}
+          onEditDraftChange={onEditDraftChange}
           onSubmitEdit={onSubmitEdit}
         />
       ) : null}

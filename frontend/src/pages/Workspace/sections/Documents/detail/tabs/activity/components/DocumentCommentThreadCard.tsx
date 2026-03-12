@@ -75,20 +75,24 @@ function CommentRow({
   comment,
   currentUser,
   isEditing,
+  editDraft,
   isSubmittingEdit,
   editErrorMessage,
   onEdit,
   onSubmitEdit,
+  onEditDraftChange,
   onCancelEdit,
 }: {
   workspaceId: string;
   comment: ActivityComment;
   currentUser: ActivityCurrentUser;
   isEditing: boolean;
+  editDraft?: NoteDraft | null;
   isSubmittingEdit: boolean;
   editErrorMessage?: string | null;
   onEdit: () => void;
   onSubmitEdit: (draft: CommentEditDraft) => Promise<unknown> | void;
+  onEditDraftChange: (draft: NoteDraft) => void;
   onCancelEdit: () => void;
 }) {
   const authorName = comment.author?.name || comment.author?.email || "Unknown";
@@ -100,9 +104,11 @@ function CommentRow({
         workspaceId={workspaceId}
         mode="edit"
         comment={comment}
+        draft={editDraft}
         variant="editing"
         isSubmitting={isSubmittingEdit}
         errorMessage={editErrorMessage}
+        onDraftChange={onEditDraftChange}
         onCancel={onCancelEdit}
         onSubmit={(draft) =>
           onSubmitEdit({
@@ -157,17 +163,21 @@ export function DocumentCommentThreadCard({
   currentUser,
   thread,
   isReplyOpen,
+  replyDraft,
   isReplySubmitting = false,
   replyErrorMessage,
   activeEditCommentId,
+  activeEditDraft,
   submittingEditCommentId,
   editErrorCommentId,
   editErrorMessage,
   onStartReply,
   onCancelReply,
+  onReplyDraftChange,
   onSubmitReply,
   onStartEdit,
   onCancelEdit,
+  onEditDraftChange,
   onSubmitEdit,
 }: {
   variant: "note" | "attached";
@@ -175,17 +185,21 @@ export function DocumentCommentThreadCard({
   currentUser: ActivityCurrentUser;
   thread: ActivityThread | null;
   isReplyOpen: boolean;
+  replyDraft?: NoteDraft | null;
   isReplySubmitting?: boolean;
   replyErrorMessage?: string | null;
   activeEditCommentId: string | null;
+  activeEditDraft?: NoteDraft | null;
   submittingEditCommentId: string | null;
   editErrorCommentId: string | null;
   editErrorMessage?: string | null;
   onStartReply: () => void;
   onCancelReply: () => void;
+  onReplyDraftChange: (draft: NoteDraft) => void;
   onSubmitReply: (draft: NoteDraft) => Promise<unknown> | void;
   onStartEdit: (commentId: string) => void;
   onCancelEdit: () => void;
+  onEditDraftChange: (commentId: string, draft: NoteDraft) => void;
   onSubmitEdit: (draft: CommentEditDraft) => Promise<unknown> | void;
 }) {
   const comments = thread?.comments ?? [];
@@ -212,9 +226,11 @@ export function DocumentCommentThreadCard({
                   comment={comment}
                   currentUser={currentUser}
                   isEditing={activeEditCommentId === comment.id}
+                  editDraft={activeEditCommentId === comment.id ? activeEditDraft : null}
                   isSubmittingEdit={submittingEditCommentId === comment.id}
                   editErrorMessage={editErrorCommentId === comment.id ? editErrorMessage : null}
                   onEdit={() => onStartEdit(comment.id)}
+                  onEditDraftChange={(draft) => onEditDraftChange(comment.id, draft)}
                   onCancelEdit={onCancelEdit}
                   onSubmitEdit={onSubmitEdit}
                 />
@@ -229,15 +245,17 @@ export function DocumentCommentThreadCard({
           <DocumentCommentEditor
             workspaceId={workspaceId}
             mode="reply"
+            draft={replyDraft}
             variant="compact"
             isSubmitting={isReplySubmitting}
             errorMessage={replyErrorMessage}
+            onDraftChange={onReplyDraftChange}
             onCancel={onCancelReply}
             onSubmit={onSubmitReply}
             placeholder={variant === "note" ? "Reply to this note..." : "Reply to this activity..."}
             helperText="Use @ to mention someone. Enter sends, Shift+Enter adds a new line."
           />
-        ) : (
+        ) : variant === "note" ? (
           <div className="flex items-center justify-end">
             <Button
               type="button"
@@ -249,7 +267,7 @@ export function DocumentCommentThreadCard({
               Reply
             </Button>
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );

@@ -5,6 +5,7 @@ import type {
   ActivityCurrentUser,
   ActivityReplyTarget,
   CommentEditDraft,
+  NoteDraft,
   ThreadReplyDraft,
 } from "../activityTypes";
 import type { ActivityItem } from "../model";
@@ -16,18 +17,23 @@ export function DocumentActivityFeed({
   items,
   isLoading,
   hasError,
+  showDiscussions,
   activeReplyTargetKey,
+  replyDraftsByTargetKey,
   submittingReplyTargetKey,
   replyErrorTargetKey,
   activeEditCommentId,
+  editDraftsByCommentId,
   submittingEditCommentId,
   editErrorCommentId,
   editErrorMessage,
   onStartReply,
   onCancelReply,
+  onReplyDraftChange,
   onSubmitReply,
   onStartEdit,
   onCancelEdit,
+  onEditDraftChange,
   onSubmitEdit,
 }: {
   workspaceId: string;
@@ -35,18 +41,23 @@ export function DocumentActivityFeed({
   items: ActivityItem[];
   isLoading: boolean;
   hasError: boolean;
+  showDiscussions: boolean;
   activeReplyTargetKey: string | null;
+  replyDraftsByTargetKey: Record<string, NoteDraft>;
   submittingReplyTargetKey: string | null;
   replyErrorTargetKey: string | null;
   activeEditCommentId: string | null;
+  editDraftsByCommentId: Record<string, NoteDraft>;
   submittingEditCommentId: string | null;
   editErrorCommentId: string | null;
   editErrorMessage?: string | null;
   onStartReply: (target: ActivityReplyTarget) => void;
   onCancelReply: () => void;
+  onReplyDraftChange: (targetKey: string, draft: NoteDraft) => void;
   onSubmitReply: (draft: ThreadReplyDraft) => Promise<unknown> | void;
   onStartEdit: (commentId: string) => void;
   onCancelEdit: () => void;
+  onEditDraftChange: (commentId: string, draft: NoteDraft) => void;
   onSubmitEdit: (draft: CommentEditDraft) => Promise<unknown> | void;
 }) {
   return (
@@ -67,18 +78,25 @@ export function DocumentActivityFeed({
               item={item}
               workspaceId={workspaceId}
               currentUser={currentUser}
+              showDiscussions={showDiscussions}
               activeReplyTargetKey={activeReplyTargetKey}
+              replyDraft={replyDraftsByTargetKey[item.replyTargetKey] ?? null}
               submittingReplyTargetKey={submittingReplyTargetKey}
               replyErrorTargetKey={replyErrorTargetKey}
               activeEditCommentId={activeEditCommentId}
+              activeEditDraft={
+                activeEditCommentId ? (editDraftsByCommentId[activeEditCommentId] ?? null) : null
+              }
               submittingEditCommentId={submittingEditCommentId}
               editErrorCommentId={editErrorCommentId}
               editErrorMessage={editErrorMessage}
               onStartReply={onStartReply}
               onCancelReply={onCancelReply}
+              onReplyDraftChange={onReplyDraftChange}
               onSubmitReply={onSubmitReply}
               onStartEdit={onStartEdit}
               onCancelEdit={onCancelEdit}
+              onEditDraftChange={onEditDraftChange}
               onSubmitEdit={onSubmitEdit}
             />
           ))}

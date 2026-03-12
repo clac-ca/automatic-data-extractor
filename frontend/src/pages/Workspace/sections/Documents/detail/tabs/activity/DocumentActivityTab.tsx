@@ -29,6 +29,7 @@ export function DocumentActivityTab({
     editComment: timeline.editComment,
   });
   const visibleItems = filterActivityItems(timeline.items, filter);
+  const showDiscussions = filter !== "events";
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-background">
@@ -43,18 +44,23 @@ export function DocumentActivityTab({
         items={visibleItems}
         isLoading={timeline.isLoading}
         hasError={timeline.hasError}
+        showDiscussions={showDiscussions}
         activeReplyTargetKey={ui.activeReplyTarget?.targetKey ?? null}
+        replyDraftsByTargetKey={ui.replyDraftsByTargetKey}
         submittingReplyTargetKey={timeline.replyingTargetKey}
         replyErrorTargetKey={ui.replyErrorTargetKey}
         activeEditCommentId={ui.activeEditCommentId}
+        editDraftsByCommentId={ui.editDraftsByCommentId}
         submittingEditCommentId={timeline.editingCommentId}
         editErrorCommentId={ui.editErrorCommentId}
         editErrorMessage={ui.editErrorMessage}
         onStartReply={ui.startReply}
         onCancelReply={ui.cancelReply}
+        onReplyDraftChange={ui.setReplyDraft}
         onSubmitReply={ui.submitReply}
         onStartEdit={ui.startEdit}
         onCancelEdit={ui.cancelEdit}
+        onEditDraftChange={ui.setEditDraft}
         onSubmitEdit={ui.submitEdit}
       />
 

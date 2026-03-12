@@ -76,4 +76,64 @@ describe("useDocumentActivityUiState", () => {
       expect(result.current.replyErrorTargetKey).toBe("document:doc-1");
     });
   });
+
+  it("preserves reply drafts across target switches and clears note errors when changing modes", async () => {
+    const createNote = vi.fn().mockRejectedValue(new Error("Unable to save note"));
+    const { result } = renderHook(() =>
+      useDocumentActivityUiState({
+        createNote,
+        replyToItem: vi.fn(),
+        editComment: vi.fn(),
+      }),
+    );
+
+    await act(async () => {
+      await expect(
+        result.current.submitNote({
+          body: "Decision pending",
+          mentions: [],
+        }),
+      ).rejects.toThrow("Unable to save note");
+    });
+
+    expect(result.current.noteError).toBe("Unable to save note");
+
+    act(() => {
+      result.current.startReply({
+        targetKey: "run:run-1",
+        threadId: "thread-run-1",
+      });
+      result.current.setReplyDraft("run:run-1", {
+        body: "Follow up on run 1",
+        mentions: [],
+      });
+    });
+
+    expect(result.current.noteError).toBeNull();
+    expect(result.current.replyDraftsByTargetKey["run:run-1"]?.body).toBe("Follow up on run 1");
+
+    act(() => {
+      result.current.startReply({
+        targetKey: "run:run-2",
+        threadId: "thread-run-2",
+      });
+      result.current.setReplyDraft("run:run-2", {
+        body: "Follow up on run 2",
+        mentions: [],
+      });
+    });
+
+    expect(result.current.replyDraftsByTargetKey["run:run-1"]?.body).toBe("Follow up on run 1");
+    expect(result.current.replyDraftsByTargetKey["run:run-2"]?.body).toBe("Follow up on run 2");
+
+    act(() => {
+      result.current.startReply({
+        targetKey: "run:run-1",
+        threadId: "thread-run-1",
+      });
+    });
+
+    expect(result.current.activeReplyTarget?.targetKey).toBe("run:run-1");
+    expect(result.current.replyDraftsByTargetKey["run:run-1"]?.body).toBe("Follow up on run 1");
+  });
 });

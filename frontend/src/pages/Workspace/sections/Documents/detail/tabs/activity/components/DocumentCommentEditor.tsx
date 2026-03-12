@@ -25,6 +25,23 @@ function toComposerDraft(comment?: ActivityComment | null): CommentComposerDraft
   };
 }
 
+function toComposerDraftFromNote(draft?: NoteDraft | null): CommentComposerDraft | undefined {
+  if (!draft) {
+    return undefined;
+  }
+
+  return {
+    body: draft.body,
+    mentions: draft.mentions.map((mention) => ({
+      id: mention.user.id,
+      name: mention.user.name ?? null,
+      email: mention.user.email,
+      start: mention.start,
+      end: mention.end,
+    })),
+  };
+}
+
 function toDraft(draft: CommentComposerDraft): NoteDraft {
   return {
     body: draft.body,
@@ -46,27 +63,31 @@ export function DocumentCommentEditor({
   workspaceId,
   mode,
   comment,
+  draft,
   variant = mode === "edit" ? "editing" : "compact",
   isSubmitting = false,
   errorMessage,
   onSubmit,
+  onDraftChange,
   onCancel,
   placeholder,
   helperText,
-  autoFocus,
+  shouldAutoFocus,
   showHeading,
 }: {
   workspaceId: string;
   mode: "new" | "reply" | "edit";
   comment?: ActivityComment | null;
+  draft?: NoteDraft | null;
   variant?: "default" | "compact" | "editing";
   isSubmitting?: boolean;
   errorMessage?: string | null;
   onSubmit: (draft: NoteDraft) => Promise<unknown> | void;
+  onDraftChange?: (draft: NoteDraft) => void;
   onCancel?: () => void;
   placeholder?: string;
   helperText?: string;
-  autoFocus?: boolean;
+  shouldAutoFocus?: boolean;
   showHeading?: boolean;
 }) {
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
@@ -81,6 +102,8 @@ export function DocumentCommentEditor({
         mode={mode}
         variant={variant}
         initialDraft={toComposerDraft(comment)}
+        draft={toComposerDraftFromNote(draft)}
+        onDraftChange={onDraftChange ? (nextDraft) => onDraftChange(toDraft(nextDraft)) : undefined}
         mentionSuggestions={mentionSuggestions}
         isMentionLoading={isMentionLoading}
         onMentionQueryChange={setMentionQuery}
@@ -89,7 +112,7 @@ export function DocumentCommentEditor({
         onSubmit={(draft) => onSubmit(toDraft(draft))}
         placeholder={placeholder}
         helperText={helperText}
-        autoFocus={autoFocus ?? mode !== "new"}
+        shouldAutoFocus={shouldAutoFocus ?? mode !== "new"}
         showHeading={showHeading}
       />
       {errorMessage ? <div className="text-xs text-destructive">{errorMessage}</div> : null}

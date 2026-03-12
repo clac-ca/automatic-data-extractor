@@ -29,8 +29,11 @@ export function useDocumentActivityUiState({
   const [replyErrorTargetKey, setReplyErrorTargetKey] = useState<string | null>(null);
   const [editErrorCommentId, setEditErrorCommentId] = useState<string | null>(null);
   const [editErrorMessage, setEditErrorMessage] = useState<string | null>(null);
+  const [replyDraftsByTargetKey, setReplyDraftsByTargetKey] = useState<Record<string, NoteDraft>>({});
+  const [editDraftsByCommentId, setEditDraftsByCommentId] = useState<Record<string, NoteDraft>>({});
 
   const startReply = useCallback((target: ActivityReplyTarget) => {
+    setNoteError(null);
     setActiveEditCommentId(null);
     setEditErrorCommentId(null);
     setEditErrorMessage(null);
@@ -39,11 +42,21 @@ export function useDocumentActivityUiState({
   }, []);
 
   const cancelReply = useCallback(() => {
+    setNoteError(null);
     setReplyErrorTargetKey(null);
+    setReplyDraftsByTargetKey((current) => {
+      if (!activeReplyTarget?.targetKey) {
+        return current;
+      }
+
+      const { [activeReplyTarget.targetKey]: _discarded, ...rest } = current;
+      return rest;
+    });
     setActiveReplyTarget(null);
-  }, []);
+  }, [activeReplyTarget?.targetKey]);
 
   const startEdit = useCallback((commentId: string) => {
+    setNoteError(null);
     setActiveReplyTarget(null);
     setReplyErrorTargetKey(null);
     setEditErrorCommentId(null);
@@ -52,9 +65,32 @@ export function useDocumentActivityUiState({
   }, []);
 
   const cancelEdit = useCallback(() => {
+    setNoteError(null);
     setEditErrorCommentId(null);
     setEditErrorMessage(null);
+    setEditDraftsByCommentId((current) => {
+      if (!activeEditCommentId) {
+        return current;
+      }
+
+      const { [activeEditCommentId]: _discarded, ...rest } = current;
+      return rest;
+    });
     setActiveEditCommentId(null);
+  }, [activeEditCommentId]);
+
+  const setReplyDraft = useCallback((targetKey: string, draft: NoteDraft) => {
+    setReplyDraftsByTargetKey((current) => ({
+      ...current,
+      [targetKey]: draft,
+    }));
+  }, []);
+
+  const setEditDraft = useCallback((commentId: string, draft: NoteDraft) => {
+    setEditDraftsByCommentId((current) => ({
+      ...current,
+      [commentId]: draft,
+    }));
   }, []);
 
   const submitNote = useCallback(
@@ -77,6 +113,10 @@ export function useDocumentActivityUiState({
 
       try {
         await replyToItem(draft);
+        setReplyDraftsByTargetKey((current) => {
+          const { [draft.targetKey]: _discarded, ...rest } = current;
+          return rest;
+        });
         setActiveReplyTarget((current) =>
           current?.targetKey === draft.targetKey ? null : current,
         );
@@ -95,6 +135,10 @@ export function useDocumentActivityUiState({
 
       try {
         await editComment(draft);
+        setEditDraftsByCommentId((current) => {
+          const { [draft.commentId]: _discarded, ...rest } = current;
+          return rest;
+        });
         setActiveEditCommentId((current) =>
           current === draft.commentId ? null : current,
         );
@@ -114,10 +158,14 @@ export function useDocumentActivityUiState({
     replyErrorTargetKey,
     editErrorCommentId,
     editErrorMessage,
+    replyDraftsByTargetKey,
+    editDraftsByCommentId,
     startReply,
     cancelReply,
     startEdit,
     cancelEdit,
+    setReplyDraft,
+    setEditDraft,
     submitNote,
     submitReply,
     submitEdit,
