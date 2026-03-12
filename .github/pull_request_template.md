@@ -31,3 +31,20 @@ Add before/after screenshots or a short recording if this touches **ade-web**.
 ## Notes for reviewers
 
 Anything that would help a reviewer (risk areas, follow-ups, rollout plan, etc.).
+
+## Release metadata for `development` -> `main` promotions
+
+If this PR promotes `development` into `main` and will be squash-merged, add either:
+
+- a releasable Conventional Commit title such as `fix: ...`, `feat: ...`, or `deps: ...`
+- a Release Please override block in the PR body
+
+Example:
+
+```text
+BEGIN_COMMIT_OVERRIDE
+# Add one releasable conventional line per user-facing change, for example:
+# feat(documents): redesign activity threads (#329)
+# fix(api): stabilize release metadata handling (#333)
+END_COMMIT_OVERRIDE
+```
