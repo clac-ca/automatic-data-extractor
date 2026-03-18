@@ -34,6 +34,7 @@ export function DocumentTicketHeader({
   document,
   onBack,
   onRenameRequest,
+  onRestoreRequest,
   onReprocessRequest,
   onCancelRunRequest,
   isRunActionPending = false,
@@ -42,6 +43,7 @@ export function DocumentTicketHeader({
   document: DocumentRow;
   onBack: () => void;
   onRenameRequest: () => void;
+  onRestoreRequest: () => void;
   onReprocessRequest: () => void;
   onCancelRunRequest: () => void;
   isRunActionPending?: boolean;
@@ -58,7 +60,13 @@ export function DocumentTicketHeader({
   );
   const runStatus = document.lastRun?.status ?? null;
   const isRunActive = runStatus === "queued" || runStatus === "running";
-  const runActionLabel = isRunActive ? "Cancel run" : "Reprocess";
+  const isArchived = Boolean(document.deletedAt);
+  const primaryActionLabel = isRunActive ? "Cancel run" : isArchived ? "Restore" : "Reprocess";
+  const onPrimaryAction = isRunActive
+    ? onCancelRunRequest
+    : isArchived
+      ? onRestoreRequest
+      : onReprocessRequest;
 
   return (
     <div className="sticky top-0 z-20 border-b bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/90">
@@ -98,11 +106,11 @@ export function DocumentTicketHeader({
             size="sm"
             variant={isRunActive ? "secondary" : "outline"}
             className="gap-1.5"
-            onClick={isRunActive ? onCancelRunRequest : onReprocessRequest}
+            onClick={onPrimaryAction}
             disabled={isRunActionPending}
           >
             {isRunActive ? <CloseIcon className="h-4 w-4" /> : <RefreshIcon className="h-4 w-4" />}
-            {runActionLabel}
+            {primaryActionLabel}
           </Button>
           <Button size="sm" variant="ghost" className="gap-1.5" onClick={onRenameRequest}>
             <PencilLine className="h-4 w-4" />

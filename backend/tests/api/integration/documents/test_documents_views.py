@@ -78,6 +78,8 @@ async def test_list_document_views_includes_default_system_views(
         }
     ]
     assert "simpleFilters" not in by_key["unassigned"]["queryState"]
+    assert by_key["deleted"]["name"] == "Archived"
+    assert by_key["deleted"]["queryState"]["lifecycle"] == "archived"
 
     persisted = list(
         db_session.execute(
@@ -236,7 +238,7 @@ async def test_mutating_unknown_non_system_view_returns_not_found(
 
 @pytest.mark.parametrize(
     "reserved_name",
-    ["All documents", "Assigned to me", "Unassigned", "Deleted"],
+    ["All documents", "Assigned to me", "Unassigned", "Archived"],
 )
 async def test_reserved_system_names_are_blocked_on_create(
     async_client: AsyncClient,
@@ -274,6 +276,6 @@ async def test_reserved_system_names_are_blocked_on_update(
     update = await async_client.patch(
         f"{workspace_base}/documents/views/{view_id}",
         headers=headers,
-        json={"name": "Deleted"},
+        json={"name": "Archived"},
     )
     assert update.status_code == 409, update.text

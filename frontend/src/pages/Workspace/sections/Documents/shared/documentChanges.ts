@@ -8,15 +8,15 @@ export function partitionDocumentChanges(changes: readonly DocumentChangeNotific
     }
   });
 
-  const deleteIds: string[] = [];
+  const archiveIds: string[] = [];
   const upsertIds: string[] = [];
   opById.forEach((op, documentId) => {
-    if (op === "delete") {
-      deleteIds.push(documentId);
+    if (op === "archive" || op === "delete") {
+      archiveIds.push(documentId);
       return;
     }
     upsertIds.push(documentId);
   });
 
-  return { deleteIds, upsertIds };
+  return { deleteIds: archiveIds, upsertIds };
 }

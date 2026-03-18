@@ -8494,116 +8494,6 @@
           }
         ],
         "description": "Retrieve document metadata."
-      },
-      "delete": {
-        "tags": [
-          "documents"
-        ],
-        "summary": "Soft delete a document",
-        "operationId": "delete_document_api_v1_workspaces__workspaceId__documents__documentId__delete",
-        "parameters": [
-          {
-            "name": "workspaceId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "description": "Workspace identifier",
-              "title": "Workspaceid"
-            },
-            "description": "Workspace identifier"
-          },
-          {
-            "name": "documentId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "description": "Document identifier",
-              "title": "Documentid"
-            },
-            "description": "Document identifier"
-          },
-          {
-            "name": "X-CSRF-Token",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Csrf-Token"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Successful Response",
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "401": {
-            "description": "Authentication required to delete documents.",
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "403": {
-            "description": "Workspace permissions do not allow document deletion.",
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "404": {
-            "description": "Document not found within the workspace.",
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-Id": {
-                "$ref": "#/components/headers/X-Request-Id"
-              }
-            }
-          },
-          "default": {
-            "$ref": "#/components/responses/ProblemDetails"
-          }
-        },
-        "security": [
-          {
-            "SessionCookie": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ],
-        "description": "Soft delete a document."
       }
     },
     "/api/v1/workspaces/{workspaceId}/documents/batch/tags": {
@@ -10274,12 +10164,124 @@
         "description": "List worksheets for a document."
       }
     },
+    "/api/v1/workspaces/{workspaceId}/documents/{documentId}/archive": {
+      "post": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Archive a document",
+        "operationId": "archive_document_api_v1_workspaces__workspaceId__documents__documentId__archive_post",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspaceid"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "documentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Document identifier",
+              "title": "Documentid"
+            },
+            "description": "Document identifier"
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required to archive documents.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Workspace permissions do not allow document archival.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Document not found within the workspace.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "description": "Archive a document."
+      }
+    },
     "/api/v1/workspaces/{workspaceId}/documents/{documentId}/restore": {
       "post": {
         "tags": [
           "documents"
         ],
-        "summary": "Restore a soft-deleted document",
+        "summary": "Restore an archived document",
         "operationId": "restore_document_api_v1_workspaces__workspaceId__documents__documentId__restore_post",
         "parameters": [
           {
@@ -10408,16 +10410,16 @@
             "APIKeyHeader": []
           }
         ],
-        "description": "Restore a soft-deleted document."
+        "description": "Restore an archived document."
       }
     },
-    "/api/v1/workspaces/{workspaceId}/documents/batch/delete": {
+    "/api/v1/workspaces/{workspaceId}/documents/batch/archive": {
       "post": {
         "tags": [
           "documents"
         ],
-        "summary": "Soft delete multiple documents",
-        "operationId": "delete_documents_batch_api_v1_workspaces__workspaceId__documents_batch_delete_post",
+        "summary": "Archive multiple documents",
+        "operationId": "archive_documents_batch_api_v1_workspaces__workspaceId__documents_batch_archive_post",
         "parameters": [
           {
             "name": "workspaceId",
@@ -10453,7 +10455,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/DocumentBatchDeleteRequest"
+                "$ref": "#/components/schemas/DocumentBatchArchiveRequest"
               }
             }
           }
@@ -10464,7 +10466,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DocumentBatchDeleteResponse"
+                  "$ref": "#/components/schemas/DocumentBatchArchiveResponse"
                 }
               }
             },
@@ -10475,7 +10477,7 @@
             }
           },
           "401": {
-            "description": "Authentication required to delete documents.",
+            "description": "Authentication required to archive documents.",
             "headers": {
               "X-Request-Id": {
                 "$ref": "#/components/headers/X-Request-Id"
@@ -10483,7 +10485,7 @@
             }
           },
           "403": {
-            "description": "Workspace permissions do not allow document deletion.",
+            "description": "Workspace permissions do not allow document archival.",
             "headers": {
               "X-Request-Id": {
                 "$ref": "#/components/headers/X-Request-Id"
@@ -10525,7 +10527,7 @@
             "APIKeyHeader": []
           }
         ],
-        "description": "Soft delete multiple documents."
+        "description": "Archive multiple documents."
       }
     },
     "/api/v1/workspaces/{workspaceId}/documents/batch/restore": {
@@ -10533,7 +10535,7 @@
         "tags": [
           "documents"
         ],
-        "summary": "Restore multiple soft-deleted documents",
+        "summary": "Restore multiple archived documents",
         "operationId": "restore_documents_batch_api_v1_workspaces__workspaceId__documents_batch_restore_post",
         "parameters": [
           {
@@ -10634,7 +10636,7 @@
             "APIKeyHeader": []
           }
         ],
-        "description": "Restore multiple soft-deleted documents."
+        "description": "Restore multiple archived documents."
       }
     },
     "/api/v1/workspaces/{workspaceId}/configurations": {
@@ -18716,7 +18718,7 @@
         "title": "DocumentActivityThreadOut",
         "description": "Serialized document activity thread."
       },
-      "DocumentBatchDeleteRequest": {
+      "DocumentBatchArchiveRequest": {
         "properties": {
           "documentIds": {
             "items": {
@@ -18727,7 +18729,7 @@
             "type": "array",
             "minItems": 1,
             "title": "Documentids",
-            "description": "Documents to delete (soft delete, all-or-nothing)."
+            "description": "Documents to archive (soft archive, all-or-nothing)."
           }
         },
         "additionalProperties": false,
@@ -18735,10 +18737,10 @@
         "required": [
           "documentIds"
         ],
-        "title": "DocumentBatchDeleteRequest",
-        "description": "Payload for soft-deleting multiple documents."
+        "title": "DocumentBatchArchiveRequest",
+        "description": "Payload for archiving multiple documents."
       },
-      "DocumentBatchDeleteResponse": {
+      "DocumentBatchArchiveResponse": {
         "properties": {
           "documentIds": {
             "items": {
@@ -18752,8 +18754,8 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "title": "DocumentBatchDeleteResponse",
-        "description": "Response envelope for batch deletions."
+        "title": "DocumentBatchArchiveResponse",
+        "description": "Response envelope for batch archive operations."
       },
       "DocumentBatchRestoreConflict": {
         "properties": {
@@ -18814,7 +18816,7 @@
           "documentIds"
         ],
         "title": "DocumentBatchRestoreRequest",
-        "description": "Payload for restoring multiple soft-deleted documents."
+        "description": "Payload for restoring multiple archived documents."
       },
       "DocumentBatchRestoreResponse": {
         "properties": {
@@ -18954,7 +18956,7 @@
             "type": "string",
             "enum": [
               "upsert",
-              "delete"
+              "archive"
             ],
             "title": "Op"
           },
@@ -19170,7 +19172,7 @@
         "type": "string",
         "enum": [
           "active",
-          "deleted"
+          "archived"
         ],
         "title": "DocumentListLifecycle",
         "description": "Visibility scope for list queries."
@@ -19614,13 +19616,13 @@
               }
             ],
             "title": "Name",
-            "description": "Optional replacement name used while restoring a deleted document."
+            "description": "Optional replacement name used while restoring an archived document."
           }
         },
         "additionalProperties": false,
         "type": "object",
         "title": "DocumentRestoreRequest",
-        "description": "Optional payload for restoring a document with a new name."
+        "description": "Optional payload for restoring an archived document with a new name."
       },
       "DocumentRunSummary": {
         "properties": {

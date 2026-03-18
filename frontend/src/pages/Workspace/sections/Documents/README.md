@@ -38,7 +38,7 @@ These query keys are owned by the Documents section:
   - `sort` - canonical sorting state
   - `filters` - canonical filter state
   - `joinOperator` - filter join mode (`and` / `or`)
-  - `lifecycle` - list scope (`active` / `deleted`)
+  - `lifecycle` - list scope (`active` / `archived`)
   - `view` - selected saved view id
 - Detail:
   - `tab` - active tab (`activity` default, `preview`)

@@ -74,11 +74,11 @@ describe("buildDocumentRowActions", () => {
     );
   });
 
-  it("gates lifecycle-only actions for deleted documents", () => {
+  it("keeps archive-only actions hidden for archived documents", () => {
     const document = makeDocument();
     const actions = buildDocumentRowActions({
       document,
-      lifecycle: "deleted",
+      lifecycle: "archived",
       isBusy: false,
       isSelfAssigned: false,
       canRenameInline: false,
@@ -90,7 +90,28 @@ describe("buildDocumentRowActions", () => {
       onDeleteRequest: vi.fn(),
     });
 
-    expect(actions.map((item) => item.id)).toEqual(["download", "download-original"]);
+    expect(actions.map((item) => item.id)).toEqual(["download", "download-original", "assign-to-me"]);
+  });
+
+  it("shows restore instead of archive for archived documents", () => {
+    const document = makeDocument();
+    const actions = buildDocumentRowActions({
+      document,
+      lifecycle: "archived",
+      isBusy: false,
+      isSelfAssigned: false,
+      canRenameInline: true,
+      surface: "overflow",
+      onDownloadLatest: vi.fn(),
+      onDownloadOriginal: vi.fn(),
+      onAssignToMe: vi.fn(),
+      onRename: vi.fn(),
+      onDeleteRequest: vi.fn(),
+      onRestoreRequest: vi.fn(),
+    });
+
+    expect(actions.find((item) => item.id === "delete")).toBeUndefined();
+    expect(actions.find((item) => item.id === "restore")?.label).toBe("Restore");
   });
 
   it("hides assign-to-me when already assigned to current user", () => {

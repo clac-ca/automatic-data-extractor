@@ -40,6 +40,7 @@ describe("DocumentTicketHeader", () => {
         document={document}
         onBack={vi.fn()}
         onRenameRequest={vi.fn()}
+        onRestoreRequest={vi.fn()}
         onReprocessRequest={vi.fn()}
         onCancelRunRequest={vi.fn()}
       />,
@@ -59,5 +60,32 @@ describe("DocumentTicketHeader", () => {
       "href",
       "/api/v1/workspaces/ws_1/documents/doc_1/original/download",
     );
+  });
+
+  it("uses restore as the primary action for archived documents", async () => {
+    const user = userEvent.setup();
+    const document = {
+      ...makeDocument(),
+      deletedAt: "2026-01-02T00:00:00Z",
+    };
+    const onRestoreRequest = vi.fn();
+    const onReprocessRequest = vi.fn();
+
+    render(
+      <DocumentTicketHeader
+        workspaceId="ws_1"
+        document={document}
+        onBack={vi.fn()}
+        onRenameRequest={vi.fn()}
+        onRestoreRequest={onRestoreRequest}
+        onReprocessRequest={onReprocessRequest}
+        onCancelRunRequest={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Restore" }));
+
+    expect(onRestoreRequest).toHaveBeenCalledTimes(1);
+    expect(onReprocessRequest).not.toHaveBeenCalled();
   });
 });
