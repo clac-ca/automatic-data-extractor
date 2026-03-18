@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.11.0](https://github.com/clac-ca/automatic-data-extractor/compare/v1.10.1...v1.11.0) (2026-03-18)
+
+
+### Features
+
+* **release:** promote development to main with archived documents ([#344](https://github.com/clac-ca/automatic-data-extractor/issues/344)) ([c065148](https://github.com/clac-ca/automatic-data-extractor/commit/c065148e542e8dfc9580676c5a8474a0dc5f91f7))
+
 ## [1.10.1](https://github.com/clac-ca/automatic-data-extractor/compare/v1.10.0...v1.10.1) (2026-03-12)
 
 
