@@ -61,8 +61,8 @@ export function DocumentsActiveFiltersRail({
     }
   };
 
-  const showDeleted = lifecycle === "deleted";
-  const hasActiveFilters = activeFilters.length > 0 || showDeleted;
+  const showArchived = lifecycle === "archived";
+  const hasActiveFilters = activeFilters.length > 0 || showArchived;
 
   return (
     <div className="documents-filter-rail flex min-h-10 flex-wrap items-center gap-2 rounded-md border border-border/60 bg-muted/20 px-2 py-1.5">
@@ -72,12 +72,12 @@ export function DocumentsActiveFiltersRail({
           Match any
         </Badge>
       ) : null}
-      {showDeleted ? (
+      {showArchived ? (
         <Badge variant="secondary" className="h-6 gap-1 px-2 text-[11px]">
-          Deleted
+          Archived
           <button
             type="button"
-            aria-label="Remove Deleted filter"
+            aria-label="Remove Archived filter"
             className="inline-flex items-center"
             onClick={() => {
               void setLifecycle("active");

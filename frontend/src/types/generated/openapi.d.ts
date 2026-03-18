@@ -1216,11 +1216,7 @@ export type paths = {
         get: operations["read_document_api_v1_workspaces__workspaceId__documents__documentId__get"];
         put?: never;
         post?: never;
-        /**
-         * Soft delete a document
-         * @description Soft delete a document.
-         */
-        delete: operations["delete_document_api_v1_workspaces__workspaceId__documents__documentId__delete"];
+        delete?: never;
         options?: never;
         head?: never;
         /**
@@ -1478,6 +1474,26 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspaceId}/documents/{documentId}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Archive a document
+         * @description Archive a document.
+         */
+        post: operations["archive_document_api_v1_workspaces__workspaceId__documents__documentId__archive_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspaceId}/documents/{documentId}/restore": {
         parameters: {
             query?: never;
@@ -1488,8 +1504,8 @@ export type paths = {
         get?: never;
         put?: never;
         /**
-         * Restore a soft-deleted document
-         * @description Restore a soft-deleted document.
+         * Restore an archived document
+         * @description Restore an archived document.
          */
         post: operations["restore_document_api_v1_workspaces__workspaceId__documents__documentId__restore_post"];
         delete?: never;
@@ -1498,7 +1514,7 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/workspaces/{workspaceId}/documents/batch/delete": {
+    "/api/v1/workspaces/{workspaceId}/documents/batch/archive": {
         parameters: {
             query?: never;
             header?: never;
@@ -1508,10 +1524,10 @@ export type paths = {
         get?: never;
         put?: never;
         /**
-         * Soft delete multiple documents
-         * @description Soft delete multiple documents.
+         * Archive multiple documents
+         * @description Archive multiple documents.
          */
-        post: operations["delete_documents_batch_api_v1_workspaces__workspaceId__documents_batch_delete_post"];
+        post: operations["archive_documents_batch_api_v1_workspaces__workspaceId__documents_batch_archive_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1528,8 +1544,8 @@ export type paths = {
         get?: never;
         put?: never;
         /**
-         * Restore multiple soft-deleted documents
-         * @description Restore multiple soft-deleted documents.
+         * Restore multiple archived documents
+         * @description Restore multiple archived documents.
          */
         post: operations["restore_documents_batch_api_v1_workspaces__workspaceId__documents_batch_restore_post"];
         delete?: never;
@@ -3288,21 +3304,21 @@ export type components = {
             commentCount: number;
         };
         /**
-         * DocumentBatchDeleteRequest
-         * @description Payload for soft-deleting multiple documents.
+         * DocumentBatchArchiveRequest
+         * @description Payload for archiving multiple documents.
          */
-        DocumentBatchDeleteRequest: {
+        DocumentBatchArchiveRequest: {
             /**
              * Documentids
-             * @description Documents to delete (soft delete, all-or-nothing).
+             * @description Documents to archive (soft archive, all-or-nothing).
              */
             documentIds: string[];
         };
         /**
-         * DocumentBatchDeleteResponse
-         * @description Response envelope for batch deletions.
+         * DocumentBatchArchiveResponse
+         * @description Response envelope for batch archive operations.
          */
-        DocumentBatchDeleteResponse: {
+        DocumentBatchArchiveResponse: {
             /** Documentids */
             documentIds?: string[];
         };
@@ -3332,7 +3348,7 @@ export type components = {
         };
         /**
          * DocumentBatchRestoreRequest
-         * @description Payload for restoring multiple soft-deleted documents.
+         * @description Payload for restoring multiple archived documents.
          */
         DocumentBatchRestoreRequest: {
             /**
@@ -3405,7 +3421,7 @@ export type components = {
              * Op
              * @enum {string}
              */
-            op: "upsert" | "delete";
+            op: "upsert" | "archive";
             /**
              * Documentid
              * Format: uuid
@@ -3517,7 +3533,7 @@ export type components = {
          * @description Visibility scope for list queries.
          * @enum {string}
          */
-        DocumentListLifecycle: "active" | "deleted";
+        DocumentListLifecycle: "active" | "archived";
         /**
          * DocumentListPage
          * @description Cursor-based envelope of document list rows.
@@ -3678,12 +3694,12 @@ export type components = {
         };
         /**
          * DocumentRestoreRequest
-         * @description Optional payload for restoring a document with a new name.
+         * @description Optional payload for restoring an archived document with a new name.
          */
         DocumentRestoreRequest: {
             /**
              * Name
-             * @description Optional replacement name used while restoring a deleted document.
+             * @description Optional replacement name used while restoring an archived document.
              */
             name?: string | null;
         };
@@ -9834,67 +9850,6 @@ export interface operations {
             default: components["responses"]["ProblemDetails"];
         };
     };
-    delete_document_api_v1_workspaces__workspaceId__documents__documentId__delete: {
-        parameters: {
-            query?: never;
-            header?: {
-                "X-CSRF-Token"?: string | null;
-            };
-            path: {
-                /** @description Workspace identifier */
-                workspaceId: string;
-                /** @description Document identifier */
-                documentId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Authentication required to delete documents. */
-            401: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Workspace permissions do not allow document deletion. */
-            403: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Document not found within the workspace. */
-            404: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    "X-Request-Id": components["headers"]["X-Request-Id"];
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-            default: components["responses"]["ProblemDetails"];
-        };
-    };
     update_document_api_v1_workspaces__workspaceId__documents__documentId__patch: {
         parameters: {
             query?: never;
@@ -10837,6 +10792,67 @@ export interface operations {
             default: components["responses"]["ProblemDetails"];
         };
     };
+    archive_document_api_v1_workspaces__workspaceId__documents__documentId__archive_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Workspace identifier */
+                workspaceId: string;
+                /** @description Document identifier */
+                documentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required to archive documents. */
+            401: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Workspace permissions do not allow document archival. */
+            403: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Document not found within the workspace. */
+            404: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
     restore_document_api_v1_workspaces__workspaceId__documents__documentId__restore_post: {
         parameters: {
             query?: never;
@@ -10910,7 +10926,7 @@ export interface operations {
             default: components["responses"]["ProblemDetails"];
         };
     };
-    delete_documents_batch_api_v1_workspaces__workspaceId__documents_batch_delete_post: {
+    archive_documents_batch_api_v1_workspaces__workspaceId__documents_batch_archive_post: {
         parameters: {
             query?: never;
             header?: {
@@ -10924,7 +10940,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["DocumentBatchDeleteRequest"];
+                "application/json": components["schemas"]["DocumentBatchArchiveRequest"];
             };
         };
         responses: {
@@ -10935,10 +10951,10 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DocumentBatchDeleteResponse"];
+                    "application/json": components["schemas"]["DocumentBatchArchiveResponse"];
                 };
             };
-            /** @description Authentication required to delete documents. */
+            /** @description Authentication required to archive documents. */
             401: {
                 headers: {
                     "X-Request-Id": components["headers"]["X-Request-Id"];
@@ -10946,7 +10962,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Workspace permissions do not allow document deletion. */
+            /** @description Workspace permissions do not allow document archival. */
             403: {
                 headers: {
                     "X-Request-Id": components["headers"]["X-Request-Id"];

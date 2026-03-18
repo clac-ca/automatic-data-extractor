@@ -70,7 +70,7 @@ export function useDocumentsEventsStream({
       try {
         const parsed = JSON.parse(event.data) as DocumentChangeNotification;
         if (!parsed.op) {
-          parsed.op = event.type === "document.deleted" ? "delete" : "upsert";
+          parsed.op = event.type === "document.archived" || event.type === "document.deleted" ? "archive" : "upsert";
         }
         if (!parsed.id && event.lastEventId) {
           parsed.id = event.lastEventId;
@@ -106,6 +106,7 @@ export function useDocumentsEventsStream({
     source.addEventListener("ready", handleReady);
     source.addEventListener("documents.resync", handleResync);
     source.addEventListener("document.changed", handleEvent);
+    source.addEventListener("document.archived", handleEvent);
     source.addEventListener("document.deleted", handleEvent);
     source.addEventListener("error", handleErrorEvent);
 

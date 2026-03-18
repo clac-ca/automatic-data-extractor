@@ -4,8 +4,8 @@ import { useNavigate } from "react-router-dom";
 
 import { resolveApiUrl } from "@/api/client";
 import {
-  deleteWorkspaceDocumentsBatch,
-  deleteWorkspaceDocument,
+  archiveWorkspaceDocumentsBatch,
+  archiveWorkspaceDocument,
   fetchWorkspaceDocumentRowsByIdFilter,
   patchWorkspaceDocument,
   restoreWorkspaceDocument,
@@ -988,20 +988,20 @@ export function DocumentsTableContainer({
     targets.forEach((documentId) => markRowPending(documentId, "delete"));
     setIsBulkDeleteSubmitting(true);
     try {
-      const deletedIds = await deleteWorkspaceDocumentsBatch(workspaceId, targets);
-      const resolvedDeletedIds = deletedIds.length > 0 ? deletedIds : targets;
-      resolvedDeletedIds.forEach((documentId) => removeRow(documentId));
+      const archivedIds = await archiveWorkspaceDocumentsBatch(workspaceId, targets);
+      const resolvedArchivedIds = archivedIds.length > 0 ? archivedIds : targets;
+      resolvedArchivedIds.forEach((documentId) => removeRow(documentId));
       void refreshSnapshot();
       notifyToast({
-        title: "Documents deleted",
-        description: `${resolvedDeletedIds.length} document${resolvedDeletedIds.length === 1 ? "" : "s"} deleted.`,
+        title: "Documents archived",
+        description: `${resolvedArchivedIds.length} document${resolvedArchivedIds.length === 1 ? "" : "s"} archived.`,
         intent: "success",
       });
       setSelectionResetToken((value) => value + 1);
       onBulkDeleteCancel();
     } catch (error) {
       notifyToast({
-        title: "Unable to delete documents",
+        title: "Unable to archive documents",
         description: error instanceof Error ? error.message : "Please try again.",
         intent: "danger",
       });
@@ -1333,14 +1333,14 @@ export function DocumentsTableContainer({
     if (!deleteTarget) return;
     markRowPending(deleteTarget.id, "delete");
     try {
-      await deleteWorkspaceDocument(workspaceId, deleteTarget.id);
+      await archiveWorkspaceDocument(workspaceId, deleteTarget.id);
       removeRow(deleteTarget.id);
       void refreshSnapshot();
-      notifyToast({ title: "Document deleted.", intent: "success", duration: 4000 });
+      notifyToast({ title: "Document archived.", intent: "success", duration: 4000 });
       setDeleteTarget(null);
     } catch (error) {
       notifyToast({
-        title: error instanceof Error ? error.message : "Unable to delete document.",
+        title: error instanceof Error ? error.message : "Unable to archive document.",
         intent: "danger",
       });
     } finally {
@@ -1799,25 +1799,22 @@ export function DocumentsTableContainer({
         lifecycle,
         isBusy: isRowMutationPending(row.id),
         isSelfAssigned: row.assignee?.id === currentUser.id,
-        canRenameInline: lifecycle === "active",
+        canRenameInline: true,
         surface: "context",
         onOpen: () => openDocument(row.id, "activity"),
         onOpenPreview: () => openDocument(row.id, "preview"),
         onDownloadLatest: handleDownloadLatest,
         onDownloadOriginal: handleDownloadOriginal,
         onAssignToMe:
-          lifecycle === "active"
-            ? () => {
-                void onAssign(row.id, currentUser.id);
-              }
-            : undefined,
+          () => {
+            void onAssign(row.id, currentUser.id);
+          },
         onRename:
-          lifecycle === "active"
-            ? () => {
-                requestInlineRename(row.id);
-              }
-            : undefined,
+          () => {
+            requestInlineRename(row.id);
+          },
         onDeleteRequest: lifecycle === "active" ? onDeleteRequest : undefined,
+        onRestoreRequest: lifecycle === "archived" ? onRestoreRequest : undefined,
       });
       return toContextMenuItems(actions);
     },
@@ -1952,12 +1949,12 @@ export function DocumentsTableContainer({
           onRowActivate={(document) => openDocument(document.id, "activity")}
           onBulkReprocessRequest={lifecycle === "active" ? onBulkReprocessRequest : undefined}
           onBulkCancelRequest={lifecycle === "active" ? onBulkCancelRequest : undefined}
-          onBulkAssignRequest={lifecycle === "active" ? onBulkAssignRequest : undefined}
-          onBulkTagRequest={lifecycle === "active" ? onBulkTagRequest : undefined}
+          onBulkAssignRequest={onBulkAssignRequest}
+          onBulkTagRequest={onBulkTagRequest}
           onBulkDeleteRequest={lifecycle === "active" ? onBulkDeleteRequest : undefined}
-          onBulkRestoreRequest={lifecycle === "deleted" ? onBulkRestoreRequest : undefined}
-          onBulkDownloadRequest={lifecycle === "active" ? onBulkDownloadRequest : undefined}
-          onBulkDownloadOriginalRequest={lifecycle === "active" ? onBulkDownloadOriginalRequest : undefined}
+          onBulkRestoreRequest={lifecycle === "archived" ? onBulkRestoreRequest : undefined}
+          onBulkDownloadRequest={onBulkDownloadRequest}
+          onBulkDownloadOriginalRequest={onBulkDownloadOriginalRequest}
           buildRowContextMenuItems={buildRowContextMenuItems}
           selectionResetToken={selectionResetToken}
         />
@@ -2101,10 +2098,10 @@ export function DocumentsTableContainer({
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete selected documents?</DialogTitle>
+            <DialogTitle>Archive selected documents?</DialogTitle>
             <DialogDescription>
-              Move {bulkDeleteCount} document{bulkDeleteCount === 1 ? "" : "s"} to Deleted.
-              You can restore these later from the Deleted view.
+              Move {bulkDeleteCount} document{bulkDeleteCount === 1 ? "" : "s"} to Archived.
+              You can restore these later from the Archived view.
             </DialogDescription>
           </DialogHeader>
           {bulkDeletePreview.length > 0 ? (
@@ -2131,7 +2128,7 @@ export function DocumentsTableContainer({
               onClick={onBulkDeleteConfirm}
               disabled={isBulkDeleteSubmitting}
             >
-              {isBulkDeleteSubmitting ? "Deleting..." : "Delete selected"}
+              {isBulkDeleteSubmitting ? "Archiving..." : "Archive selected"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -2247,11 +2244,11 @@ export function DocumentsTableContainer({
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete document?</DialogTitle>
+            <DialogTitle>Archive document?</DialogTitle>
             <DialogDescription>
               {deleteTarget
-                ? `Move "${deleteTarget.name}" to Deleted. You can restore it later from the Deleted view.`
-                : "Move this document to Deleted. You can restore it later from the Deleted view."}
+                ? `Move "${deleteTarget.name}" to Archived. You can restore it later from the Archived view.`
+                : "Move this document to Archived. You can restore it later from the Archived view."}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -2259,7 +2256,7 @@ export function DocumentsTableContainer({
               Cancel
             </Button>
             <Button variant="destructive" onClick={onDeleteConfirm} disabled={deletePending}>
-              {deletePending ? "Deleting..." : "Delete"}
+              {deletePending ? "Archiving..." : "Archive"}
             </Button>
           </DialogFooter>
         </DialogContent>

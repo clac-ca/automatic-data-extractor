@@ -85,7 +85,6 @@ export function DocumentsTable({
 
   const selectedRows = table.getFilteredSelectedRowModel().rows;
   const selectedDocuments = selectedRows.map((row) => row.original);
-  const isRestoreMode = Boolean(onBulkRestoreRequest);
   const cancellableDocuments = selectedDocuments.filter(
     (document) => document.lastRun?.status === "queued" || document.lastRun?.status === "running",
   );
@@ -96,35 +95,11 @@ export function DocumentsTable({
   const showRunActions =
     (cancellableDocuments.length > 0 && Boolean(onBulkCancelRequest)) ||
     (reprocessableDocuments.length > 0 && Boolean(onBulkReprocessRequest));
-  const showOrganizeMenu = Boolean(onBulkAssignRequest || onBulkTagRequest);
+  const showOrganizeActions = Boolean(onBulkAssignRequest || onBulkTagRequest);
   const showDownloadMenu = Boolean(onBulkDownloadRequest || onBulkDownloadOriginalRequest);
   const showSecondaryActions =
-    showOrganizeMenu || showDownloadMenu || Boolean(onBulkDeleteRequest);
-  const actionBar = isRestoreMode ? (
-    <ActionBar
-      open={selectedCount > 0}
-      onOpenChange={(open) => {
-        if (!open) {
-          table.toggleAllRowsSelected(false);
-        }
-      }}
-    >
-      <ActionBarSelection>{selectedCount} selected</ActionBarSelection>
-      <ActionBarSeparator />
-      <ActionBarGroup>
-        <ActionBarItem
-          variant="secondary"
-          size="sm"
-          onSelect={() => onBulkRestoreRequest?.(selectedDocuments)}
-        >
-          Restore ({selectedDocuments.length})
-        </ActionBarItem>
-        <ActionBarItem variant="outline" size="sm" onSelect={() => table.toggleAllRowsSelected(false)}>
-          Clear selection
-        </ActionBarItem>
-      </ActionBarGroup>
-    </ActionBar>
-  ) : (
+    showOrganizeActions || showDownloadMenu || Boolean(onBulkDeleteRequest);
+  const actionBar = (
     <ActionBar
       open={selectedCount > 0}
       onOpenChange={(open) => {
@@ -157,34 +132,32 @@ export function DocumentsTable({
       </ActionBarGroup>
       {showRunActions && showSecondaryActions ? <ActionBarSeparator /> : null}
       <ActionBarGroup>
-        {showOrganizeMenu ? (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <ActionBarItem
-                variant="outline"
-                size="sm"
-                onSelect={(event) => event.preventDefault()}
-              >
-                Organize
-              </ActionBarItem>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="center" side="top">
-              {onBulkAssignRequest ? (
-                <DropdownMenuItem
-                  onSelect={() => onBulkAssignRequest(selectedDocuments)}
-                >
-                  Assign…
-                </DropdownMenuItem>
-              ) : null}
-              {onBulkTagRequest ? (
-                <DropdownMenuItem
-                  onSelect={() => onBulkTagRequest(selectedDocuments)}
-                >
-                  Edit tags…
-                </DropdownMenuItem>
-              ) : null}
-            </DropdownMenuContent>
-          </DropdownMenu>
+        {onBulkRestoreRequest ? (
+          <ActionBarItem
+            variant="secondary"
+            size="sm"
+            onSelect={() => onBulkRestoreRequest(selectedDocuments)}
+          >
+            Restore ({selectedDocuments.length})
+          </ActionBarItem>
+        ) : null}
+        {onBulkAssignRequest ? (
+          <ActionBarItem
+            variant="outline"
+            size="sm"
+            onSelect={() => onBulkAssignRequest(selectedDocuments)}
+          >
+            Assign
+          </ActionBarItem>
+        ) : null}
+        {onBulkTagRequest ? (
+          <ActionBarItem
+            variant="outline"
+            size="sm"
+            onSelect={() => onBulkTagRequest(selectedDocuments)}
+          >
+            Edit Tags
+          </ActionBarItem>
         ) : null}
         {showDownloadMenu ? (
           <DropdownMenu>
@@ -221,7 +194,7 @@ export function DocumentsTable({
             size="sm"
             onSelect={() => onBulkDeleteRequest(selectedDocuments)}
           >
-            Delete ({selectedDocuments.length})
+            Archive ({selectedDocuments.length})
           </ActionBarItem>
         ) : null}
         <ActionBarItem variant="outline" size="sm" onSelect={() => table.toggleAllRowsSelected(false)}>

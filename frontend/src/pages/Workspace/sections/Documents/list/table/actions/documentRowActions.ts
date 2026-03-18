@@ -1,5 +1,5 @@
 import { createElement, type ReactNode } from "react";
-import { FileText, Pencil, Trash2, UserRoundPlus } from "lucide-react";
+import { Archive, FileText, Pencil, UserRoundPlus } from "lucide-react";
 
 import { DownloadIcon, EyeIcon } from "@/components/icons";
 import type { ContextMenuItem } from "@/components/ui/context-menu-simple";
@@ -32,9 +32,10 @@ export function buildDocumentRowActions({
   onAssignToMe,
   onRename,
   onDeleteRequest,
+  onRestoreRequest,
 }: {
   document: DocumentRow;
-  lifecycle: "active" | "deleted";
+  lifecycle: "active" | "archived";
   isBusy: boolean;
   isSelfAssigned: boolean;
   canRenameInline: boolean;
@@ -46,6 +47,7 @@ export function buildDocumentRowActions({
   onAssignToMe?: () => void;
   onRename?: () => void;
   onDeleteRequest?: (document: DocumentRow) => void;
+  onRestoreRequest?: (document: DocumentRow) => void;
 }) {
   const actions: DocumentRowActionDescriptor[] = [];
 
@@ -96,7 +98,7 @@ export function buildDocumentRowActions({
     });
   }
 
-  if (lifecycle === "active" && onAssignToMe && !isSelfAssigned) {
+  if (onAssignToMe && !isSelfAssigned) {
     pushCore({
       id: "assign-to-me",
       label: "Assign to me",
@@ -119,11 +121,20 @@ export function buildDocumentRowActions({
   if (lifecycle === "active" && onDeleteRequest) {
     pushCore({
       id: "delete",
-      label: "Delete",
-      icon: createElement(Trash2, { className: "h-4 w-4" }),
+      label: "Archive",
+      icon: createElement(Archive, { className: "h-4 w-4" }),
       disabled: isBusy,
       danger: true,
       onSelect: () => onDeleteRequest(document),
+    });
+  }
+
+  if (lifecycle === "archived" && onRestoreRequest) {
+    pushCore({
+      id: "restore",
+      label: "Restore",
+      disabled: isBusy,
+      onSelect: () => onRestoreRequest(document),
     });
   }
 

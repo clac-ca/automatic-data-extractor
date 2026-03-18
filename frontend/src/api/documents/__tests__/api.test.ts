@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { client } from "@/api/client";
 import {
+  archiveWorkspaceDocument,
+  archiveWorkspaceDocumentsBatch,
   fetchWorkspaceDocuments,
   patchWorkspaceDocument,
   restoreWorkspaceDocument,
@@ -71,7 +73,7 @@ describe("documents api helpers", () => {
     await fetchWorkspaceDocuments("ws-1", {
       limit: 20,
       sort: null,
-      lifecycle: "deleted",
+      lifecycle: "archived",
     });
 
     expect(spy).toHaveBeenCalledWith("/api/v1/workspaces/{workspaceId}/documents", {
@@ -79,10 +81,36 @@ describe("documents api helpers", () => {
         path: { workspaceId: "ws-1" },
         query: {
           limit: 20,
-          lifecycle: "deleted",
+          lifecycle: "archived",
         },
       },
       signal: undefined,
+    });
+  });
+
+  it("calls the single archive endpoint", async () => {
+    const spy = vi.spyOn(client, "POST").mockResolvedValue(
+      { data: undefined } as unknown as PostResponse,
+    );
+
+    await archiveWorkspaceDocument("ws-1", "doc-1");
+
+    expect(spy).toHaveBeenCalledWith("/api/v1/workspaces/{workspaceId}/documents/{documentId}/archive", {
+      params: { path: { workspaceId: "ws-1", documentId: "doc-1" } },
+    });
+  });
+
+  it("calls the batch archive endpoint", async () => {
+    const spy = vi.spyOn(client, "POST").mockResolvedValue(
+      { data: { documentIds: ["doc-1", "doc-2"] } } as unknown as PostResponse,
+    );
+
+    const result = await archiveWorkspaceDocumentsBatch("ws-1", ["doc-1", "doc-2"]);
+
+    expect(result).toEqual(["doc-1", "doc-2"]);
+    expect(spy).toHaveBeenCalledWith("/api/v1/workspaces/{workspaceId}/documents/batch/archive", {
+      params: { path: { workspaceId: "ws-1" } },
+      body: { documentIds: ["doc-1", "doc-2"] },
     });
   });
 

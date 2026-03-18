@@ -93,8 +93,8 @@ from .schemas import (
     DocumentActivityResponse,
     DocumentActivityThreadCreate,
     DocumentActivityThreadOut,
-    DocumentBatchDeleteRequest,
-    DocumentBatchDeleteResponse,
+    DocumentBatchArchiveRequest,
+    DocumentBatchArchiveResponse,
     DocumentBatchRestoreConflict,
     DocumentBatchRestoreRequest,
     DocumentBatchRestoreResponse,
@@ -670,11 +670,16 @@ async def stream_document_changes(
                 change_id = payload.get("id")
                 if not op or not document_id:
                     continue
-                event_type = "document.deleted" if op == "delete" else "document.changed"
+                normalized_op = "archive" if op == "delete" else op
+                event_type = (
+                    "document.archived"
+                    if normalized_op == "archive"
+                    else "document.changed"
+                )
                 event_id = change_id
                 yield sse_json(
                     event_type,
-                    {"documentId": document_id, "op": op, "id": change_id},
+                    {"documentId": document_id, "op": normalized_op, "id": change_id},
                     event_id=event_id,
                 )
         finally:
@@ -725,7 +730,7 @@ def list_document_changes_delta(
         DocumentChangeEntry(
             id=str(change.id),
             document_id=change.document_id,
-            op=change.op,
+            op="archive" if change.op == "delete" else change.op,
         )
         for change in delta.changes
     ]
@@ -1501,31 +1506,49 @@ def list_document_sheets_endpoint(
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
 
 
-@router.delete(
-    "/{documentId}",
+@router.post(
+    "/{documentId:uuid}/archive",
     dependencies=[Security(require_csrf)],
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="Soft delete a document",
+    summary="Archive a document",
     responses={
         status.HTTP_401_UNAUTHORIZED: {
-            "description": "Authentication required to delete documents.",
+            "description": "Authentication required to archive documents.",
         },
         status.HTTP_403_FORBIDDEN: {
-            "description": "Workspace permissions do not allow document deletion.",
+            "description": "Workspace permissions do not allow document archival.",
         },
         status.HTTP_404_NOT_FOUND: {
             "description": "Document not found within the workspace.",
         },
     },
 )
-def delete_document(
+@router.delete(
+    "/{documentId}",
+    dependencies=[Security(require_csrf)],
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Archive a document",
+    include_in_schema=False,
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {
+            "description": "Authentication required to archive documents.",
+        },
+        status.HTTP_403_FORBIDDEN: {
+            "description": "Workspace permissions do not allow document archival.",
+        },
+        status.HTTP_404_NOT_FOUND: {
+            "description": "Document not found within the workspace.",
+        },
+    },
+)
+def archive_document(
     workspace_id: WorkspacePath,
     document_id: DocumentPath,
     service: DocumentsServiceDep,
     actor: DocumentManager,
 ) -> None:
     try:
-        service.delete_document(
+        service.archive_document(
             workspace_id=workspace_id,
             document_id=document_id,
             actor=actor,
@@ -1539,7 +1562,7 @@ def delete_document(
     dependencies=[Security(require_csrf)],
     response_model=DocumentOut,
     status_code=status.HTTP_200_OK,
-    summary="Restore a soft-deleted document",
+    summary="Restore an archived document",
     response_model_exclude_none=True,
     responses={
         status.HTTP_401_UNAUTHORIZED: {
@@ -1613,31 +1636,39 @@ def restore_document(
 
 
 @router.post(
-    "/batch/delete",
+    "/batch/archive",
     dependencies=[Security(require_csrf)],
-    response_model=DocumentBatchDeleteResponse,
+    response_model=DocumentBatchArchiveResponse,
     status_code=status.HTTP_200_OK,
-    summary="Soft delete multiple documents",
+    summary="Archive multiple documents",
     responses={
         status.HTTP_401_UNAUTHORIZED: {
-            "description": "Authentication required to delete documents.",
+            "description": "Authentication required to archive documents.",
         },
         status.HTTP_403_FORBIDDEN: {
-            "description": "Workspace permissions do not allow document deletion.",
+            "description": "Workspace permissions do not allow document archival.",
         },
         status.HTTP_404_NOT_FOUND: {
             "description": "One or more documents were not found within the workspace.",
         },
     },
 )
-def delete_documents_batch(
+@router.post(
+    "/batch/delete",
+    dependencies=[Security(require_csrf)],
+    response_model=DocumentBatchArchiveResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Archive multiple documents",
+    include_in_schema=False,
+)
+def archive_documents_batch(
     workspace_id: WorkspacePath,
-    payload: DocumentBatchDeleteRequest,
+    payload: DocumentBatchArchiveRequest,
     service: DocumentsServiceDep,
     actor: DocumentManager,
-) -> DocumentBatchDeleteResponse:
+) -> DocumentBatchArchiveResponse:
     try:
-        deleted_ids = service.delete_documents_batch(
+        archived_ids = service.archive_documents_batch(
             workspace_id=workspace_id,
             document_ids=payload.document_ids,
             actor=actor,
@@ -1645,7 +1676,7 @@ def delete_documents_batch(
     except DocumentNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
-    return DocumentBatchDeleteResponse(document_ids=deleted_ids)
+    return DocumentBatchArchiveResponse(document_ids=archived_ids)
 
 
 @router.post(
@@ -1653,7 +1684,7 @@ def delete_documents_batch(
     dependencies=[Security(require_csrf)],
     response_model=DocumentBatchRestoreResponse,
     status_code=status.HTTP_200_OK,
-    summary="Restore multiple soft-deleted documents",
+    summary="Restore multiple archived documents",
     responses={
         status.HTTP_401_UNAUTHORIZED: {
             "description": "Authentication required to restore documents.",

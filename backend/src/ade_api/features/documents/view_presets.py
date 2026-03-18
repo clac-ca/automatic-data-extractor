@@ -73,10 +73,10 @@ SYSTEM_DOCUMENT_VIEW_PRESETS: tuple[SystemDocumentViewPreset, ...] = (
     ),
     SystemDocumentViewPreset(
         system_key="deleted",
-        name="Deleted",
-        name_key="deleted",
+        name="Archived",
+        name_key="archived",
         query_state={
-            "lifecycle": "deleted",
+            "lifecycle": "archived",
             "q": None,
             "sort": [{"id": "deletedAt", "desc": True}],
             "filters": [],

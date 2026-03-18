@@ -12,7 +12,7 @@ export type DocumentBatchRestoreResult = components["schemas"]["DocumentBatchRes
 export type WorkbookSheetPreview = components["schemas"]["WorkbookSheetPreview"];
 export type FileType = "xlsx" | "xls" | "csv" | "pdf" | "unknown";
 export type TagMode = "any" | "all";
-export type DocumentLifecycle = "active" | "deleted";
+export type DocumentLifecycle = "active" | "archived";
 
 export type ListDocumentsQuery = {
   limit: number;
@@ -201,25 +201,25 @@ export async function patchWorkspaceDocument(
   return data;
 }
 
-export async function deleteWorkspaceDocument(
+export async function archiveWorkspaceDocument(
   workspaceId: string,
   documentId: string,
 ): Promise<void> {
-  await client.DELETE("/api/v1/workspaces/{workspaceId}/documents/{documentId}", {
+  await client.POST("/api/v1/workspaces/{workspaceId}/documents/{documentId}/archive", {
     params: { path: { workspaceId, documentId } },
   });
 }
 
-export async function deleteWorkspaceDocumentsBatch(
+export async function archiveWorkspaceDocumentsBatch(
   workspaceId: string,
   documentIds: string[],
 ): Promise<string[]> {
-  const { data } = await client.POST("/api/v1/workspaces/{workspaceId}/documents/batch/delete", {
+  const { data } = await client.POST("/api/v1/workspaces/{workspaceId}/documents/batch/archive", {
     params: { path: { workspaceId } },
     body: { documentIds },
   });
 
-  if (!data) throw new Error("Expected delete response.");
+  if (!data) throw new Error("Expected archive response.");
   return data.documentIds ?? [];
 }
 

@@ -17,7 +17,7 @@ type SortState = ExtendedColumnSort<DocumentListRow>[];
 type FiltersState = ExtendedColumnFilter<DocumentListRow>[];
 type FilterValue = ExtendedColumnFilter<DocumentListRow>["value"];
 type JoinOperator = "and" | "or";
-type Lifecycle = "active" | "deleted";
+type Lifecycle = "active" | "archived";
 type DocumentViewQueryState = components["schemas"]["DocumentViewQueryState"];
 
 type QuerySnapshotInput = {
@@ -44,7 +44,7 @@ export const documentsFiltersParser = getFiltersStateParser<DocumentListRow>(DOC
 export const documentsJoinOperatorParser = parseAsStringEnum(["and", "or"])
   .withOptions({ clearOnDefault: true })
   .withDefault("and");
-export const documentsLifecycleParser = parseAsStringEnum(["active", "deleted"])
+export const documentsLifecycleParser = parseAsStringEnum(["active", "archived", "deleted"])
   .withOptions({ clearOnDefault: true })
   .withDefault("active");
 export const documentsSearchParser = parseAsString;
@@ -89,7 +89,7 @@ function normalizeJoinOperator(value: unknown): JoinOperator {
 }
 
 function normalizeLifecycle(value: unknown): Lifecycle {
-  return value === "deleted" ? "deleted" : "active";
+  return value === "archived" || value === "deleted" ? "archived" : "active";
 }
 
 export function buildDocumentsQuerySnapshot(input: QuerySnapshotInput): DocumentsQuerySnapshot {
@@ -160,7 +160,7 @@ export function hasExplicitListState(snapshot: DocumentsQuerySnapshot): boolean 
       snapshot.sort.length > 0 ||
       snapshot.filters.length > 0 ||
       snapshot.joinOperator === "or" ||
-      snapshot.lifecycle === "deleted",
+      snapshot.lifecycle === "archived",
   );
 }
 

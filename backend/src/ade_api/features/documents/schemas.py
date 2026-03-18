@@ -38,7 +38,13 @@ class DocumentListLifecycle(str, Enum):
     """Visibility scope for list queries."""
 
     ACTIVE = "active"
-    DELETED = "deleted"
+    ARCHIVED = "archived"
+
+    @classmethod
+    def _missing_(cls, value: object) -> DocumentListLifecycle | None:
+        if value == "deleted":
+            return cls.ARCHIVED
+        return None
 
 
 class DocumentViewVisibility(str, Enum):
@@ -231,11 +237,11 @@ class DocumentUpdateRequest(BaseSchema):
 
 
 class DocumentRestoreRequest(BaseSchema):
-    """Optional payload for restoring a document with a new name."""
+    """Optional payload for restoring an archived document with a new name."""
 
     name: str | None = Field(
         default=None,
-        description="Optional replacement name used while restoring a deleted document.",
+        description="Optional replacement name used while restoring an archived document.",
     )
 
     @field_validator("name")
@@ -279,25 +285,25 @@ class DocumentBatchTagsResponse(BaseSchema):
     documents: list[DocumentOut] = Field(default_factory=list)
 
 
-class DocumentBatchDeleteRequest(BaseSchema):
-    """Payload for soft-deleting multiple documents."""
+class DocumentBatchArchiveRequest(BaseSchema):
+    """Payload for archiving multiple documents."""
 
     document_ids: list[UUIDStr] = Field(
         ...,
         min_length=1,
         alias="documentIds",
-        description="Documents to delete (soft delete, all-or-nothing).",
+        description="Documents to archive (soft archive, all-or-nothing).",
     )
 
 
-class DocumentBatchDeleteResponse(BaseSchema):
-    """Response envelope for batch deletions."""
+class DocumentBatchArchiveResponse(BaseSchema):
+    """Response envelope for batch archive operations."""
 
     document_ids: list[UUIDStr] = Field(default_factory=list, alias="documentIds")
 
 
 class DocumentBatchRestoreRequest(BaseSchema):
-    """Payload for restoring multiple soft-deleted documents."""
+    """Payload for restoring multiple archived documents."""
 
     document_ids: list[UUIDStr] = Field(
         ...,
@@ -392,7 +398,7 @@ class DocumentListPage(CursorPage[DocumentListRow]):
     """Cursor-based envelope of document list rows."""
 
 
-DocumentChangeOp = Literal["upsert", "delete"]
+DocumentChangeOp = Literal["upsert", "archive"]
 
 
 class DocumentChangeEntry(BaseSchema):
@@ -628,6 +634,10 @@ class DocumentViewQueryState(BaseSchema):
     join_operator: Literal["and", "or"] | None = Field(default="and", alias="joinOperator")
 
 
+DocumentBatchDeleteRequest = DocumentBatchArchiveRequest
+DocumentBatchDeleteResponse = DocumentBatchArchiveResponse
+
+
 class DocumentViewTableState(BaseSchema):
     """Serializable table layout state persisted for a saved view."""
 
@@ -710,6 +720,8 @@ class DocumentSheet(BaseSchema):
 
 
 __all__ = [
+    "DocumentBatchArchiveRequest",
+    "DocumentBatchArchiveResponse",
     "DocumentBatchDeleteRequest",
     "DocumentBatchDeleteResponse",
     "DocumentBatchRestoreConflict",
