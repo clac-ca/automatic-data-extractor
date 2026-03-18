@@ -44,7 +44,7 @@ export function DocumentNameCell({
   externalRenameSignal,
 }: {
   document: DocumentRow;
-  lifecycle: "active" | "deleted";
+  lifecycle: "active" | "archived";
   presenceEntries: DocumentPresenceEntry[];
   isBusy?: boolean;
   currentUserId?: string;
@@ -67,14 +67,14 @@ export function DocumentNameCell({
   const [isSubmittingRename, setIsSubmittingRename] = useState(false);
   const lastRenameSignalRef = useRef(externalRenameSignal ?? 0);
 
-  const isDeletedLifecycle = lifecycle === "deleted";
+  const isArchivedLifecycle = lifecycle === "archived";
   const runActive = isRunActive(document);
-  const runActionLabel = isDeletedLifecycle ? "Restore" : runActive ? "Cancel run" : "Reprocess";
+  const runActionLabel = isArchivedLifecycle ? "Restore" : runActive ? "Cancel run" : "Reprocess";
   const commentCount = document.commentCount ?? 0;
   const commentBadgeLabel = commentCount > 99 ? "99+" : String(commentCount);
   const isSelfAssigned = Boolean(currentUserId && document.assignee?.id === currentUserId);
 
-  const canRenameInline = Boolean(onRename && !isDeletedLifecycle);
+  const canRenameInline = Boolean(onRename);
   const resetDraftFromName = useCallback((name: string) => {
     const next = splitFileName(name);
     setDraftBaseName(next.baseName);
@@ -124,10 +124,10 @@ export function DocumentNameCell({
   };
 
   const runActionIcon = useMemo(() => {
-    if (isDeletedLifecycle) return <RotateCcw className="h-4 w-4" />;
+    if (isArchivedLifecycle) return <RotateCcw className="h-4 w-4" />;
     if (runActive) return <CloseIcon className="h-4 w-4" />;
     return <RefreshIcon className="h-4 w-4" />;
-  }, [isDeletedLifecycle, runActive]);
+  }, [isArchivedLifecycle, runActive]);
 
   useEffect(() => {
     const nextSignal = externalRenameSignal ?? 0;
@@ -150,6 +150,7 @@ export function DocumentNameCell({
         onAssignToMe,
         onRename: startRename,
         onDeleteRequest,
+        onRestoreRequest,
       }),
     [
       canRenameInline,
@@ -161,6 +162,7 @@ export function DocumentNameCell({
       onDeleteRequest,
       onDownloadLatest,
       onDownloadOriginal,
+      onRestoreRequest,
       startRename,
     ],
   );
@@ -289,7 +291,7 @@ export function DocumentNameCell({
         <IconButton
           label={runActionLabel}
           onClick={() => {
-            if (isDeletedLifecycle) {
+            if (isArchivedLifecycle) {
               onRestoreRequest?.(document);
               return;
             }
@@ -299,7 +301,7 @@ export function DocumentNameCell({
             }
             onReprocessRequest?.(document);
           }}
-          variant={isDeletedLifecycle || runActive ? "secondary" : "ghost"}
+          variant={isArchivedLifecycle || runActive ? "secondary" : "ghost"}
           disabled={isBusy}
         >
           {runActionIcon}

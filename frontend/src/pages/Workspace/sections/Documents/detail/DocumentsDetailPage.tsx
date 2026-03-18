@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 
-import { fetchWorkspaceDocumentRowById } from "@/api/documents";
+import { fetchWorkspaceDocumentRowById, restoreWorkspaceDocument } from "@/api/documents";
 import { ApiError } from "@/api/errors";
 import { cancelRun, createRun } from "@/api/runs/api";
 import type { RunStreamOptions } from "@/api/runs/api";
@@ -187,6 +187,28 @@ export function DocumentsDetailPage({ documentId }: { documentId: string }) {
     [documentQuery, documentRow, notifyToast, workspace.id],
   );
 
+  const onRestoreRequest = useCallback(async () => {
+    if (!documentRow) return;
+    setIsRunActionPending(true);
+    try {
+      await restoreWorkspaceDocument(workspace.id, documentRow.id);
+      notifyToast({
+        title: "Document restored.",
+        intent: "success",
+        duration: 4000,
+      });
+      await documentQuery.refetch();
+    } catch (error) {
+      notifyToast({
+        title: "Unable to restore document",
+        description: error instanceof Error ? error.message : "Please try again.",
+        intent: "danger",
+      });
+    } finally {
+      setIsRunActionPending(false);
+    }
+  }, [documentQuery, documentRow, notifyToast, workspace.id]);
+
   if (documentQuery.isLoading) {
     return (
       <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
@@ -204,7 +226,7 @@ export function DocumentsDetailPage({ documentId }: { documentId: string }) {
     const message =
       error instanceof ApiError
         ? error.status === 404
-          ? "We couldn’t find that document. It may have been deleted."
+          ? "We couldn’t find that document."
           : error.status === 403
             ? "You don’t have access to that document."
             : error.message
@@ -241,6 +263,7 @@ export function DocumentsDetailPage({ documentId }: { documentId: string }) {
           setRenameError(null);
           setRenameOpen(true);
         }}
+        onRestoreRequest={onRestoreRequest}
         onReprocessRequest={() => setReprocessOpen(true)}
         onCancelRunRequest={onCancelRunRequest}
         isRunActionPending={isRunActionPending}

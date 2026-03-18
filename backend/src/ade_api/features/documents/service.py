@@ -471,7 +471,7 @@ class DocumentsService:
         )
 
         stmt = self._repository.base_query(workspace_id)
-        if lifecycle == DocumentListLifecycle.DELETED:
+        if lifecycle == DocumentListLifecycle.ARCHIVED:
             stmt = stmt.where(File.deleted_at.is_not(None))
         else:
             stmt = stmt.where(File.deleted_at.is_(None))
@@ -1512,18 +1512,18 @@ class DocumentsService:
         )
         return payload, filename, version, _guarded()
 
-    def delete_document(
+    def archive_document(
         self,
         *,
         workspace_id: UUID,
         document_id: UUID,
         actor: User | None = None,
     ) -> None:
-        """Soft delete ``document_id`` while retaining blob storage."""
+        """Archive ``document_id`` while retaining blob storage."""
 
         actor_id: UUID | None = actor.id if actor is not None else None
         logger.debug(
-            "document.delete.start",
+            "document.archive.start",
             extra=log_context(
                 workspace_id=workspace_id,
                 document_id=document_id,
@@ -1539,7 +1539,7 @@ class DocumentsService:
         self._session.flush()
 
         logger.info(
-            "document.delete.success",
+            "document.archive.success",
             extra=log_context(
                 workspace_id=workspace_id,
                 document_id=document_id,
@@ -1548,14 +1548,29 @@ class DocumentsService:
             ),
         )
 
-    def delete_documents_batch(
+    def delete_document(
+        self,
+        *,
+        workspace_id: UUID,
+        document_id: UUID,
+        actor: User | None = None,
+    ) -> None:
+        """Backward-compatible alias for archiving a document."""
+
+        self.archive_document(
+            workspace_id=workspace_id,
+            document_id=document_id,
+            actor=actor,
+        )
+
+    def archive_documents_batch(
         self,
         *,
         workspace_id: UUID,
         document_ids: Sequence[UUID],
         actor: User | None = None,
     ) -> list[UUID]:
-        """Soft delete multiple documents while retaining blob storage."""
+        """Archive multiple documents while retaining blob storage."""
 
         ordered_ids = list(dict.fromkeys(document_ids))
         if not ordered_ids:
@@ -1577,6 +1592,21 @@ class DocumentsService:
 
         return ordered_ids
 
+    def delete_documents_batch(
+        self,
+        *,
+        workspace_id: UUID,
+        document_ids: Sequence[UUID],
+        actor: User | None = None,
+    ) -> list[UUID]:
+        """Backward-compatible alias for archiving multiple documents."""
+
+        return self.archive_documents_batch(
+            workspace_id=workspace_id,
+            document_ids=document_ids,
+            actor=actor,
+        )
+
     def restore_document(
         self,
         *,
@@ -1584,7 +1614,7 @@ class DocumentsService:
         document_id: UUID,
         name: str | None = None,
     ) -> DocumentOut:
-        """Restore a soft-deleted document."""
+        """Restore an archived document."""
 
         document = self._get_document(
             workspace_id=workspace_id,
@@ -1643,7 +1673,7 @@ class DocumentsService:
         workspace_id: UUID,
         document_ids: Sequence[UUID],
     ) -> RestoreBatchResult:
-        """Restore multiple soft-deleted documents with partial conflict reporting."""
+        """Restore multiple archived documents with partial conflict reporting."""
 
         ordered_ids = list(dict.fromkeys(document_ids))
         if not ordered_ids:
@@ -1905,7 +1935,7 @@ class DocumentsService:
         workspace_id: UUID,
         document_id: UUID,
         *,
-        include_deleted: bool = False,
+        include_deleted: bool = True,
     ) -> File:
         document = self._repository.get_document(
             workspace_id=workspace_id,
@@ -2239,7 +2269,7 @@ class DocumentsService:
         *,
         workspace_id: UUID,
         document_ids: Sequence[UUID],
-        include_deleted: bool = False,
+        include_deleted: bool = True,
     ) -> list[File]:
         if not document_ids:
             return []

@@ -100,7 +100,7 @@ describe("queryState", () => {
       sort: [{ id: "createdAt", desc: true }],
       filters: [{ id: "name", operator: "contains", value: "Q4" }],
       joinOperator: "or",
-      lifecycle: "deleted",
+      lifecycle: "archived",
     });
   });
 

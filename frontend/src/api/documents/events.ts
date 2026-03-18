@@ -6,7 +6,7 @@ export type DocumentChangeDeltaResponse = components["schemas"]["DocumentChangeD
 
 export type DocumentChangeNotification = {
   documentId: string;
-  op: DocumentChangeEntry["op"];
+  op: DocumentChangeEntry["op"] | "delete";
   id?: DocumentChangeEntry["id"] | null;
 };
 

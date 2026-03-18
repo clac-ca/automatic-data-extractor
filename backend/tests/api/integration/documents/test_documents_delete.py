@@ -1,4 +1,4 @@
-"""Document deletion tests."""
+"""Document archive lifecycle tests."""
 
 from __future__ import annotations
 
@@ -13,12 +13,12 @@ from tests.api.utils import login
 pytestmark = pytest.mark.asyncio
 
 
-async def test_delete_document_marks_deleted(
+async def test_archive_document_marks_archived(
     async_client: AsyncClient,
     seed_identity,
     db_session,
 ) -> None:
-    """Soft deletion should flag the record and allow restore."""
+    """Archiving should flag the record and allow restore."""
 
     member = seed_identity.member
     token, _ = await login(async_client, email=member.email, password=member.password)
@@ -32,28 +32,30 @@ async def test_delete_document_marks_deleted(
     )
     payload = upload.json()
     document_id = payload["id"]
-    delete_response = await async_client.request(
-        "DELETE",
-        f"{workspace_base}/documents/{document_id}",
+    archive_response = await async_client.post(
+        f"{workspace_base}/documents/{document_id}/archive",
         headers=headers,
     )
-    assert delete_response.status_code == 204, delete_response.text
+    assert archive_response.status_code == 204, archive_response.text
 
     detail = await async_client.get(f"{workspace_base}/documents/{document_id}", headers=headers)
-    assert detail.status_code == 404
+    assert detail.status_code == 200, detail.text
+    detail_payload = detail.json()
+    assert detail_payload["id"] == document_id
+    assert detail_payload["name"] == "delete.txt"
 
     active_list = await async_client.get(f"{workspace_base}/documents", headers=headers)
     assert active_list.status_code == 200, active_list.text
     assert all(item["id"] != document_id for item in active_list.json()["items"])
 
-    deleted_list = await async_client.get(
+    archived_list = await async_client.get(
         f"{workspace_base}/documents",
         headers=headers,
-        params={"lifecycle": "deleted"},
+        params={"lifecycle": "archived"},
     )
-    assert deleted_list.status_code == 200, deleted_list.text
-    deleted_ids = {item["id"] for item in deleted_list.json()["items"]}
-    assert document_id in deleted_ids
+    assert archived_list.status_code == 200, archived_list.text
+    archived_ids = {item["id"] for item in archived_list.json()["items"]}
+    assert document_id in archived_ids
 
     row = db_session.get(File, UUID(document_id))
     assert row is not None
@@ -69,14 +71,14 @@ async def test_delete_document_marks_deleted(
     restored_detail = await async_client.get(f"{workspace_base}/documents/{document_id}", headers=headers)
     assert restored_detail.status_code == 200, restored_detail.text
 
-    deleted_after_restore = await async_client.get(
+    archived_after_restore = await async_client.get(
         f"{workspace_base}/documents",
         headers=headers,
-        params={"lifecycle": "deleted"},
+        params={"lifecycle": "archived"},
     )
-    assert deleted_after_restore.status_code == 200, deleted_after_restore.text
-    deleted_after_restore_ids = {item["id"] for item in deleted_after_restore.json()["items"]}
-    assert document_id not in deleted_after_restore_ids
+    assert archived_after_restore.status_code == 200, archived_after_restore.text
+    archived_after_restore_ids = {item["id"] for item in archived_after_restore.json()["items"]}
+    assert document_id not in archived_after_restore_ids
 
     active_after_restore = await async_client.get(f"{workspace_base}/documents", headers=headers)
     assert active_after_restore.status_code == 200, active_after_restore.text
@@ -84,7 +86,7 @@ async def test_delete_document_marks_deleted(
     assert document_id in active_after_restore_ids
 
 
-async def test_batch_delete_and_restore_documents(
+async def test_batch_archive_and_restore_documents(
     async_client: AsyncClient,
     seed_identity,
 ) -> None:
@@ -109,22 +111,22 @@ async def test_batch_delete_and_restore_documents(
     id_one = upload_one.json()["id"]
     id_two = upload_two.json()["id"]
 
-    deleted = await async_client.post(
-        f"{workspace_base}/documents/batch/delete",
+    archived = await async_client.post(
+        f"{workspace_base}/documents/batch/archive",
         headers=headers,
         json={"documentIds": [id_one, id_two]},
     )
-    assert deleted.status_code == 200, deleted.text
-    assert set(deleted.json()["documentIds"]) == {id_one, id_two}
+    assert archived.status_code == 200, archived.text
+    assert set(archived.json()["documentIds"]) == {id_one, id_two}
 
-    deleted_list = await async_client.get(
+    archived_list = await async_client.get(
         f"{workspace_base}/documents",
         headers=headers,
-        params={"lifecycle": "deleted"},
+        params={"lifecycle": "archived"},
     )
-    assert deleted_list.status_code == 200, deleted_list.text
-    deleted_ids = {item["id"] for item in deleted_list.json()["items"]}
-    assert {id_one, id_two}.issubset(deleted_ids)
+    assert archived_list.status_code == 200, archived_list.text
+    archived_ids = {item["id"] for item in archived_list.json()["items"]}
+    assert {id_one, id_two}.issubset(archived_ids)
 
     restored = await async_client.post(
         f"{workspace_base}/documents/batch/restore",

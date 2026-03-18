@@ -15,7 +15,7 @@ import { DocumentRunPhaseCell } from "./cells/DocumentRunPhaseCell";
 import { TagsCell } from "./cells/TagsCell";
 
 export type DocumentsColumnContext = {
-  lifecycle: "active" | "deleted";
+  lifecycle: "active" | "archived";
   people: WorkspacePerson[];
   currentUserId: string;
   tagOptions: string[];
@@ -69,7 +69,6 @@ export function useDocumentsColumns({
   isRowActionPending,
   inlineRenameRequest,
 }: DocumentsColumnContext) {
-  const isDeletedLifecycle = lifecycle === "deleted";
   const runStatusOptions = useMemo(() => {
     const statuses = (["queued", "running", "succeeded", "failed", "cancelled"] as RunStatus[]).map((value) => ({
       value,
@@ -179,7 +178,7 @@ export function useDocumentsColumns({
             people={people}
             currentUserId={currentUserId}
             onAssign={(assigneeId) => onAssign(row.original.id, assigneeId)}
-            disabled={isDeletedLifecycle || (isRowActionPending?.(row.original.id) ?? false)}
+            disabled={isRowActionPending?.(row.original.id) ?? false}
           />
         ),
         meta: {
@@ -205,7 +204,7 @@ export function useDocumentsColumns({
             onToggle={(tag) => onToggleTag(row.original.id, tag)}
             onTagOptionsChange={onTagOptionsChange}
             onCreateTag={onCreateTag}
-            disabled={isDeletedLifecycle || (isRowActionPending?.(row.original.id) ?? false)}
+            disabled={isRowActionPending?.(row.original.id) ?? false}
           />
         ),
         meta: {
@@ -289,13 +288,13 @@ export function useDocumentsColumns({
       {
         id: "deletedAt",
         accessorKey: "deletedAt",
-        header: ({ column }) => <DataTableColumnHeader column={column} label="Deleted" />,
+        header: ({ column }) => <DataTableColumnHeader column={column} label="Archived" />,
         cell: ({ row }) => {
           const value = row.getValue<string | null>("deletedAt");
           return value ? formatTimestamp(value) : <span className="text-muted-foreground">-</span>;
         },
         meta: {
-          label: "Deleted",
+          label: "Archived",
         } as DocumentsColumnMeta,
         size: 150,
         enableColumnFilter: false,
@@ -376,7 +375,6 @@ export function useDocumentsColumns({
     [
       lifecycle,
       fileTypeOptions,
-      isDeletedLifecycle,
       isRowActionPending,
       assigneeFilterOptions,
       currentUserId,
