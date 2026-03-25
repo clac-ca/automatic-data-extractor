@@ -21,6 +21,7 @@ from ade_db.models import (
     WorkspaceMembership,
 )
 from tests.api.integration.documents.helpers import ensure_configuration
+from tests.api.integration.helpers_access import create_group_with_workspace_role
 from tests.api.utils import login
 
 pytestmark = pytest.mark.asyncio
@@ -214,6 +215,62 @@ async def test_note_thread_accepts_mentions_for_workspace_principals_without_mem
     assert created.status_code == 201, created.text
     payload = created.json()
     assert payload["comments"][0]["mentions"][0]["user"]["id"] == str(mentioned.id)
+
+
+async def test_note_thread_accepts_mentions_for_group_derived_workspace_members(
+    async_client: AsyncClient,
+    seed_identity,
+    db_session,
+) -> None:
+    author = seed_identity.member
+    mentioned = seed_identity.orphan
+    membership = db_session.execute(
+        select(WorkspaceMembership).where(
+            WorkspaceMembership.workspace_id == seed_identity.workspace_id,
+            WorkspaceMembership.user_id == mentioned.id,
+        )
+    ).scalar_one_or_none()
+    assert membership is None
+
+    create_group_with_workspace_role(
+        db_session,
+        workspace_id=seed_identity.workspace_id,
+        user_id=mentioned.id,
+        display_name="Mention Collaborators",
+        slug=f"mention-collaborators-{generate_uuid7()}",
+    )
+    await anyio.to_thread.run_sync(db_session.commit)
+
+    document = await _create_document(
+        db_session,
+        workspace_id=seed_identity.workspace_id,
+        user_id=author.id,
+    )
+
+    label = f"@{mentioned.email}"
+    body = f"Please review {label}"
+    created = await async_client.post(
+        f"/api/v1/workspaces/{seed_identity.workspace_id}/documents/{document.id}/threads",
+        headers=await _auth_headers(async_client, author),
+        json={
+            "anchorType": "note",
+            "body": body,
+            "mentions": [_mention_payload(body, label, mentioned.id)],
+        },
+    )
+
+    assert created.status_code == 201, created.text
+    payload = created.json()
+    assert payload["comments"][0]["mentions"] == [
+        {
+            "user": {
+                "id": str(mentioned.id),
+                "email": mentioned.email,
+            },
+            "start": body.index(label),
+            "end": body.index(label) + len(label),
+        }
+    ]
 
 
 async def test_reply_to_document_and_run_items_keeps_timeline_position(

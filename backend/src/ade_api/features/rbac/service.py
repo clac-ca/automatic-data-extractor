@@ -309,6 +309,10 @@ class RbacService:
             return true()
         return Group.source == GroupSource.INTERNAL
 
+    def build_group_source_filter(self) -> Any:
+        """Return the SQL predicate for group sources that contribute effective access."""
+        return self._group_source_filter()
+
     # ------------- registry sync -----------------
 
     def _permission_id_map(self, definitions: Iterable[PermissionDef]) -> dict[str, UUID]:
