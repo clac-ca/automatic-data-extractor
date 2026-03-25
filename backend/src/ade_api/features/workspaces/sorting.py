@@ -16,6 +16,10 @@ def _lower(value: str | None) -> str:
     return (value or "").lower()
 
 
+def _member_label(item: WorkspaceMemberOut) -> str:
+    return item.user.display_name or item.user.email or str(item.user_id)
+
+
 DEFAULT_SORT = ["name"]
 
 MEMBER_DEFAULT_SORT = ["label", "userId"]
@@ -33,7 +37,7 @@ MEMBER_CURSOR_FIELDS: dict[str, CursorFieldSpec[WorkspaceMemberOut]] = {
     "id": cursor_field(lambda item: item.user_id, parse_uuid),
     "userId": cursor_field(lambda item: item.user_id, parse_uuid),
     "label": cursor_field(
-        lambda item: _lower(item.user.display_name or item.user.email or item.user_id),
+        lambda item: _lower(_member_label(item)),
         parse_str,
     ),
     "displayName": cursor_field(

@@ -1,12 +1,14 @@
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Any, cast
 from uuid import UUID
 
 from sqlalchemy import and_, false, select, true
 from sqlalchemy.orm import Session
+from sqlalchemy.sql.elements import ColumnElement
 
 from ade_api.features.rbac.service import RbacService
 from ade_api.settings import Settings
@@ -89,17 +91,18 @@ class EffectiveWorkspaceMember:
         )
 
 
-def workspace_access_role_filter(role_id_column: object) -> object:
+def workspace_access_role_filter(role_id_column: Any) -> ColumnElement[bool]:
     """Return a predicate matching roles that grant workspace-scoped access."""
 
-    return (
+    return cast(
+        ColumnElement[bool],
         select(RolePermission.role_id)
         .join(Permission, Permission.id == RolePermission.permission_id)
         .where(
             RolePermission.role_id == role_id_column,
             Permission.scope_type == ScopeType.WORKSPACE,
         )
-        .exists()
+        .exists(),
     )
 
 
@@ -211,7 +214,7 @@ class EffectiveWorkspaceMembersResolver:
         *,
         workspace_id: UUID,
         user_ids: set[UUID] | None,
-    ) -> Iterable[tuple[UserRoleAssignment, User, Role]]:
+    ) -> Sequence[tuple[UserRoleAssignment, User, Role]]:
         stmt = (
             select(UserRoleAssignment, User, Role)
             .join(User, UserRoleAssignment.user_id == User.id)
@@ -225,14 +228,17 @@ class EffectiveWorkspaceMembersResolver:
         )
         if user_ids:
             stmt = stmt.where(UserRoleAssignment.user_id.in_(user_ids))
-        return self._session.execute(stmt).all()
+        return cast(
+            Sequence[tuple[UserRoleAssignment, User, Role]],
+            self._session.execute(stmt).tuples().all(),
+        )
 
     def _direct_principal_assignments(
         self,
         *,
         workspace_id: UUID,
         user_ids: set[UUID] | None,
-    ) -> Iterable[tuple[RoleAssignment, User, Role]]:
+    ) -> Sequence[tuple[RoleAssignment, User, Role]]:
         stmt = (
             select(RoleAssignment, User, Role)
             .join(
@@ -254,14 +260,17 @@ class EffectiveWorkspaceMembersResolver:
         )
         if user_ids:
             stmt = stmt.where(RoleAssignment.principal_id.in_(user_ids))
-        return self._session.execute(stmt).all()
+        return cast(
+            Sequence[tuple[RoleAssignment, User, Role]],
+            self._session.execute(stmt).tuples().all(),
+        )
 
     def _group_assignments(
         self,
         *,
         workspace_id: UUID,
         user_ids: set[UUID] | None,
-    ) -> Iterable[tuple[RoleAssignment, Group, GroupMembership, User, Role]]:
+    ) -> Sequence[tuple[RoleAssignment, Group, GroupMembership, User, Role]]:
         stmt = (
             select(RoleAssignment, Group, GroupMembership, User, Role)
             .join(
@@ -287,7 +296,10 @@ class EffectiveWorkspaceMembersResolver:
         )
         if user_ids:
             stmt = stmt.where(User.id.in_(user_ids))
-        return self._session.execute(stmt).all()
+        return cast(
+            Sequence[tuple[RoleAssignment, Group, GroupMembership, User, Role]],
+            self._session.execute(stmt).tuples().all(),
+        )
 
 
 __all__ = [
