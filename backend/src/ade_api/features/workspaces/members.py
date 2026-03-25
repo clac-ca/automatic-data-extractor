@@ -61,7 +61,7 @@ def list_workspace_members(
     _actor: Annotated[
         User,
         Security(
-            require_workspace("workspace.members.read"),
+            require_workspace("workspace.read"),
             scopes=["{workspaceId}"],
         ),
     ],

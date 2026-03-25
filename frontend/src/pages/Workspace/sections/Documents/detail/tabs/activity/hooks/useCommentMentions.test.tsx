@@ -46,6 +46,9 @@ describe("useCommentMentions", () => {
                 email: "ada@example.com",
                 display_name: "Ada Lovelace",
               },
+              access_mode: "direct",
+              is_directly_managed: true,
+              sources: [],
             },
           ]
         : [],

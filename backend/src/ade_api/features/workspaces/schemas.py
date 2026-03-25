@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import Field
 
 from ade_api.common.cursor_listing import CursorPage
 from ade_api.common.ids import UUIDStr
 from ade_api.common.schema import BaseSchema
+from ade_db.models import PrincipalType
 
 
 class WorkspaceOut(BaseSchema):
@@ -63,13 +64,38 @@ class WorkspacePage(CursorPage[WorkspaceOut]):
     """Cursor-based workspace listing."""
 
 
+class WorkspaceMemberUserOut(BaseSchema):
+    """Renderable user identity for a workspace member."""
+
+    id: UUIDStr
+    email: str
+    display_name: str | None = None
+
+
+class WorkspaceMemberSourceOut(BaseSchema):
+    """A direct or indirect grant source contributing to effective access."""
+
+    principal_type: PrincipalType
+    principal_id: UUIDStr
+    principal_display_name: str | None = None
+    principal_email: str | None = None
+    principal_slug: str | None = None
+    role_ids: list[UUIDStr]
+    role_slugs: list[str]
+    created_at: datetime
+
+
 class WorkspaceMemberOut(BaseSchema):
-    """Workspace member with their role IDs and slugs."""
+    """Effective workspace member with identity and access source metadata."""
 
     user_id: UUIDStr
     role_ids: list[UUIDStr]
     role_slugs: list[str]
     created_at: datetime
+    user: WorkspaceMemberUserOut
+    access_mode: Literal["direct", "indirect", "mixed"]
+    is_directly_managed: bool
+    sources: list[WorkspaceMemberSourceOut] = Field(default_factory=list)
 
 
 class WorkspaceMemberCreate(BaseSchema):
@@ -95,7 +121,9 @@ __all__ = [
     "WorkspaceMemberCreate",
     "WorkspaceMemberOut",
     "WorkspaceMemberPage",
+    "WorkspaceMemberSourceOut",
     "WorkspaceMemberUpdate",
+    "WorkspaceMemberUserOut",
     "WorkspaceOut",
     "WorkspaceUpdate",
     "WorkspacePage",
