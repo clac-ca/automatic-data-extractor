@@ -84,6 +84,7 @@ from .exceptions import (
     DocumentViewNotFoundError,
     DocumentWorksheetParseError,
     InvalidDocumentActivityThreadAnchorError,
+    InvalidDocumentAssigneeError,
     InvalidDocumentCommentMentionsError,
     InvalidDocumentRenameError,
     InvalidDocumentTagsError,
@@ -794,6 +795,8 @@ def update_document(
     except DocumentNameConflictError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except InvalidDocumentRenameError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
+    except InvalidDocumentAssigneeError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
     except DocumentNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc

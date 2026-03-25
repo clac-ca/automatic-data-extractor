@@ -1050,6 +1050,54 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspaceId}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List workspace members with their roles
+         * @description List workspace members with their roles.
+         */
+        get: operations["list_workspace_members_api_v1_workspaces__workspaceId__members_get"];
+        put?: never;
+        /**
+         * Add a workspace member with roles
+         * @description Add a workspace member with roles.
+         */
+        post: operations["add_workspace_member_api_v1_workspaces__workspaceId__members_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspaceId}/members/{userId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Replace workspace member roles
+         * @description Replace workspace member roles.
+         */
+        put: operations["update_workspace_member_api_v1_workspaces__workspaceId__members__userId__put"];
+        post?: never;
+        /**
+         * Remove a workspace member
+         * @description Remove a workspace member.
+         */
+        delete: operations["remove_workspace_member_api_v1_workspaces__workspaceId__members__userId__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspaceId}/documents/tags": {
         parameters: {
             query?: never;
@@ -5854,6 +5902,116 @@ export type components = {
             processing_paused?: boolean | null;
         };
         /**
+         * WorkspaceMemberCreate
+         * @description Payload for adding a new workspace member with roles.
+         */
+        WorkspaceMemberCreate: {
+            /**
+             * User Id
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
+             */
+            user_id: string;
+            /** Role Ids */
+            role_ids: string[];
+        };
+        /**
+         * WorkspaceMemberOut
+         * @description Effective workspace member with identity and access source metadata.
+         */
+        WorkspaceMemberOut: {
+            /**
+             * User Id
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
+             */
+            user_id: string;
+            /** Role Ids */
+            role_ids: string[];
+            /** Role Slugs */
+            role_slugs: string[];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            user: components["schemas"]["WorkspaceMemberUserOut"];
+            /**
+             * Access Mode
+             * @enum {string}
+             */
+            access_mode: "direct" | "indirect" | "mixed";
+            /** Is Directly Managed */
+            is_directly_managed: boolean;
+            /** Sources */
+            sources?: components["schemas"]["WorkspaceMemberSourceOut"][];
+        };
+        /**
+         * WorkspaceMemberPage
+         * @description Cursor-based collection of workspace members.
+         */
+        WorkspaceMemberPage: {
+            /** Items */
+            items: components["schemas"]["WorkspaceMemberOut"][];
+            meta: components["schemas"]["CursorMeta"];
+            /** Facets */
+            facets?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /**
+         * WorkspaceMemberSourceOut
+         * @description A direct or indirect grant source contributing to effective access.
+         */
+        WorkspaceMemberSourceOut: {
+            principal_type: components["schemas"]["PrincipalType"];
+            /**
+             * Principal Id
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
+             */
+            principal_id: string;
+            /** Principal Display Name */
+            principal_display_name?: string | null;
+            /** Principal Email */
+            principal_email?: string | null;
+            /** Principal Slug */
+            principal_slug?: string | null;
+            /** Role Ids */
+            role_ids: string[];
+            /** Role Slugs */
+            role_slugs: string[];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /**
+         * WorkspaceMemberUpdate
+         * @description Payload for updating workspace member roles.
+         */
+        WorkspaceMemberUpdate: {
+            /** Role Ids */
+            role_ids: string[];
+        };
+        /**
+         * WorkspaceMemberUserOut
+         * @description Renderable user identity for a workspace member.
+         */
+        WorkspaceMemberUserOut: {
+            /**
+             * Id
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
+             */
+            id: string;
+            /** Email */
+            email: string;
+            /** Display Name */
+            display_name?: string | null;
+        };
+        /**
          * WorkspaceOut
          * @description Workspace information decorated with membership metadata.
          */
@@ -9217,6 +9375,179 @@ export interface operations {
             };
             /** @description Workspace access denied for the authenticated user. */
             403: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    list_workspace_members_api_v1_workspaces__workspaceId__members_get: {
+        parameters: {
+            query?: {
+                /** @description Items per page (max 200) */
+                limit?: number;
+                /** @description Opaque cursor token for pagination. */
+                cursor?: string | null;
+                /** @description JSON array of {id, desc}. */
+                sort?: string | null;
+                /** @description URL-encoded JSON array of filter objects. */
+                filters?: string | null;
+                /** @description Logical operator to join filters (and/or). */
+                joinOperator?: components["schemas"]["FilterJoinOperator"];
+                /** @description Free-text search string. Tokens are whitespace-separated, matched case-insensitively as substrings; tokens shorter than 2 characters are ignored. */
+                q?: string | null;
+                /** @description Include totalCount in the response. */
+                includeTotal?: boolean;
+                /** @description Include facet counts in the response. */
+                includeFacets?: boolean;
+            };
+            header?: never;
+            path: {
+                /** @description Workspace identifier */
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceMemberPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    add_workspace_member_api_v1_workspaces__workspaceId__members_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Workspace identifier */
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkspaceMemberCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceMemberOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    update_workspace_member_api_v1_workspaces__workspaceId__members__userId__put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Workspace identifier */
+                workspaceId: string;
+                /** @description User identifier */
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkspaceMemberUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceMemberOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    remove_workspace_member_api_v1_workspaces__workspaceId__members__userId__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Workspace identifier */
+                workspaceId: string;
+                /** @description User identifier */
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
                 headers: {
                     "X-Request-Id": components["headers"]["X-Request-Id"];
                     [name: string]: unknown;

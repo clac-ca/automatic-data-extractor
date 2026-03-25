@@ -43,10 +43,10 @@ from ade_api.common.workbook_preview import (
     build_workbook_preview_from_xlsx,
 )
 from ade_api.features.runs.schemas import RunColumnResource, RunFieldResource, RunMetricsResource
+from ade_api.features.workspaces.effective_members import EffectiveWorkspaceMembersResolver
 from ade_api.settings import Settings
 from ade_db import utc_now
 from ade_db.models import (
-    AssignmentScopeType,
     DocumentActivityThread,
     DocumentActivityThreadAnchorType,
     DocumentView,
@@ -58,15 +58,12 @@ from ade_db.models import (
     FileTag,
     FileVersion,
     FileVersionOrigin,
-    PrincipalType,
-    RoleAssignment,
     Run,
     RunField,
     RunMetrics,
     RunStatus,
     RunTableColumn,
     User,
-    WorkspaceMembership,
 )
 from ade_storage import StorageAdapter, StorageError, StorageLimitError, StoredObject
 
@@ -95,6 +92,7 @@ from .exceptions import (
     DocumentViewNotFoundError,
     DocumentWorksheetParseError,
     InvalidDocumentActivityThreadAnchorError,
+    InvalidDocumentAssigneeError,
     InvalidDocumentCommentMentionsError,
     InvalidDocumentRenameError,
     InvalidDocumentTagsError,
@@ -225,6 +223,10 @@ class DocumentsService:
         self._settings = settings
         self._storage = storage
         self._repository = DocumentsRepository(session)
+        self._effective_members = EffectiveWorkspaceMembersResolver(
+            session=session,
+            settings=settings,
+        )
 
     def plan_upload(
         self,
@@ -1110,6 +1112,13 @@ class DocumentsService:
                 changed = True
 
         if "assignee_user_id" in payload.model_fields_set:
+            if payload.assignee_user_id is not None:
+                self._ensure_effective_member(
+                    workspace_id=workspace_id,
+                    user_id=UUID(str(payload.assignee_user_id)),
+                    error_cls=InvalidDocumentAssigneeError,
+                    missing_message="Unknown or non-member assignee: {user_id}",
+                )
             if document.assignee_user_id != payload.assignee_user_id:
                 document.assignee_user_id = payload.assignee_user_id
                 assignee_changed = True
@@ -2231,38 +2240,48 @@ class DocumentsService:
             last_end = mention.end
 
         unique_ids = list(dict.fromkeys(UUID(str(mention.user_id)) for mention in ordered_mentions))
-        workspace_membership_ids = (
-            select(WorkspaceMembership.user_id)
-            .where(WorkspaceMembership.workspace_id == workspace_id)
+        users = self._resolve_effective_member_users(
+            workspace_id=workspace_id,
+            user_ids=unique_ids,
         )
-        workspace_principal_ids = (
-            select(RoleAssignment.principal_id)
-            .where(RoleAssignment.scope_type == AssignmentScopeType.WORKSPACE)
-            .where(RoleAssignment.scope_id == workspace_id)
-            .where(RoleAssignment.principal_type == PrincipalType.USER)
-        )
-        stmt = (
-            select(User)
-            .where(User.id.in_(unique_ids))
-            .where(
-                or_(
-                    User.id.in_(workspace_membership_ids),
-                    User.id.in_(workspace_principal_ids),
-                )
-            )
-        )
-        users = list(self._session.execute(stmt).scalars())
-        found = {user.id for user in users}
+        found = set(users)
         missing = [str(user_id) for user_id in unique_ids if user_id not in found]
         if missing:
             raise InvalidDocumentCommentMentionsError(
                 f"Unknown or non-member mentions: {', '.join(missing)}"
             )
-        user_by_id = {user.id: user for user in users}
         return [
-            (mention, user_by_id[UUID(str(mention.user_id))])
+            (mention, users[UUID(str(mention.user_id))])
             for mention in ordered_mentions
         ]
+
+    def _resolve_effective_member_users(
+        self,
+        *,
+        workspace_id: UUID,
+        user_ids: Sequence[UUID],
+    ) -> dict[UUID, User]:
+        members = self._effective_members.list_members(
+            workspace_id=workspace_id,
+            user_ids=user_ids,
+        )
+        return {member.user.id: member.user for member in members}
+
+    def _ensure_effective_member(
+        self,
+        *,
+        workspace_id: UUID,
+        user_id: UUID,
+        error_cls: type[Exception],
+        missing_message: str,
+    ) -> User:
+        member = self._effective_members.member_by_user_id(
+            workspace_id=workspace_id,
+            user_id=user_id,
+        )
+        if member is None:
+            raise error_cls(missing_message.format(user_id=user_id))
+        return member.user
 
     def _require_documents(
         self,

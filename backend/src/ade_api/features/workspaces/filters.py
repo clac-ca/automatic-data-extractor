@@ -15,7 +15,7 @@ from ade_api.common.list_filters import (
 from ade_api.common.search import matches_tokens, parse_q
 from ade_db.models import UserRoleAssignment, Workspace
 
-from .schemas import WorkspaceOut
+from .schemas import WorkspaceMemberOut, WorkspaceOut
 
 WORKSPACE_FILTER_REGISTRY = FilterRegistry([
     FilterField(
@@ -137,17 +137,14 @@ def evaluate_workspace_filters(
 
 
 def evaluate_member_filters(
-    assignments: Sequence[UserRoleAssignment],
+    member: WorkspaceMemberOut,
     parsed_filters: Sequence[ParsedFilter],
     *,
     join_operator: FilterJoinOperator,
 ) -> bool:
-    if not assignments:
-        return False
-    user = assignments[0].user
-    user_id = assignments[0].user_id
-    role_ids = {assignment.role_id for assignment in assignments}
-    is_active = bool(getattr(user, "is_active", True)) if user is not None else True
+    user_id = member.user_id
+    role_ids = {str(role_id) for role_id in member.role_ids}
+    is_active = True
 
     results: list[bool] = []
     for parsed in parsed_filters:
@@ -167,7 +164,7 @@ def evaluate_member_filters(
         if filter_id == "roleId":
             values = value if isinstance(value, list) else [value]
             role_values = {str(item) for item in values}
-            match = any(str(role_id) in role_values for role_id in role_ids)
+            match = any(role_id in role_values for role_id in role_ids)
             if operator in {FilterOperator.NE, FilterOperator.NOT_IN}:
                 match = not match
             results.append(match)
