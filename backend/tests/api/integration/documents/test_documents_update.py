@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import anyio
 import pytest
 from httpx import AsyncClient
 
+from tests.api.integration.helpers_access import create_group_with_workspace_role
 from tests.api.utils import login
 
 pytestmark = pytest.mark.asyncio
@@ -173,3 +175,88 @@ async def test_update_document_rename_whitespace_only_returns_422(
         json={"name": "   "},
     )
     assert rename.status_code == 422, rename.text
+
+
+async def test_update_document_assignment_accepts_group_derived_workspace_member(
+    async_client: AsyncClient,
+    seed_identity,
+    db_session,
+) -> None:
+    member = seed_identity.member
+    token, _ = await login(
+        async_client,
+        email=member.email,
+        password=member.password,
+    )
+    workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
+    headers = {"X-API-Key": token}
+
+    create_group_with_workspace_role(
+        db_session,
+        workspace_id=seed_identity.workspace_id,
+        user_id=seed_identity.orphan.id,
+        display_name="Assignment Collaborators",
+        slug=f"assignment-collaborators-{seed_identity.orphan.id}",
+    )
+    await anyio.to_thread.run_sync(db_session.commit)
+
+    upload = await async_client.post(
+        f"{workspace_base}/documents",
+        headers=headers,
+        files={
+            "file": (
+                "assignable.xlsx",
+                b"payload",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+    assert upload.status_code == 201, upload.text
+    document_id = upload.json()["id"]
+
+    assigned = await async_client.patch(
+        f"{workspace_base}/documents/{document_id}",
+        headers=headers,
+        json={"assigneeId": str(seed_identity.orphan.id)},
+    )
+    assert assigned.status_code == 200, assigned.text
+    payload = assigned.json()
+    assert payload["id"] == document_id
+    assert payload["assignee"]["id"] == str(seed_identity.orphan.id)
+    assert payload["assignee"]["email"] == seed_identity.orphan.email
+
+
+async def test_update_document_assignment_rejects_non_member_assignee(
+    async_client: AsyncClient,
+    seed_identity,
+) -> None:
+    member = seed_identity.member
+    token, _ = await login(
+        async_client,
+        email=member.email,
+        password=member.password,
+    )
+    workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
+    headers = {"X-API-Key": token}
+
+    upload = await async_client.post(
+        f"{workspace_base}/documents",
+        headers=headers,
+        files={
+            "file": (
+                "assignable.xlsx",
+                b"payload",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+    assert upload.status_code == 201, upload.text
+    document_id = upload.json()["id"]
+
+    assigned = await async_client.patch(
+        f"{workspace_base}/documents/{document_id}",
+        headers=headers,
+        json={"assigneeId": str(seed_identity.orphan.id)},
+    )
+    assert assigned.status_code == 422, assigned.text
+    assert assigned.json()["detail"] == f"Unknown or non-member assignee: {seed_identity.orphan.id}"

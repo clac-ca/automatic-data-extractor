@@ -174,6 +174,13 @@ class InvalidDocumentCommentMentionsError(Exception):
         super().__init__(message)
 
 
+class InvalidDocumentAssigneeError(Exception):
+    """Raised when a document assignee is not a valid effective workspace member."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+
+
 class DocumentCommentNotFoundError(Exception):
     """Raised when a requested document comment does not exist."""
 
@@ -257,6 +264,7 @@ __all__ = [
     "DocumentVersionNotFoundError",
     "InvalidDocumentTagsError",
     "InvalidDocumentCommentMentionsError",
+    "InvalidDocumentAssigneeError",
     "DocumentCommentNotFoundError",
     "DocumentCommentEditForbiddenError",
     "DocumentCommentDeleteForbiddenError",

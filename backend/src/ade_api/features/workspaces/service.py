@@ -5,14 +5,13 @@ from __future__ import annotations
 import logging
 import re
 import shutil
-from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import delete, select, true, update
+from sqlalchemy import and_, select, true, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
@@ -20,14 +19,15 @@ from ade_api.common.cursor_listing import ResolvedCursorSort, paginate_sequence_
 from ade_api.common.list_filters import FilterItem, FilterJoinOperator
 from ade_api.common.logging import log_context
 from ade_api.common.search import matches_tokens, parse_q
+from ade_api.core.rbac.registry import role_allows_scope
 from ade_api.features.rbac import (
-    AssignmentError,
     RbacService,
     RoleConflictError,
     RoleImmutableError,
     RoleNotFoundError,
     RoleValidationError,
     ScopeMismatchError,
+    ScopeType,
 )
 from ade_api.settings import Settings
 from ade_db.models import (
@@ -45,6 +45,11 @@ from ade_db.models import (
 )
 
 from ..users.repository import UsersRepository
+from .effective_members import (
+    EffectiveWorkspaceMember,
+    EffectiveWorkspaceMembersResolver,
+    role_grants_workspace_access,
+)
 from .filters import (
     evaluate_member_filters,
     evaluate_workspace_filters,
@@ -89,6 +94,10 @@ class WorkspacesService:
         self._repo = WorkspacesRepository(session)
         self._users_repo = UsersRepository(session)
         self._rbac = RbacService(session=session)
+        self._effective_members = EffectiveWorkspaceMembersResolver(
+            session=session,
+            settings=settings,
+        )
 
     # ------------------------------------------------------------------
     # Workspace profiles
@@ -324,8 +333,7 @@ class WorkspacesService:
         else:
             memberships = self._repo.list_for_user(user_id=user_id)
             membership_by_workspace = {
-                membership.workspace_id: membership
-                for membership in memberships
+                membership.workspace_id: membership for membership in memberships
             }
             workspace_ids = self._workspace_ids_with_access(user=user)
             workspace_ids.update(membership_by_workspace.keys())
@@ -626,19 +634,14 @@ class WorkspacesService:
     ) -> WorkspaceMemberPage:
         self._ensure_workspace(workspace_id)
         parsed_filters = parse_workspace_member_filters(filters)
-        include_inactive = any(parsed.field.id == "isActive" for parsed in parsed_filters)
-        assignments = self._get_workspace_assignments(
-            workspace_id=workspace_id,
-            user_id=None,
-            include_inactive=include_inactive,
-        )
-        grouped: dict[UUID, list[UserRoleAssignment]] = defaultdict(list)
-        for assignment in assignments:
-            grouped[assignment.user_id].append(assignment)
         members = [
-            self._serialize_member(group)
-            for group in grouped.values()
-            if evaluate_member_filters(group, parsed_filters, join_operator=join_operator)
+            self._serialize_effective_member(member)
+            for member in self._effective_members.list_members(workspace_id=workspace_id)
+        ]
+        members = [
+            member
+            for member in members
+            if evaluate_member_filters(member, parsed_filters, join_operator=join_operator)
         ]
         if q:
             tokens = parse_q(q).tokens
@@ -647,7 +650,10 @@ class WorkspacesService:
                 for member in members
                 if matches_tokens(
                     tokens,
-                    [str(member.user_id), *member.role_slugs],
+                    [
+                        member.user.display_name,
+                        member.user.email,
+                    ],
                 )
             ]
         page_result = paginate_sequence_cursor(
@@ -676,20 +682,13 @@ class WorkspacesService:
                 detail="role_ids must include at least one role",
             )
 
-        for role_id in payload.role_ids:
-            try:
-                self._rbac.assign_role_if_missing(
-                    user_id=payload.user_id,
-                    role_id=role_id,
-                    workspace_id=workspace_id,
-                )
-            except (RoleNotFoundError, AssignmentError) as exc:
-                raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-            except ScopeMismatchError as exc:
-                raise HTTPException(
-                    status.HTTP_422_UNPROCESSABLE_CONTENT,
-                    detail=str(exc),
-                ) from exc
+        self._validate_member_target_user(user_id=payload.user_id)
+        self._validate_member_role_ids(role_ids=payload.role_ids)
+        self._assign_roles_to_member(
+            user_id=payload.user_id,
+            workspace_id=workspace_id,
+            role_ids=payload.role_ids,
+        )
 
         membership = self._repo.get_membership_for_workspace(
             user_id=payload.user_id,
@@ -702,16 +701,9 @@ class WorkspacesService:
                 is_default=False,
             )
 
-        assignments = self._get_workspace_assignments(
-            workspace_id=workspace_id,
-            user_id=payload.user_id,
+        return self._serialize_effective_member(
+            self._load_effective_member(workspace_id=workspace_id, user_id=payload.user_id)
         )
-        if not assignments:
-            raise HTTPException(
-                status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to create workspace member",
-            )
-        return self._serialize_member(assignments)
 
     def update_workspace_member_roles(
         self,
@@ -727,6 +719,9 @@ class WorkspacesService:
                 status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="role_ids must include at least one role",
             )
+
+        self._validate_member_target_user(user_id=user_id)
+        self._validate_member_role_ids(role_ids=payload.role_ids)
 
         membership = self._repo.get_membership_for_workspace(
             user_id=user_id,
@@ -745,16 +740,9 @@ class WorkspacesService:
             role_ids=list(payload.role_ids),
         )
 
-        assignments = self._get_workspace_assignments(
-            workspace_id=workspace_id,
-            user_id=user_id,
+        return self._serialize_effective_member(
+            self._load_effective_member(workspace_id=workspace_id, user_id=user_id)
         )
-        if not assignments:
-            raise HTTPException(
-                status.HTTP_404_NOT_FOUND,
-                detail="Workspace member not found",
-            )
-        return self._serialize_member(assignments)
 
     def remove_workspace_member(
         self,
@@ -764,21 +752,34 @@ class WorkspacesService:
     ) -> None:
         self._ensure_workspace(workspace_id)
 
-        assignments = self._get_workspace_assignments(
+        direct_assignments = self._get_workspace_assignments(
             workspace_id=workspace_id,
             user_id=user_id,
         )
-        if not assignments:
+        direct_principal_assignments = self._get_direct_user_principal_assignments(
+            workspace_id=workspace_id,
+            user_id=user_id,
+        )
+        effective_member = self._effective_members.member_by_user_id(
+            workspace_id=workspace_id,
+            user_id=user_id,
+        )
+        if not direct_assignments and not direct_principal_assignments and effective_member is None:
             raise HTTPException(
                 status.HTTP_404_NOT_FOUND,
                 detail="Workspace member not found",
             )
 
-        for assignment in assignments:
+        for assignment in direct_assignments:
             self._rbac.delete_assignment(
                 assignment_id=assignment.id,
                 workspace_id=workspace_id,
             )
+        legacy_role_ids = {assignment.role_id for assignment in direct_assignments}
+        for assignment in direct_principal_assignments:
+            if assignment.role_id in legacy_role_ids:
+                continue
+            self._rbac.delete_principal_assignment(assignment_id=assignment.id)
         self._delete_membership_if_exists(
             workspace_id=workspace_id,
             user_id=user_id,
@@ -979,29 +980,87 @@ class WorkspacesService:
         result = self._session.execute(stmt)
         return list(result.scalars().all())
 
-    def _serialize_member(self, assignments: Sequence[UserRoleAssignment]) -> WorkspaceMemberOut:
-        assignments = list(assignments)
-        if not assignments:
-            raise ValueError("workspace member requires at least one assignment")
-        user_id = assignments[0].user_id
-        role_ids = [assignment.role_id for assignment in assignments]
-        role_slugs = [
-            assignment.role.slug if assignment.role is not None else ""
-            for assignment in assignments
-        ]
-        created_at = min(assignment.created_at for assignment in assignments)
-        return WorkspaceMemberOut(
-            user_id=user_id,
-            role_ids=role_ids,
-            role_slugs=role_slugs,
-            created_at=created_at,
+    def _get_direct_user_principal_assignments(
+        self,
+        *,
+        workspace_id: UUID,
+        user_id: UUID,
+    ) -> list[RoleAssignment]:
+        stmt = select(RoleAssignment).where(
+            RoleAssignment.principal_type == PrincipalType.USER,
+            RoleAssignment.principal_id == user_id,
+            RoleAssignment.scope_type == AssignmentScopeType.WORKSPACE,
+            RoleAssignment.scope_id == workspace_id,
         )
+        result = self._session.execute(stmt)
+        return list(result.scalars().all())
 
-    def _group_members(self, assignments: list[UserRoleAssignment]) -> list[WorkspaceMemberOut]:
-        grouped: dict[UUID, list[UserRoleAssignment]] = defaultdict(list)
-        for assignment in assignments:
-            grouped[assignment.user_id].append(assignment)
-        return [self._serialize_member(group) for group in grouped.values()]
+    def _serialize_effective_member(
+        self,
+        member: EffectiveWorkspaceMember,
+    ) -> WorkspaceMemberOut:
+        sources = sorted(
+            member.source_map.values(),
+            key=lambda source: (
+                0 if source.principal_type == PrincipalType.USER else 1,
+                (
+                    source.principal_display_name
+                    or source.principal_email
+                    or source.principal_slug
+                    or str(source.principal_id)
+                ).lower(),
+                str(source.principal_id),
+            ),
+        )
+        role_pairs = sorted(
+            member.role_map.items(),
+            key=lambda item: (item[1].lower(), str(item[0])),
+        )
+        if member.has_direct_access and member.has_indirect_access:
+            access_mode = "mixed"
+        elif member.has_direct_access:
+            access_mode = "direct"
+        else:
+            access_mode = "indirect"
+
+        return WorkspaceMemberOut(
+            user_id=member.user.id,
+            role_ids=[role_id for role_id, _role_slug in role_pairs],
+            role_slugs=[role_slug for _role_id, role_slug in role_pairs],
+            created_at=member.created_at or member.user.created_at,
+            user={
+                "id": member.user.id,
+                "email": member.user.email,
+                "display_name": member.user.display_name,
+            },
+            access_mode=access_mode,
+            is_directly_managed=member.has_direct_access,
+            sources=[
+                {
+                    "principal_type": source.principal_type,
+                    "principal_id": source.principal_id,
+                    "principal_display_name": source.principal_display_name,
+                    "principal_email": source.principal_email,
+                    "principal_slug": source.principal_slug,
+                    "role_ids": [
+                        role_id
+                        for role_id, _role_slug in sorted(
+                            source.role_map.items(),
+                            key=lambda item: (item[1].lower(), str(item[0])),
+                        )
+                    ],
+                    "role_slugs": [
+                        role_slug
+                        for _role_id, role_slug in sorted(
+                            source.role_map.items(),
+                            key=lambda item: (item[1].lower(), str(item[0])),
+                        )
+                    ],
+                    "created_at": source.created_at or member.user.created_at,
+                }
+                for source in sources
+            ],
+        )
 
     def _delete_membership_if_exists(
         self,
@@ -1060,6 +1119,7 @@ class WorkspacesService:
                 RoleAssignment.scope_id == workspace_id,
                 GroupMembership.user_id == user_id,
                 Group.is_active == true(),
+                self._rbac.build_group_source_filter(),
             )
         )
         role_slugs.update(self._session.execute(group_stmt).scalars().all())
@@ -1069,12 +1129,9 @@ class WorkspacesService:
     def _workspace_ids_with_access(self, *, user: User) -> set[UUID]:
         workspace_ids: set[UUID] = set()
 
-        legacy_stmt = (
-            select(UserRoleAssignment.workspace_id)
-            .where(
-                UserRoleAssignment.user_id == user.id,
-                UserRoleAssignment.workspace_id.is_not(None),
-            )
+        legacy_stmt = select(UserRoleAssignment.workspace_id).where(
+            UserRoleAssignment.user_id == user.id,
+            UserRoleAssignment.workspace_id.is_not(None),
         )
         workspace_ids.update(
             workspace_id
@@ -1082,14 +1139,11 @@ class WorkspacesService:
             if workspace_id is not None
         )
 
-        direct_stmt = (
-            select(RoleAssignment.scope_id)
-            .where(
-                RoleAssignment.principal_type == PrincipalType.USER,
-                RoleAssignment.principal_id == user.id,
-                RoleAssignment.scope_type == AssignmentScopeType.WORKSPACE,
-                RoleAssignment.scope_id.is_not(None),
-            )
+        direct_stmt = select(RoleAssignment.scope_id).where(
+            RoleAssignment.principal_type == PrincipalType.USER,
+            RoleAssignment.principal_id == user.id,
+            RoleAssignment.scope_type == AssignmentScopeType.WORKSPACE,
+            RoleAssignment.scope_id.is_not(None),
         )
         workspace_ids.update(
             workspace_id
@@ -1110,6 +1164,7 @@ class WorkspacesService:
                 RoleAssignment.scope_id.is_not(None),
                 GroupMembership.user_id == user.id,
                 Group.is_active == true(),
+                self._rbac.build_group_source_filter(),
             )
         )
         workspace_ids.update(
@@ -1173,6 +1228,92 @@ class WorkspacesService:
             except RoleConflictError:
                 continue
 
+    def _validate_member_target_user(self, *, user_id: UUID) -> User:
+        user = self._users_repo.get_by_id_basic(user_id)
+        if user is None:
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND,
+                detail="User not found",
+            )
+        if not user.is_active:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="User must be active to be a workspace member",
+            )
+        if user.is_service_account:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="Service accounts cannot be workspace members",
+            )
+        return user
+
+    def _validate_member_role_ids(self, *, role_ids: Sequence[UUID]) -> None:
+        requested_ids = tuple(dict.fromkeys(role_ids))
+        if not requested_ids:
+            return
+
+        stmt = (
+            select(Role)
+            .options(
+                selectinload(Role.permissions).selectinload(RolePermission.permission),
+            )
+            .where(Role.id.in_(requested_ids))
+        )
+        roles = list(self._session.execute(stmt).scalars().all())
+        role_by_id = {role.id: role for role in roles}
+
+        missing_role_ids = [str(role_id) for role_id in requested_ids if role_id not in role_by_id]
+        if missing_role_ids:
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND,
+                detail=f"Roles not found: {', '.join(missing_role_ids)}",
+            )
+
+        invalid_scope_role_ids = sorted(
+            str(role_id)
+            for role_id in requested_ids
+            if not role_allows_scope(role_by_id[role_id].slug, ScopeType.WORKSPACE)
+        )
+        if invalid_scope_role_ids:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=(
+                    "role_ids must be assignable to workspace scope: "
+                    + ", ".join(invalid_scope_role_ids)
+                ),
+            )
+
+        non_member_role_ids = sorted(
+            str(role_id)
+            for role_id in requested_ids
+            if not role_grants_workspace_access(role_by_id[role_id])
+        )
+        if non_member_role_ids:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=(
+                    "role_ids must grant workspace access: "
+                    + ", ".join(non_member_role_ids)
+                ),
+            )
+
+    def _load_effective_member(
+        self,
+        *,
+        workspace_id: UUID,
+        user_id: UUID,
+    ) -> EffectiveWorkspaceMember:
+        member = self._effective_members.member_by_user_id(
+            workspace_id=workspace_id,
+            user_id=user_id,
+        )
+        if member is None:
+            raise HTTPException(
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to load workspace member",
+            )
+        return member
+
     def _replace_member_roles(
         self,
         *,
@@ -1180,17 +1321,42 @@ class WorkspacesService:
         workspace_id: UUID,
         role_ids: Sequence[UUID],
     ) -> None:
-        criteria = [
-            UserRoleAssignment.user_id == user_id,
-            UserRoleAssignment.workspace_id == workspace_id,
-        ]
-        if role_ids:
-            criteria.append(~UserRoleAssignment.role_id.in_(role_ids))
-        self._session.execute(delete(UserRoleAssignment).where(*criteria))
+        desired_role_ids = set(role_ids or self._default_workspace_role_ids())
+        direct_assignments = self._get_workspace_assignments(
+            workspace_id=workspace_id,
+            user_id=user_id,
+        )
+        for assignment in direct_assignments:
+            if assignment.role_id in desired_role_ids:
+                continue
+            self._rbac.delete_assignment(
+                assignment_id=assignment.id,
+                workspace_id=workspace_id,
+            )
+
+        remaining_legacy_role_ids = {
+            assignment.role_id
+            for assignment in self._get_workspace_assignments(
+                workspace_id=workspace_id,
+                user_id=user_id,
+            )
+        }
+        direct_principal_assignments = self._get_direct_user_principal_assignments(
+            workspace_id=workspace_id,
+            user_id=user_id,
+        )
+        for assignment in direct_principal_assignments:
+            if (
+                assignment.role_id in desired_role_ids
+                or assignment.role_id in remaining_legacy_role_ids
+            ):
+                continue
+            self._rbac.delete_principal_assignment(assignment_id=assignment.id)
+
         self._assign_roles_to_member(
             user_id=user_id,
             workspace_id=workspace_id,
-            role_ids=role_ids or self._default_workspace_role_ids(),
+            role_ids=list(desired_role_ids),
         )
         self._ensure_owner_retained(workspace_id)
 
@@ -1198,13 +1364,44 @@ class WorkspacesService:
         owner_role = self._rbac.get_role_by_slug(slug=_WORKSPACE_OWNER_SLUG)
         if owner_role is None:
             return
-        result = self._session.execute(
+        legacy_owner = self._session.execute(
             select(UserRoleAssignment.id).where(
                 UserRoleAssignment.role_id == owner_role.id,
                 UserRoleAssignment.workspace_id == workspace_id,
             )
-        )
-        if result.scalar_one_or_none() is None:
+        ).scalar_one_or_none()
+        if legacy_owner is not None:
+            return
+
+        direct_owner = self._session.execute(
+            select(RoleAssignment.id).where(
+                RoleAssignment.principal_type == PrincipalType.USER,
+                RoleAssignment.role_id == owner_role.id,
+                RoleAssignment.scope_type == AssignmentScopeType.WORKSPACE,
+                RoleAssignment.scope_id == workspace_id,
+            )
+        ).scalar_one_or_none()
+        if direct_owner is not None:
+            return
+
+        group_owner = self._session.execute(
+            select(RoleAssignment.id)
+            .join(
+                Group,
+                and_(
+                    RoleAssignment.principal_type == PrincipalType.GROUP,
+                    RoleAssignment.principal_id == Group.id,
+                ),
+            )
+            .where(
+                RoleAssignment.role_id == owner_role.id,
+                RoleAssignment.scope_type == AssignmentScopeType.WORKSPACE,
+                RoleAssignment.scope_id == workspace_id,
+                Group.is_active == true(),
+                self._rbac.build_group_source_filter(),
+            )
+        ).scalar_one_or_none()
+        if group_owner is None:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
                 detail="Workspace must retain at least one owner",

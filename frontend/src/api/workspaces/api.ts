@@ -18,8 +18,13 @@ import type {
   WorkspaceProfile,
   WorkspaceUpdatePayload,
 } from "@/types/workspaces";
-import type { WorkspaceMember, WorkspaceMemberCreatePayload, WorkspaceMemberPage, WorkspaceMemberRolesUpdatePayload } from "@/types/workspaces";
 import type { components } from "@/types";
+import type {
+  WorkspaceMember,
+  WorkspaceMemberCreatePayload,
+  WorkspaceMemberPage,
+  WorkspaceMemberRolesUpdatePayload,
+} from "@/types/workspaces";
 
 export const DEFAULT_WORKSPACE_PAGE_SIZE = MAX_PAGE_SIZE;
 export const DEFAULT_MEMBER_PAGE_SIZE = DEFAULT_PAGE_SIZE;
@@ -387,59 +392,61 @@ export async function removeWorkspacePrincipal(
 
 export type ListWorkspaceMembersOptions = ListWorkspacePrincipalsOptions;
 
+async function listWorkspaceMembersPage(
+  workspaceId: string,
+  options: ListWorkspaceMembersOptions = {},
+): Promise<WorkspaceMemberPage> {
+  const query = buildListQuery({
+    limit: clampPageSize(options.limit ?? DEFAULT_MEMBER_PAGE_SIZE),
+    cursor: options.cursor ?? null,
+    sort: options.sort ?? null,
+    q: options.q ?? null,
+    filters: options.filters,
+    joinOperator: options.joinOperator,
+    includeTotal: options.includeTotal,
+  });
+  const { data } = await client.GET("/api/v1/workspaces/{workspaceId}/members", {
+    params: {
+      path: { workspaceId },
+      query,
+    },
+    signal: options.signal,
+  });
+
+  if (!data) {
+    throw new Error("Expected workspace members payload.");
+  }
+
+  return data as WorkspaceMemberPage;
+}
+
 export async function listWorkspaceMembers(
   workspaceId: string,
   options: ListWorkspaceMembersOptions = {},
 ): Promise<WorkspaceMemberPage> {
-  const principalPage = await listWorkspacePrincipals(workspaceId, options);
-  const items: WorkspaceMember[] = principalPage.items
-    .filter((principal) => principal.principal_type === "user")
-    .map((principal) => ({
-      user_id: principal.principal_id,
-      role_ids: principal.role_ids,
-      role_slugs: principal.role_slugs,
-      created_at: principal.created_at,
-      user: principal.principal_email
-        ? ({
-            id: principal.principal_id,
-            email: principal.principal_email,
-            display_name: principal.principal_display_name ?? null,
-          } as WorkspaceMember["user"])
-        : undefined,
-    }));
-
-  return {
-    items,
-    meta: {
-      ...principalPage.meta,
-      totalCount: items.length,
-    },
-    facets: principalPage.facets,
-  };
+  const { cursor: _cursor, ...pageOptions } = options;
+  return collectAllPages((cursor) =>
+    listWorkspaceMembersPage(workspaceId, {
+      ...pageOptions,
+      cursor,
+      limit: options.limit ?? DEFAULT_MEMBER_PAGE_SIZE,
+      includeTotal: true,
+    }),
+  );
 }
 
 export async function addWorkspaceMember(
   workspaceId: string,
   payload: WorkspaceMemberCreatePayload,
 ): Promise<WorkspaceMember> {
-  const principal = await addWorkspacePrincipalRoles(workspaceId, {
-    principal_type: "user",
-    principal_id: payload.user_id,
-    role_ids: payload.role_ids,
+  const { data } = await client.POST("/api/v1/workspaces/{workspaceId}/members", {
+    params: { path: { workspaceId } },
+    body: payload,
   });
-  return {
-    user_id: principal.principal_id,
-    role_ids: principal.role_ids,
-    role_slugs: principal.role_slugs,
-    created_at: principal.created_at,
-    user: principal.principal_email
-      ? ({
-          id: principal.principal_id,
-          email: principal.principal_email,
-          display_name: principal.principal_display_name ?? null,
-        } as WorkspaceMember["user"])
-      : undefined,
-  };
+  if (!data) {
+    throw new Error("Expected workspace member payload.");
+  }
+  return data as WorkspaceMember;
 }
 
 export async function updateWorkspaceMemberRoles(
@@ -447,32 +454,30 @@ export async function updateWorkspaceMemberRoles(
   userId: string,
   payload: WorkspaceMemberRolesUpdatePayload,
 ): Promise<WorkspaceMember> {
-  const principal = await updateWorkspacePrincipalRoles(workspaceId, "user", userId, payload);
-  if (!principal) {
-    return {
-      user_id: userId,
-      role_ids: [],
-      role_slugs: [],
-      created_at: new Date().toISOString(),
-    };
+  const { data } = await client.PUT("/api/v1/workspaces/{workspaceId}/members/{userId}", {
+    params: {
+      path: {
+        workspaceId,
+        userId,
+      },
+    },
+    body: payload,
+  });
+  if (!data) {
+    throw new Error("Expected workspace member payload.");
   }
-  return {
-    user_id: principal.principal_id,
-    role_ids: principal.role_ids,
-    role_slugs: principal.role_slugs,
-    created_at: principal.created_at,
-    user: principal.principal_email
-      ? ({
-          id: principal.principal_id,
-          email: principal.principal_email,
-          display_name: principal.principal_display_name ?? null,
-        } as WorkspaceMember["user"])
-      : undefined,
-  };
+  return data as WorkspaceMember;
 }
 
 export async function removeWorkspaceMember(workspaceId: string, userId: string) {
-  await removeWorkspacePrincipal(workspaceId, "user", userId);
+  await client.DELETE("/api/v1/workspaces/{workspaceId}/members/{userId}", {
+    params: {
+      path: {
+        workspaceId,
+        userId,
+      },
+    },
+  });
 }
 
 export interface ListWorkspaceRolesOptions {

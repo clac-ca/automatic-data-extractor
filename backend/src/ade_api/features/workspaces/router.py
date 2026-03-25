@@ -16,6 +16,7 @@ from ade_api.core.http import require_authenticated, require_csrf, require_globa
 from ade_db.models import User
 
 from .deps import get_workspace_profile
+from .members import router as members_router
 from .schemas import (
     WorkspaceCreate,
     WorkspaceOut,
@@ -265,6 +266,9 @@ def set_default_workspace(
         user=actor,
     )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+router.include_router(members_router)
 
 
 __all__ = ["router"]

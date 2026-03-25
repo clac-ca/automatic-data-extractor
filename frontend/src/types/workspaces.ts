@@ -9,7 +9,6 @@ import type {
   WorkspaceOut,
   WorkspacePage,
   WorkspaceUpdate,
-  User,
   components,
 } from "@/types";
 
@@ -35,19 +34,10 @@ export interface WorkspacePrincipalPage {
   readonly facets?: Record<string, unknown> | null;
 }
 
-export interface WorkspaceMember {
-  readonly user_id: string;
-  readonly role_ids: string[];
-  readonly role_slugs: string[];
-  readonly created_at: string;
-  readonly user?: Pick<User, "id" | "email" | "display_name">;
-}
-
-export interface WorkspaceMemberPage {
-  readonly items: WorkspaceMember[];
-  readonly meta: components["schemas"]["CursorMeta"];
-  readonly facets?: Record<string, unknown> | null;
-}
+export type WorkspaceMember = components["schemas"]["WorkspaceMemberOut"];
+export type WorkspaceMemberUser = components["schemas"]["WorkspaceMemberUserOut"];
+export type WorkspaceMemberSource = components["schemas"]["WorkspaceMemberSourceOut"];
+export type WorkspaceMemberPage = components["schemas"]["WorkspaceMemberPage"];
 
 export type RoleDefinition = RoleOut;
 export type PermissionDefinition = PermissionOut;
@@ -56,12 +46,6 @@ export type WorkspaceUpdatePayload = WorkspaceUpdate;
 export type RoleCreatePayload = RoleCreate;
 export type RoleUpdatePayload = RoleUpdate;
 export type RoleListPage = RolePage;
-export interface WorkspaceMemberRolesUpdatePayload {
-  readonly role_ids: string[];
-}
-
-export interface WorkspaceMemberCreatePayload {
-  readonly user_id: string;
-  readonly role_ids: string[];
-}
+export type WorkspaceMemberRolesUpdatePayload = components["schemas"]["WorkspaceMemberUpdate"];
+export type WorkspaceMemberCreatePayload = components["schemas"]["WorkspaceMemberCreate"];
 export type PermissionListPage = PermissionPage;
