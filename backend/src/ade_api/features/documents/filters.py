@@ -21,7 +21,16 @@ from ade_api.common.list_filters import (
 from ade_api.common.search import build_q_predicate
 from ade_api.features.search_registry import SEARCH_REGISTRY
 from ade_api.settings import MAX_SET_SIZE
-from ade_db.models import File, FileTag, FileVersion, FileVersionOrigin, Run, RunStatus
+from ade_db.models import (
+    File,
+    FileComment,
+    FileCommentMention,
+    FileTag,
+    FileVersion,
+    FileVersionOrigin,
+    Run,
+    RunStatus,
+)
 
 from .tags import TagValidationError, normalize_tag_set
 
@@ -149,6 +158,19 @@ DOCUMENT_FILTER_REGISTRY = FilterRegistry([
         column=File.uploaded_by_user_id,
         operators={
             FilterOperator.EQ,
+            FilterOperator.IN,
+            FilterOperator.NOT_IN,
+            FilterOperator.IS_EMPTY,
+            FilterOperator.IS_NOT_EMPTY,
+        },
+        value_type=FilterValueType.UUID,
+    ),
+    FilterField(
+        id="mentionedUserId",
+        column=FileCommentMention.mentioned_user_id,
+        operators={
+            FilterOperator.EQ,
+            FilterOperator.NE,
             FilterOperator.IN,
             FilterOperator.NOT_IN,
             FilterOperator.IS_EMPTY,
@@ -423,6 +445,39 @@ def apply_document_filters(
             value = bool(parsed.value)
             predicate = output_exists if value else ~output_exists
             if parsed.operator == FilterOperator.NE:
+                predicate = ~predicate
+            predicates.append(predicate)
+            continue
+
+        if filter_id == "mentionedUserId":
+            mention_exists = (
+                select(FileCommentMention.id)
+                .select_from(FileCommentMention)
+                .join(FileComment, FileComment.id == FileCommentMention.comment_id)
+                .where(
+                    FileComment.file_id == File.id,
+                    FileComment.workspace_id == File.workspace_id,
+                )
+            )
+            if parsed.operator == FilterOperator.IS_EMPTY:
+                predicates.append(~mention_exists.exists())
+                continue
+            if parsed.operator == FilterOperator.IS_NOT_EMPTY:
+                predicates.append(mention_exists.exists())
+                continue
+
+            values = parsed.value
+            mentioned_user_ids = values if isinstance(values, list) else [values]
+            if len(mentioned_user_ids) > MAX_SET_SIZE:
+                raise HTTPException(422, f"Too many mentioned user values; max {MAX_SET_SIZE}.")
+            normalized_ids = [value for value in mentioned_user_ids if value is not None]
+            if not normalized_ids:
+                continue
+
+            predicate = mention_exists.where(
+                FileCommentMention.mentioned_user_id.in_(normalized_ids)
+            ).exists()
+            if parsed.operator in {FilterOperator.NE, FilterOperator.NOT_IN}:
                 predicate = ~predicate
             predicates.append(predicate)
             continue

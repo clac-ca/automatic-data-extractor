@@ -25,6 +25,7 @@ export const DOCUMENTS_FILTER_IDS = new Set([
   "fileType",
   "tags",
   "assigneeId",
+  "mentionedUserId",
   "uploaderId",
   "createdAt",
   "updatedAt",

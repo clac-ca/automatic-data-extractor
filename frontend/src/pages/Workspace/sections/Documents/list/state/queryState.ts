@@ -36,6 +36,8 @@ export type DocumentsQuerySnapshot = {
   lifecycle: Lifecycle;
 };
 
+const USER_TOKEN_FILTER_IDS = new Set(["assigneeId", "mentionedUserId"]);
+
 export const documentsPageParser = parseAsInteger.withDefault(1);
 export const documentsPerPageParser = parseAsInteger.withDefault(DEFAULT_PAGE_SIZE);
 export const documentsViewIdParser = parseAsString;
@@ -102,19 +104,19 @@ export function buildDocumentsQuerySnapshot(input: QuerySnapshotInput): Document
   };
 }
 
-function resolveAssigneeTokenValue(value: string, currentUserId: string | null): string {
+function resolveCurrentUserTokenValue(value: string, currentUserId: string | null): string {
   return value === "me" && currentUserId ? currentUserId : value;
 }
 
-function resolveAssigneeToken(value: FilterValue, currentUserId: string | null): FilterValue {
+function resolveCurrentUserToken(value: FilterValue, currentUserId: string | null): FilterValue {
   if (value === "me" && currentUserId) return currentUserId;
   if (Array.isArray(value)) {
-    return value.map((item) => resolveAssigneeTokenValue(item, currentUserId));
+    return value.map((item) => resolveCurrentUserTokenValue(item, currentUserId));
   }
   return value;
 }
 
-export function encodeAssigneeToken(value: FilterValue, currentUserId: string): FilterValue {
+export function encodeCurrentUserToken(value: FilterValue, currentUserId: string): FilterValue {
   if (value === currentUserId) return "me";
   if (Array.isArray(value)) {
     return value.map((item) => (item === currentUserId ? "me" : item));
@@ -141,10 +143,10 @@ export function resolveListFiltersForApi({
   }
 
   const parsed = getValidFilters(snapshot.filters).map((filter) => {
-    if (filter.id !== "assigneeId") return filter;
+    if (!USER_TOKEN_FILTER_IDS.has(filter.id)) return filter;
     const next = Array.isArray(filter.value)
-      ? filter.value.map((value) => resolveAssigneeTokenValue(value, currentUserId))
-      : resolveAssigneeToken(filter.value, currentUserId);
+      ? filter.value.map((value) => resolveCurrentUserTokenValue(value, currentUserId))
+      : resolveCurrentUserToken(filter.value, currentUserId);
     return { ...filter, value: next };
   });
 
@@ -214,10 +216,10 @@ export function encodeSnapshotForViewPersistence({
 }): DocumentViewQueryState {
   const canonical = canonicalizeSnapshotForViewPersistence(snapshot);
   const filters: FiltersState = canonical.filters.map((item) => {
-    if (item.id !== "assigneeId") return item;
+    if (!USER_TOKEN_FILTER_IDS.has(item.id)) return item;
     return {
       ...item,
-      value: encodeAssigneeToken(item.value, currentUserId),
+      value: encodeCurrentUserToken(item.value, currentUserId),
     };
   });
 

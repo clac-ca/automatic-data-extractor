@@ -111,64 +111,71 @@ type OrderByExpr = ColumnElement[Any] | list[ColumnElement[Any]] | tuple[ColumnE
 type OrderByPair = tuple[OrderByExpr, OrderByExpr]
 
 
-def cursor_query_params(
-    limit: int = Query(
-        DEFAULT_LIMIT,
-        ge=1,
-        le=MAX_LIMIT,
-        description=f"Items per page (max {MAX_LIMIT})",
-    ),
-    cursor: str | None = Query(
-        None,
-        description="Opaque cursor token for pagination.",
-    ),
-    sort: str | None = Query(
-        None,
-        description="JSON array of {id, desc}.",
-    ),
-    filters: str | None = Query(
-        None,
-        description="URL-encoded JSON array of filter objects.",
-        examples=[STATUS_FILTER_EXAMPLE],
-    ),
-    join_operator: FilterJoinOperator = JOIN_OPERATOR_QUERY,
-    q: str | None = Query(
-        None,
-        description=(
-            "Free-text search string. Tokens are whitespace-separated, matched case-insensitively "
-            "as substrings; tokens shorter than 2 characters are ignored."
+def build_cursor_query_params(*, max_limit: int = MAX_LIMIT) -> Callable[..., CursorQueryParams]:
+    def dependency(
+        limit: int = Query(
+            DEFAULT_LIMIT,
+            ge=1,
+            le=max_limit,
+            description=f"Items per page (max {max_limit})",
         ),
-        examples=["acme invoice"],
-    ),
-    include_total: bool = Query(
-        False,
-        alias="includeTotal",
-        description="Include totalCount in the response.",
-    ),
-    include_facets: bool = Query(
-        False,
-        alias="includeFacets",
-        description="Include facet counts in the response.",
-    ),
-) -> CursorQueryParams:
-    sort_tokens = parse_sort(sort)
-    filter_items = parse_filter_items(
-        filters,
-        max_filters=MAX_FILTERS,
-        max_raw_length=MAX_FILTERS_RAW_LENGTH,
-    )
-    q_value = parse_q(q).normalized
+        cursor: str | None = Query(
+            None,
+            description="Opaque cursor token for pagination.",
+        ),
+        sort: str | None = Query(
+            None,
+            description="JSON array of {id, desc}.",
+        ),
+        filters: str | None = Query(
+            None,
+            description="URL-encoded JSON array of filter objects.",
+            examples=[STATUS_FILTER_EXAMPLE],
+        ),
+        join_operator: FilterJoinOperator = JOIN_OPERATOR_QUERY,
+        q: str | None = Query(
+            None,
+            description=(
+                "Free-text search string. Tokens are whitespace-separated, "
+                "matched case-insensitively "
+                "as substrings; tokens shorter than 2 characters are ignored."
+            ),
+            examples=["acme invoice"],
+        ),
+        include_total: bool = Query(
+            False,
+            alias="includeTotal",
+            description="Include totalCount in the response.",
+        ),
+        include_facets: bool = Query(
+            False,
+            alias="includeFacets",
+            description="Include facet counts in the response.",
+        ),
+    ) -> CursorQueryParams:
+        sort_tokens = parse_sort(sort)
+        filter_items = parse_filter_items(
+            filters,
+            max_filters=MAX_FILTERS,
+            max_raw_length=MAX_FILTERS_RAW_LENGTH,
+        )
+        q_value = parse_q(q).normalized
 
-    return CursorQueryParams(
-        limit=limit,
-        cursor=cursor,
-        sort=sort_tokens,
-        filters=filter_items,
-        join_operator=join_operator,
-        q=q_value,
-        include_total=include_total,
-        include_facets=include_facets,
-    )
+        return CursorQueryParams(
+            limit=limit,
+            cursor=cursor,
+            sort=sort_tokens,
+            filters=filter_items,
+            join_operator=join_operator,
+            q=q_value,
+            include_total=include_total,
+            include_facets=include_facets,
+        )
+
+    return dependency
+
+
+cursor_query_params = build_cursor_query_params()
 
 
 def strict_cursor_query_guard(
@@ -485,6 +492,16 @@ def _parse_cursor_values[T](
     return parsed
 
 
+def _maybe_set_count_statement_timeout(session: Session, *, include_total: bool) -> None:
+    if (
+        include_total
+        and COUNT_STATEMENT_TIMEOUT_MS
+        and session.bind is not None
+        and getattr(session.bind.dialect, "name", None) == "postgresql"
+    ):
+        session.execute(text(f"SET LOCAL statement_timeout = {int(COUNT_STATEMENT_TIMEOUT_MS)}"))
+
+
 def paginate_query_cursor(
     session: Session,
     stmt: Select,
@@ -496,13 +513,7 @@ def paginate_query_cursor(
     changes_cursor: str | None = None,
     row_mapper: Callable[[Mapping[str, Any]], T] | None = None,
 ) -> CursorPage[T]:
-    if (
-        include_total
-        and COUNT_STATEMENT_TIMEOUT_MS
-        and session.bind is not None
-        and getattr(session.bind.dialect, "name", None) == "postgresql"
-    ):
-        session.execute(text(f"SET LOCAL statement_timeout = {int(COUNT_STATEMENT_TIMEOUT_MS)}"))
+    _maybe_set_count_statement_timeout(session, include_total=include_total)
 
     count: int | None = None
     if include_total:
@@ -537,6 +548,50 @@ def paginate_query_cursor(
         limit=limit,
         has_more=has_more,
         next_cursor=next_cursor,
+        total_included=include_total,
+        total_count=count if include_total else None,
+        changes_cursor=str(changes_cursor) if changes_cursor is not None else None,
+    )
+
+    return CursorPage(items=items, meta=meta, facets=None)
+
+
+def paginate_query_page(
+    session: Session,
+    stmt: Select,
+    *,
+    resolved_sort: ResolvedCursorSort[T],
+    limit: int,
+    page: int,
+    include_total: bool = False,
+    changes_cursor: str | None = None,
+    row_mapper: Callable[[Mapping[str, Any]], T] | None = None,
+) -> CursorPage[T]:
+    _maybe_set_count_statement_timeout(session, include_total=include_total)
+
+    ordered_stmt = stmt.order_by(*resolved_sort.order_by)
+    offset = max(page - 1, 0) * limit
+
+    count: int | None = None
+    if include_total:
+        count_stmt = select(func.count()).select_from(stmt.order_by(None).subquery())
+        count = session.execute(count_stmt).scalar_one()
+
+    result = session.execute(ordered_stmt.offset(offset).limit(limit + 1))
+    if row_mapper is None:
+        rows = result.scalars().all()
+    else:
+        rows = [row_mapper(cast(Mapping[str, Any], row)) for row in result.mappings().all()]
+
+    has_more = len(rows) > limit
+    items = rows[:limit]
+    if include_total and count is not None:
+        has_more = offset + len(items) < count
+
+    meta = CursorMeta(
+        limit=limit,
+        has_more=has_more,
+        next_cursor=None,
         total_included=include_total,
         total_count=count if include_total else None,
         changes_cursor=str(changes_cursor) if changes_cursor is not None else None,
@@ -807,6 +862,7 @@ __all__ = [
     "cursor_query_params",
     "decode_cursor",
     "encode_cursor",
+    "paginate_query_page",
     "paginate_query_cursor",
     "paginate_sequence_cursor",
     "parse_bool",

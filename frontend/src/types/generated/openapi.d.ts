@@ -9636,11 +9636,13 @@ export interface operations {
     list_documents_api_v1_workspaces__workspaceId__documents_get: {
         parameters: {
             query?: {
+                /** @description 1-based page number for offset pagination. */
+                page?: number | null;
                 lifecycle?: components["schemas"]["DocumentListLifecycle"];
                 includeRunMetrics?: boolean;
                 includeRunTableColumns?: boolean;
                 includeRunFields?: boolean;
-                /** @description Items per page (max 200) */
+                /** @description Items per page (max 1000) */
                 limit?: number;
                 /** @description Opaque cursor token for pagination. */
                 cursor?: string | null;

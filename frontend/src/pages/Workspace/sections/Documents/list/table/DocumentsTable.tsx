@@ -3,7 +3,6 @@ import { type Table } from "@tanstack/react-table";
 
 import { DataTable } from "@/components/data-table/data-table";
 import { DataTableFilterList } from "@/components/data-table/data-table-filter-list";
-import { DataTablePagination } from "@/components/data-table/data-table-pagination";
 import { DataTableSortList } from "@/components/data-table/data-table-sort-list";
 import { DataTableViewOptions } from "@/components/data-table/data-table-view-options";
 import { ContextMenu, type ContextMenuItem } from "@/components/ui/context-menu-simple";
@@ -20,18 +19,16 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useIsMobile } from "@/hooks/use-mobile";
-import type { DocumentPresenceEntry } from "@/pages/Workspace/hooks/presence/presenceParticipants";
 import type { DocumentRow } from "../../shared/types";
 import { DocumentsActiveFiltersRail } from "./DocumentsActiveFiltersRail";
-import { DocumentsMobileCard } from "./DocumentsMobileCard";
+
+const DOCUMENTS_PAGE_SIZE_OPTIONS = [10, 20, 30, 40, 50, 100, 500, 1000];
 
 interface DocumentsTableProps {
   table: Table<DocumentRow>;
   debounceMs: number;
   throttleMs: number;
   shallow: boolean;
-  rowPresence?: Map<string, DocumentPresenceEntry[]>;
   leadingToolbarActions?: ReactNode;
   toolbarActions?: ReactNode;
   onRowActivate?: (document: DocumentRow) => void;
@@ -52,7 +49,6 @@ export function DocumentsTable({
   debounceMs,
   throttleMs,
   shallow,
-  rowPresence,
   leadingToolbarActions,
   toolbarActions,
   onRowActivate,
@@ -67,7 +63,6 @@ export function DocumentsTable({
   buildRowContextMenuItems,
   selectionResetToken = 0,
 }: DocumentsTableProps) {
-  const isMobile = useIsMobile();
   const [rowContextMenu, setRowContextMenu] = useState<{
     position: { x: number; y: number };
     items: ContextMenuItem[];
@@ -76,12 +71,6 @@ export function DocumentsTable({
   useEffect(() => {
     table.toggleAllRowsSelected(false);
   }, [selectionResetToken, table]);
-
-  useEffect(() => {
-    if (isMobile && rowContextMenu) {
-      setRowContextMenu(null);
-    }
-  }, [isMobile, rowContextMenu]);
 
   const selectedRows = table.getFilteredSelectedRowModel().rows;
   const selectedDocuments = selectedRows.map((row) => row.original);
@@ -236,65 +225,40 @@ export function DocumentsTable({
     </div>
   );
 
-  const mobileCards = (
-    <div className="space-y-3">
-      {table.getRowModel().rows.length > 0 ? (
-        table.getRowModel().rows.map((row) => (
-          <DocumentsMobileCard
-            key={row.id}
-            row={row}
-            presenceEntries={rowPresence?.get(row.original.id) ?? []}
-            actions={buildRowContextMenuItems ? buildRowContextMenuItems(row.original) : []}
-            onActivate={onRowActivate}
-          />
-        ))
-      ) : (
-        <div className="rounded-lg border bg-card py-10 text-center text-sm text-muted-foreground">No results.</div>
-      )}
-    </div>
-  );
-
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4">
       {toolbar}
-      {isMobile ? (
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2.5 overflow-auto">
-          {mobileCards}
-          <DataTablePagination table={table} />
-          {actionBar}
-        </div>
-      ) : (
-        <>
-          <DataTable
-            table={table}
-            actionBar={actionBar}
-            onRowActivate={
-              onRowActivate
-                ? (row) => {
-                    onRowActivate(row.original);
-                  }
-                : undefined
-            }
-            onRowContextMenu={
-              buildRowContextMenuItems
-                ? (row, position) => {
-                    const items = buildRowContextMenuItems(row.original);
-                    if (items.length === 0) return;
-                    setRowContextMenu({ position, items });
-                  }
-                : undefined
-            }
-            className="documents-table min-h-0 min-w-0 flex-1 overflow-hidden"
-          />
-          <ContextMenu
-            open={Boolean(rowContextMenu)}
-            position={rowContextMenu?.position ?? null}
-            onClose={() => setRowContextMenu(null)}
-            items={rowContextMenu?.items ?? []}
-            appearance="light"
-          />
-        </>
-      )}
+      <>
+        <DataTable
+          table={table}
+          actionBar={actionBar}
+          pageSizeOptions={DOCUMENTS_PAGE_SIZE_OPTIONS}
+          onRowActivate={
+            onRowActivate
+              ? (row) => {
+                  onRowActivate(row.original);
+                }
+              : undefined
+          }
+          onRowContextMenu={
+            buildRowContextMenuItems
+              ? (row, position) => {
+                  const items = buildRowContextMenuItems(row.original);
+                  if (items.length === 0) return;
+                  setRowContextMenu({ position, items });
+                }
+              : undefined
+          }
+          className="documents-table min-h-0 min-w-0 flex-1 overflow-hidden"
+        />
+        <ContextMenu
+          open={Boolean(rowContextMenu)}
+          position={rowContextMenu?.position ?? null}
+          onClose={() => setRowContextMenu(null)}
+          items={rowContextMenu?.items ?? []}
+          appearance="light"
+        />
+      </>
     </div>
   );
 }

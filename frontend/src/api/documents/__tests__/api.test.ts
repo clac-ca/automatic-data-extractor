@@ -88,6 +88,36 @@ describe("documents api helpers", () => {
     });
   });
 
+  it("passes page-based pagination through list document queries", async () => {
+    const responsePayload = {
+      items: [],
+      meta: {
+        limit: 50,
+        hasMore: false,
+      },
+    };
+    const spy = vi.spyOn(client, "GET").mockResolvedValue(
+      { data: responsePayload } as unknown as GetResponse,
+    );
+
+    await fetchWorkspaceDocuments("ws-1", {
+      limit: 50,
+      page: 4,
+      sort: null,
+    });
+
+    expect(spy).toHaveBeenCalledWith("/api/v1/workspaces/{workspaceId}/documents", {
+      params: {
+        path: { workspaceId: "ws-1" },
+        query: {
+          limit: 50,
+          page: 4,
+        },
+      },
+      signal: undefined,
+    });
+  });
+
   it("calls the single archive endpoint", async () => {
     const spy = vi.spyOn(client, "POST").mockResolvedValue(
       { data: undefined } as unknown as PostResponse,

@@ -25,6 +25,7 @@ import { cn } from "@/lib/utils";
 interface DataTableProps<TData> extends React.ComponentProps<"div"> {
   table: TanstackTable<TData>;
   actionBar?: React.ReactNode;
+  pageSizeOptions?: number[];
   onRowActivate?: (row: Row<TData>) => void;
   onRowContextMenu?: (row: Row<TData>, position: { x: number; y: number }) => void;
 }
@@ -32,6 +33,7 @@ interface DataTableProps<TData> extends React.ComponentProps<"div"> {
 export function DataTable<TData>({
   table,
   actionBar,
+  pageSizeOptions,
   onRowActivate,
   onRowContextMenu,
   children,
@@ -83,6 +85,8 @@ export function DataTable<TData>({
     onRowActivate(row);
   };
 
+  const tableWidth = Math.max(table.getTotalSize(), 1);
+
   return (
     <div
       className={cn("flex w-full flex-col gap-2.5 overflow-auto", className)}
@@ -90,7 +94,7 @@ export function DataTable<TData>({
     >
       {children}
       <div className="overflow-hidden rounded-md border">
-        <Table>
+        <Table className="table-fixed" style={{ width: `${tableWidth}px` }}>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
@@ -99,19 +103,45 @@ export function DataTable<TData>({
                     key={header.id}
                     colSpan={header.colSpan}
                     className={cn(
+                      "relative",
                       (header.column.columnDef.meta as { headerClassName?: string } | undefined)
                         ?.headerClassName,
                     )}
                     style={{
+                      width: `${header.getSize()}px`,
+                      minWidth: `${header.getSize()}px`,
                       ...getCommonPinningStyles({ column: header.column }),
                     }}
                   >
-                    {header.isPlaceholder
-                      ? null
-                      : flexRender(
+                    {header.isPlaceholder ? null : (
+                      <>
+                        {flexRender(
                           header.column.columnDef.header,
                           header.getContext(),
                         )}
+                        {header.column.getCanResize() ? (
+                          <button
+                            type="button"
+                            tabIndex={-1}
+                            data-column-resize-handle
+                            onDoubleClick={() => header.column.resetSize()}
+                            onClick={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                            }}
+                            onMouseDown={header.getResizeHandler()}
+                            onTouchStart={header.getResizeHandler()}
+                            aria-label={`Resize ${String(header.column.columnDef.meta?.label ?? header.column.id)} column`}
+                            className={cn(
+                              "absolute right-0 top-0 h-full w-2 cursor-col-resize touch-none select-none border-0 bg-transparent p-0 transition-colors",
+                              header.column.getIsResizing()
+                                ? "bg-border"
+                                : "hover:bg-border/70",
+                            )}
+                          />
+                        ) : null}
+                      </>
+                    )}
                   </TableHead>
                 ))}
               </TableRow>
@@ -144,6 +174,8 @@ export function DataTable<TData>({
                           ?.cellClassName,
                       )}
                       style={{
+                        width: `${cell.column.getSize()}px`,
+                        minWidth: `${cell.column.getSize()}px`,
                         ...getCommonPinningStyles({ column: cell.column }),
                       }}
                     >
@@ -158,7 +190,7 @@ export function DataTable<TData>({
             ) : (
               <TableRow>
                 <TableCell
-                  colSpan={table.getAllColumns().length}
+                  colSpan={table.getVisibleLeafColumns().length}
                   className="h-24 text-center"
                 >
                   No results.
@@ -169,7 +201,7 @@ export function DataTable<TData>({
         </Table>
       </div>
       <div className="flex flex-col gap-2.5">
-        <DataTablePagination table={table} />
+        <DataTablePagination table={table} pageSizeOptions={pageSizeOptions} />
         {actionBar &&
           table.getFilteredSelectedRowModel().rows.length > 0 &&
           actionBar}
