@@ -1,7 +1,7 @@
 import { createElement, type ReactNode } from "react";
 import { Archive, FileText, Pencil, UserRoundPlus } from "lucide-react";
 
-import { DownloadIcon, EyeIcon } from "@/components/icons";
+import { DownloadIcon, EyeIcon, LogsIcon } from "@/components/icons";
 import type { ContextMenuItem } from "@/components/ui/context-menu-simple";
 
 import type { DocumentRow } from "../../../shared/types";
@@ -29,6 +29,7 @@ export function buildDocumentRowActions({
   onOpenPreview,
   onDownloadLatest,
   onDownloadOriginal,
+  onDownloadEventsLog,
   onAssignToMe,
   onRename,
   onDeleteRequest,
@@ -44,6 +45,7 @@ export function buildDocumentRowActions({
   onOpenPreview?: () => void;
   onDownloadLatest?: (document: DocumentRow) => void;
   onDownloadOriginal?: (document: DocumentRow) => void;
+  onDownloadEventsLog?: (document: DocumentRow) => void;
   onAssignToMe?: () => void;
   onRename?: () => void;
   onDeleteRequest?: (document: DocumentRow) => void;
@@ -95,6 +97,15 @@ export function buildDocumentRowActions({
       label: "Download original",
       icon: createElement(DownloadIcon, { className: "h-4 w-4" }),
       onSelect: () => onDownloadOriginal(document),
+    });
+  }
+
+  if (surface === "overflow" && onDownloadEventsLog && document.lastRun?.id) {
+    pushCore({
+      id: "download-events-log",
+      label: "Download events log",
+      icon: createElement(LogsIcon, { className: "h-4 w-4" }),
+      onSelect: () => onDownloadEventsLog(document),
     });
   }
 

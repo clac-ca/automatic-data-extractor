@@ -39,6 +39,7 @@ export function DocumentNameCell({
   onRestoreRequest,
   onDownloadLatest,
   onDownloadOriginal,
+  onDownloadEventsLog,
   onReprocessRequest,
   onCancelRunRequest,
   externalRenameSignal,
@@ -56,6 +57,7 @@ export function DocumentNameCell({
   onRestoreRequest?: (document: DocumentRow) => void;
   onDownloadLatest?: (document: DocumentRow) => void;
   onDownloadOriginal?: (document: DocumentRow) => void;
+  onDownloadEventsLog?: (document: DocumentRow) => void;
   onReprocessRequest?: (document: DocumentRow) => void;
   onCancelRunRequest?: (document: DocumentRow) => void;
   externalRenameSignal?: number;
@@ -147,6 +149,7 @@ export function DocumentNameCell({
         surface: "overflow",
         onDownloadLatest,
         onDownloadOriginal,
+        onDownloadEventsLog,
         onAssignToMe,
         onRename: startRename,
         onDeleteRequest,
@@ -162,6 +165,7 @@ export function DocumentNameCell({
       onDeleteRequest,
       onDownloadLatest,
       onDownloadOriginal,
+      onDownloadEventsLog,
       onRestoreRequest,
       startRename,
     ],
