@@ -68,6 +68,7 @@ describe("DocumentNameCell", () => {
     const onRename = vi.fn().mockResolvedValue(undefined);
     const onDownloadLatest = vi.fn();
     const onDownloadOriginal = vi.fn();
+    const onDownloadEventsLog = vi.fn();
 
     render(
       <DocumentNameCell
@@ -79,17 +80,39 @@ describe("DocumentNameCell", () => {
         onRename={onRename}
         onDownloadLatest={onDownloadLatest}
         onDownloadOriginal={onDownloadOriginal}
+        onDownloadEventsLog={onDownloadEventsLog}
       />,
     );
 
     await user.click(screen.getByLabelText("More actions"));
     expect(screen.getByRole("menuitem", { name: "Download" })).toBeInTheDocument();
     expect(screen.getByRole("menuitem", { name: "Download original" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Download events log" })).toBeInTheDocument();
     expect(screen.getByRole("menuitem", { name: "Assign to me" })).toBeInTheDocument();
     expect(screen.getByRole("menuitem", { name: "Rename" })).toBeInTheDocument();
     await user.click(screen.getByRole("menuitem", { name: "Assign to me" }));
 
     expect(onAssignToMe).toHaveBeenCalledTimes(1);
+  });
+
+  it("triggers the overflow events log handler", async () => {
+    const user = userEvent.setup();
+    const document = makeDocument();
+    const onDownloadEventsLog = vi.fn();
+
+    render(
+      <DocumentNameCell
+        document={document}
+        lifecycle="active"
+        presenceEntries={[]}
+        onDownloadEventsLog={onDownloadEventsLog}
+      />,
+    );
+
+    await user.click(screen.getByLabelText("More actions"));
+    await user.click(screen.getByRole("menuitem", { name: "Download events log" }));
+
+    expect(onDownloadEventsLog).toHaveBeenCalledWith(document);
   });
 
   it("locks extension while renaming inline", async () => {

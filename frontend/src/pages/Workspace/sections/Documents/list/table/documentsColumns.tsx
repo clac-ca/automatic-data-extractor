@@ -31,6 +31,7 @@ export type DocumentsColumnContext = {
   onRestoreRequest: (document: DocumentRow) => void;
   onDownloadLatest: (document: DocumentRow) => void;
   onDownloadOriginal: (document: DocumentRow) => void;
+  onDownloadEventsLog: (document: DocumentRow) => void;
   onReprocessRequest: (document: DocumentRow) => void;
   onCancelRunRequest: (document: DocumentRow) => void;
   isRowActionPending?: (documentId: string) => boolean;
@@ -64,6 +65,7 @@ export function useDocumentsColumns({
   onRestoreRequest,
   onDownloadLatest,
   onDownloadOriginal,
+  onDownloadEventsLog,
   onReprocessRequest,
   onCancelRunRequest,
   isRowActionPending,
@@ -152,6 +154,7 @@ export function useDocumentsColumns({
               onRestoreRequest={onRestoreRequest}
               onDownloadLatest={onDownloadLatest}
               onDownloadOriginal={onDownloadOriginal}
+              onDownloadEventsLog={onDownloadEventsLog}
               onReprocessRequest={onReprocessRequest}
               onCancelRunRequest={onCancelRunRequest}
               externalRenameSignal={
@@ -396,6 +399,7 @@ export function useDocumentsColumns({
       onRestoreRequest,
       onDownloadLatest,
       onDownloadOriginal,
+      onDownloadEventsLog,
       onReprocessRequest,
       onCancelRunRequest,
       inlineRenameRequest,

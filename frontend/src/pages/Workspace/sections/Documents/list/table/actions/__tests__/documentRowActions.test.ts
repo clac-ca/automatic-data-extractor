@@ -21,7 +21,14 @@ function makeDocument(): DocumentRow {
       name: "Other",
       email: "other@example.com",
     },
-    lastRun: null,
+    lastRun: {
+      id: "run_1",
+      status: "failed",
+      createdAt: "2026-01-01T00:00:00Z",
+      startedAt: "2026-01-01T00:01:00Z",
+      completedAt: "2026-01-01T00:02:00Z",
+      errorMessage: "engine failed",
+    },
   } as DocumentRow;
 }
 
@@ -33,6 +40,7 @@ describe("buildDocumentRowActions", () => {
       onOpenPreview: vi.fn(),
       onDownloadLatest: vi.fn(),
       onDownloadOriginal: vi.fn(),
+      onDownloadEventsLog: vi.fn(),
       onAssignToMe: vi.fn(),
       onRename: vi.fn(),
       onDeleteRequest: vi.fn(),
@@ -47,6 +55,7 @@ describe("buildDocumentRowActions", () => {
       surface: "overflow",
       onDownloadLatest: handlers.onDownloadLatest,
       onDownloadOriginal: handlers.onDownloadOriginal,
+      onDownloadEventsLog: handlers.onDownloadEventsLog,
       onAssignToMe: handlers.onAssignToMe,
       onRename: handlers.onRename,
       onDeleteRequest: handlers.onDeleteRequest,
@@ -69,8 +78,9 @@ describe("buildDocumentRowActions", () => {
     });
 
     expect(context.map((item) => item.id).slice(0, 2)).toEqual(["open", "open-preview"]);
+    expect(context.find((item) => item.id === "download-events-log")).toBeUndefined();
     expect(context.filter((item) => !["open", "open-preview"].includes(item.id)).map((item) => item.id)).toEqual(
-      overflow.map((item) => item.id),
+      overflow.filter((item) => item.id !== "download-events-log").map((item) => item.id),
     );
   });
 
@@ -85,12 +95,18 @@ describe("buildDocumentRowActions", () => {
       surface: "overflow",
       onDownloadLatest: vi.fn(),
       onDownloadOriginal: vi.fn(),
+      onDownloadEventsLog: vi.fn(),
       onAssignToMe: vi.fn(),
       onRename: vi.fn(),
       onDeleteRequest: vi.fn(),
     });
 
-    expect(actions.map((item) => item.id)).toEqual(["download", "download-original", "assign-to-me"]);
+    expect(actions.map((item) => item.id)).toEqual([
+      "download",
+      "download-original",
+      "download-events-log",
+      "assign-to-me",
+    ]);
   });
 
   it("shows restore instead of archive for archived documents", () => {
@@ -104,6 +120,7 @@ describe("buildDocumentRowActions", () => {
       surface: "overflow",
       onDownloadLatest: vi.fn(),
       onDownloadOriginal: vi.fn(),
+      onDownloadEventsLog: vi.fn(),
       onAssignToMe: vi.fn(),
       onRename: vi.fn(),
       onDeleteRequest: vi.fn(),
@@ -127,5 +144,29 @@ describe("buildDocumentRowActions", () => {
     });
 
     expect(actions.find((item) => item.id === "assign-to-me")).toBeUndefined();
+  });
+
+  it("hides the overflow events log action when the document has no last run", () => {
+    const document = {
+      ...makeDocument(),
+      lastRun: null,
+    } as DocumentRow;
+
+    const actions = buildDocumentRowActions({
+      document,
+      lifecycle: "active",
+      isBusy: false,
+      isSelfAssigned: false,
+      canRenameInline: true,
+      surface: "overflow",
+      onDownloadLatest: vi.fn(),
+      onDownloadOriginal: vi.fn(),
+      onDownloadEventsLog: vi.fn(),
+      onAssignToMe: vi.fn(),
+      onRename: vi.fn(),
+      onDeleteRequest: vi.fn(),
+    });
+
+    expect(actions.find((item) => item.id === "download-events-log")).toBeUndefined();
   });
 });
