@@ -52,6 +52,7 @@ function TestHarness({
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
+  const [columnSizing, setColumnSizing] = useState({});
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 20 });
 
@@ -62,17 +63,21 @@ function TestHarness({
       sorting,
       columnFilters,
       columnVisibility,
+      columnSizing,
       rowSelection,
       pagination,
     },
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
     onColumnVisibilityChange: setColumnVisibility,
+    onColumnSizingChange: setColumnSizing,
     onRowSelectionChange: setRowSelection,
     onPaginationChange: setPagination,
     getCoreRowModel: getCoreRowModel(),
     getRowId: (row) => row.id,
     pageCount: 1,
+    enableColumnResizing: true,
+    columnResizeMode: "onEnd",
     manualFiltering: true,
     manualSorting: true,
     manualPagination: true,
@@ -92,6 +97,15 @@ function TestHarness({
 }
 
 describe("DataTable", () => {
+  it("renders fixed-width columns with resize handles", () => {
+    const onActivate = vi.fn();
+    const onContext = vi.fn();
+    render(<TestHarness onActivate={onActivate} onContext={onContext} />);
+
+    expect(screen.getByRole("table")).toHaveStyle({ width: "150px" });
+    expect(document.querySelectorAll("[data-column-resize-handle]").length).toBeGreaterThan(0);
+  });
+
   it("activates row click but ignores interactive elements", () => {
     const onActivate = vi.fn();
     const onContext = vi.fn();

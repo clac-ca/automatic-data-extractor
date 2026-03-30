@@ -1569,6 +1569,7 @@ export function DocumentsTableContainer({
     columns,
     pageCount,
     enableColumnResizing: true,
+    columnResizeMode: "onEnd",
     defaultColumn: {
       size: 140,
       minSize: 90,
@@ -1581,6 +1582,7 @@ export function DocumentsTableContainer({
         id: false,
         fileType: false,
         uploaderId: false,
+        mentionedUserId: false,
         byteSize: false,
         activityAt: false,
         deletedAt: false,
@@ -1943,7 +1945,6 @@ export function DocumentsTableContainer({
           debounceMs={debounceMs}
           throttleMs={throttleMs}
           shallow={shallow}
-          rowPresence={rowPresence}
           leadingToolbarActions={viewsToolbarControl}
           toolbarActions={toolbarContent}
           onRowActivate={(document) => openDocument(document.id, "activity")}

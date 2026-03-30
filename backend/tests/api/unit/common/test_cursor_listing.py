@@ -5,11 +5,15 @@ from datetime import UTC, datetime
 
 from fastapi import HTTPException
 import pytest
+from sqlalchemy import Column, Integer, MetaData, String, Table, create_engine, select
+from sqlalchemy.orm import Session
 
 from ade_api.common.cursor_listing import (
+    ResolvedCursorSort,
     cursor_field,
     cursor_field_nulls_last,
     encode_cursor,
+    paginate_query_page,
     paginate_sequence_cursor,
     parse_datetime,
     parse_str,
@@ -54,3 +58,39 @@ def test_paginate_sequence_cursor_rejects_invalid_null_rank() -> None:
             include_total=False,
             changes_cursor=None,
         )
+
+
+def test_paginate_query_page_returns_requested_offset_slice() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    metadata = MetaData()
+    records = Table(
+        "records",
+        metadata,
+        Column("id", Integer, primary_key=True),
+        Column("name", String, nullable=False),
+    )
+    metadata.create_all(engine)
+
+    with Session(engine) as session:
+        session.execute(
+            records.insert(),
+            [{"id": index, "name": f"record-{index}"} for index in range(1, 6)],
+        )
+        session.commit()
+
+        page = paginate_query_page(
+            session,
+            select(records.c.name),
+            resolved_sort=ResolvedCursorSort(
+                tokens=["name"],
+                fields=[],
+                order_by=(records.c.name.asc(),),
+            ),
+            limit=2,
+            page=2,
+            include_total=True,
+        )
+
+    assert list(page.items) == ["record-3", "record-4"]
+    assert page.meta.total_count == 5
+    assert page.meta.has_more is True

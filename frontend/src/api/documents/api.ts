@@ -16,6 +16,7 @@ export type DocumentLifecycle = "active" | "archived";
 
 export type ListDocumentsQuery = {
   limit: number;
+  page?: number | null;
   cursor?: string | null;
   sort?: string | null;
   filters?: FilterItem[] | string | null;
@@ -100,6 +101,7 @@ export async function fetchWorkspaceDocuments(
   options: {
     sort: string | null;
     limit: number;
+    page?: number | null;
     cursor?: string | null;
     filters?: FilterItem[] | string | null;
     joinOperator?: FilterJoinOperator;
@@ -117,6 +119,7 @@ export async function fetchWorkspaceDocuments(
     ...buildListQuery({
       sort: options.sort ?? null,
       limit: options.limit > 0 ? options.limit : DEFAULT_DOCUMENTS_PAGE_SIZE,
+      page: options.page ?? null,
       cursor: options.cursor ?? null,
       q: options.q ?? null,
       filters: options.filters,

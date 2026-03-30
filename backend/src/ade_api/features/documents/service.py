@@ -29,6 +29,7 @@ from ade_api.common.cursor_listing import (
     ResolvedCursorSort,
     cursor_field,
     paginate_query_cursor,
+    paginate_query_page,
     parse_int,
     parse_str,
     resolve_cursor_sort,
@@ -448,6 +449,7 @@ class DocumentsService:
         workspace_id: UUID,
         limit: int,
         cursor: str | None,
+        page: int | None = None,
         resolved_sort: ResolvedCursorSort[File],
         filters: list[FilterItem],
         join_operator: FilterJoinOperator,
@@ -466,6 +468,7 @@ class DocumentsService:
             extra=log_context(
                 workspace_id=workspace_id,
                 limit=limit,
+                page=page,
                 cursor=cursor,
                 lifecycle=lifecycle.value,
                 order_by=str(resolved_sort.order_by),
@@ -498,16 +501,28 @@ class DocumentsService:
 
         facets = self._build_document_facets(stmt) if include_facets else None
         changes_cursor = get_latest_document_change_id(self._session, workspace_id)
-        page_result = paginate_query_cursor(
-            self._session,
-            stmt,
-            resolved_sort=resolved_sort,
-            limit=limit,
-            cursor=cursor,
-            include_total=include_total,
-            changes_cursor=str(changes_cursor) if changes_cursor is not None else None,
-            row_mapper=lambda row: _map_document_row(row),
-        )
+        if page is not None:
+            page_result = paginate_query_page(
+                self._session,
+                stmt,
+                resolved_sort=resolved_sort,
+                limit=limit,
+                page=page,
+                include_total=include_total,
+                changes_cursor=str(changes_cursor) if changes_cursor is not None else None,
+                row_mapper=lambda row: _map_document_row(row),
+            )
+        else:
+            page_result = paginate_query_cursor(
+                self._session,
+                stmt,
+                resolved_sort=resolved_sort,
+                limit=limit,
+                cursor=cursor,
+                include_total=include_total,
+                changes_cursor=str(changes_cursor) if changes_cursor is not None else None,
+                row_mapper=lambda row: _map_document_row(row),
+            )
         raw_items = list(page_result.items)
         items = [DocumentOut.model_validate(item) for item in raw_items]
         self._attach_last_runs(

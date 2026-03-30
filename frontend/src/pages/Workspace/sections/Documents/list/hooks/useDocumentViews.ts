@@ -53,6 +53,17 @@ function normalizeTableSnapshot(table: Table<DocumentRow>): TableSnapshot {
   };
 }
 
+function normalizeColumnSizingRecord(
+  value: Record<string, unknown> | null | undefined,
+): Record<string, number> {
+  if (!value) return {};
+  return Object.fromEntries(
+    Object.entries(value)
+      .map(([key, raw]) => [key, Number(raw)] as const)
+      .filter(([, size]) => Number.isFinite(size) && size > 0),
+  );
+}
+
 function normalizeViewTableSnapshot(view: DocumentViewRecord): Partial<TableSnapshot> {
   const tableState = (view.tableState ?? {}) as Record<string, unknown>;
   const output: Partial<TableSnapshot> = {};
@@ -60,11 +71,8 @@ function normalizeViewTableSnapshot(view: DocumentViewRecord): Partial<TableSnap
     output.columnVisibility = tableState.columnVisibility as Record<string, boolean>;
   }
   if (tableState.columnSizing && typeof tableState.columnSizing === "object") {
-    output.columnSizing = Object.fromEntries(
-      Object.entries(tableState.columnSizing as Record<string, unknown>).map(([key, value]) => [
-        key,
-        Number(value),
-      ]),
+    output.columnSizing = normalizeColumnSizingRecord(
+      tableState.columnSizing as Record<string, unknown>,
     );
   }
   if (Array.isArray(tableState.columnOrder)) {
@@ -111,6 +119,10 @@ export function useDocumentViews({
   const initializedRef = useRef(false);
   const lastViewStorage = useMemo(
     () => createScopedStorage(uiStorageKeys.documentsLastView(workspaceId)),
+    [workspaceId],
+  );
+  const columnSizingStorage = useMemo(
+    () => createScopedStorage(uiStorageKeys.documentsTableColumnSizing(workspaceId)),
     [workspaceId],
   );
 
@@ -182,6 +194,10 @@ export function useDocumentViews({
     () => (selectedView ? normalizeViewTableSnapshot(selectedView) : null),
     [selectedView],
   );
+  const readStoredColumnSizing = useCallback(
+    () => normalizeColumnSizingRecord(columnSizingStorage.get<Record<string, unknown>>()),
+    [columnSizingStorage],
+  );
 
   const hasExplicitListState = useMemo(
     () => queryHasExplicitListState(currentQuerySnapshot),
@@ -191,12 +207,22 @@ export function useDocumentViews({
   const applyTableSnapshot = useCallback(
     (view: DocumentViewRecord) => {
       const snapshot = normalizeViewTableSnapshot(view);
-      if (snapshot.columnVisibility) table.setColumnVisibility(snapshot.columnVisibility);
-      if (snapshot.columnSizing) table.setColumnSizing(snapshot.columnSizing);
-      if (snapshot.columnOrder) table.setColumnOrder(snapshot.columnOrder);
-      if (snapshot.columnPinning) table.setColumnPinning(snapshot.columnPinning);
+      if ("columnVisibility" in snapshot && snapshot.columnVisibility) {
+        table.setColumnVisibility(snapshot.columnVisibility);
+      }
+      if ("columnSizing" in snapshot) {
+        table.setColumnSizing(snapshot.columnSizing ?? {});
+      } else {
+        table.setColumnSizing(readStoredColumnSizing());
+      }
+      if ("columnOrder" in snapshot && snapshot.columnOrder) {
+        table.setColumnOrder(snapshot.columnOrder);
+      }
+      if ("columnPinning" in snapshot && snapshot.columnPinning) {
+        table.setColumnPinning(snapshot.columnPinning);
+      }
     },
-    [table],
+    [readStoredColumnSizing, table],
   );
 
   const applyViewQueryState = useCallback(
@@ -248,7 +274,10 @@ export function useDocumentViews({
       void setViewId(null);
     }
 
-    if (hasExplicitListState) return;
+    if (hasExplicitListState) {
+      table.setColumnSizing(readStoredColumnSizing());
+      return;
+    }
 
     const lastId = lastViewStorage.get<string>();
     const fallback =
@@ -258,13 +287,17 @@ export function useDocumentViews({
       null;
     if (fallback) {
       void applyViewQueryState(fallback);
+      return;
     }
+    table.setColumnSizing(readStoredColumnSizing());
   }, [
     applyTableSnapshot,
     applyViewQueryState,
     hasExplicitListState,
     lastViewStorage,
+    readStoredColumnSizing,
     setViewId,
+    table,
     viewId,
     views,
   ]);
@@ -273,6 +306,23 @@ export function useDocumentViews({
     if (!viewId) return;
     lastViewStorage.set(viewId);
   }, [lastViewStorage, viewId]);
+
+  useEffect(() => {
+    const viewHasSavedSizing = selectedView
+      ? Boolean(
+          selectedView.tableState &&
+            typeof selectedView.tableState === "object" &&
+            "columnSizing" in (selectedView.tableState as Record<string, unknown>),
+        )
+      : false;
+    if (viewHasSavedSizing) {
+      return;
+    }
+    if (Object.keys(currentTableSnapshot.columnSizing).length === 0) {
+      return;
+    }
+    columnSizingStorage.set(currentTableSnapshot.columnSizing);
+  }, [columnSizingStorage, currentTableSnapshot.columnSizing, selectedView]);
 
   const canMutateView = useCallback(
     (view: DocumentViewRecord | null) => {

@@ -4,7 +4,6 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchWorkspaceDocuments, type DocumentListRow, type DocumentPageResult } from "@/api/documents";
 import type { DocumentLifecycle } from "@/api/documents";
 import type { FilterItem, FilterJoinOperator } from "@/api/listing";
-import { useCursorPager } from "@/hooks/use-cursor-pager";
 
 import type { DocumentRow } from "../../shared/types";
 
@@ -41,10 +40,17 @@ export function useDocumentsListData({
     [filters],
   );
   const qKey = useMemo(() => q ?? "", [q]);
-  const cursorKey = useMemo(
-    () =>
-      [workspaceId, perPage, sort ?? "", qKey, lifecycle, filtersKey, joinOperator ?? ""].join("|"),
-    [workspaceId, perPage, sort, qKey, lifecycle, filtersKey, joinOperator],
+  const totalQueryKey = useMemo(
+    () => [
+      "documents-total",
+      workspaceId,
+      sort ?? "",
+      qKey,
+      lifecycle,
+      filtersKey,
+      joinOperator ?? "",
+    ],
+    [workspaceId, sort, qKey, lifecycle, filtersKey, joinOperator],
   );
   const queryKey = useMemo(
     () => [
@@ -61,31 +67,43 @@ export function useDocumentsListData({
     [workspaceId, page, perPage, sort, qKey, lifecycle, filtersKey, joinOperator],
   );
 
-  const cursorPager = useCursorPager<DocumentPageResult>({
-    page,
-    limit: perPage,
-    includeTotal: true,
-    resetKey: cursorKey,
-    fetchPage: ({ cursor, limit, includeTotal, signal }) =>
-      fetchWorkspaceDocuments(
+  const documentsQuery = useQuery<DocumentPageResult>({
+    queryKey,
+    queryFn: async ({ signal }) => {
+      const cachedTotal = queryClient.getQueryData<number>(totalQueryKey);
+      const pageResult = await fetchWorkspaceDocuments(
         workspaceId,
         {
-          limit,
-          cursor,
+          limit: perPage,
+          page,
           sort,
           q,
           lifecycle,
           filters,
           joinOperator: joinOperator ?? undefined,
-          includeTotal,
+          includeTotal: typeof cachedTotal !== "number",
         },
         signal,
-      ),
-  });
+      );
 
-  const documentsQuery = useQuery<DocumentPageResult>({
-    queryKey,
-    queryFn: ({ signal }) => cursorPager.fetchCurrentPage(signal),
+      if (typeof pageResult.meta.totalCount === "number") {
+        queryClient.setQueryData(totalQueryKey, pageResult.meta.totalCount);
+        return pageResult;
+      }
+
+      if (typeof cachedTotal === "number") {
+        return {
+          ...pageResult,
+          meta: {
+            ...pageResult.meta,
+            totalCount: cachedTotal,
+            totalIncluded: true,
+          },
+        };
+      }
+
+      return pageResult;
+    },
     enabled: enabled && Boolean(workspaceId),
     staleTime: 10_000,
     placeholderData: (previous) => previous,
@@ -170,6 +188,11 @@ export function useDocumentsListData({
     [],
   );
 
+  const refreshSnapshot = useCallback(async () => {
+    queryClient.removeQueries({ queryKey: totalQueryKey, exact: true });
+    return documentsQuery.refetch();
+  }, [documentsQuery, queryClient, totalQueryKey]);
+
   return {
     rows,
     documentsById,
@@ -185,11 +208,12 @@ export function useDocumentsListData({
     isLoading: documentsQuery.isLoading,
     isFetching: documentsQuery.isFetching,
     error: documentsQuery.error instanceof Error ? documentsQuery.error.message : null,
-    refreshSnapshot: documentsQuery.refetch,
+    refreshSnapshot,
     updateRow,
     upsertRow,
     removeRow,
     setUploadProgress,
     queryKey,
+    totalQueryKey,
   };
 }
