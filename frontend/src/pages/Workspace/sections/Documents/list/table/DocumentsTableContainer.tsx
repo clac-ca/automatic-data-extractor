@@ -532,6 +532,18 @@ export function DocumentsTableContainer({
     [getOriginalDownloadUrl, openDownload],
   );
 
+  const handleDownloadEventsLog = useCallback(
+    (document: DocumentRow) => {
+      const runId = document.lastRun?.id;
+      if (!runId) return;
+      const url = resolveApiUrl(
+        `/api/v1/workspaces/${workspaceId}/runs/${runId}/events/download`,
+      );
+      openDownload(url);
+    },
+    [openDownload, workspaceId],
+  );
+
   const startBulkDownloads = useCallback(
     (urls: string[], label: string) => {
       if (urls.length === 0) {
@@ -1560,6 +1572,7 @@ export function DocumentsTableContainer({
     onCancelRunRequest,
     onDownloadLatest: handleDownloadLatest,
     onDownloadOriginal: handleDownloadOriginal,
+    onDownloadEventsLog: handleDownloadEventsLog,
     isRowActionPending: isRowMutationPending,
     inlineRenameRequest,
   });
