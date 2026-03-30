@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.13.0](https://github.com/clac-ca/automatic-data-extractor/compare/v1.12.0...v1.13.0) (2026-03-30)
+
+
+### Features
+
+* promote development to main ([#356](https://github.com/clac-ca/automatic-data-extractor/issues/356)) ([aac01de](https://github.com/clac-ca/automatic-data-extractor/commit/aac01dea44ea6078ae831f036f1a71b52de91d7b))
+
 ## [1.12.0](https://github.com/clac-ca/automatic-data-extractor/compare/v1.11.0...v1.12.0) (2026-03-25)
 
 
