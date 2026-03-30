@@ -28,7 +28,7 @@ from ade_api.settings import COUNT_STATEMENT_TIMEOUT_MS
 T = TypeVar("T")
 
 DEFAULT_LIMIT = 50
-MAX_LIMIT = 200
+MAX_LIMIT = 1000
 MAX_FILTERS = 25
 MAX_FILTERS_RAW_LENGTH = 8 * 1024
 CURSOR_VERSION = 1
@@ -485,6 +485,16 @@ def _parse_cursor_values[T](
     return parsed
 
 
+def _maybe_set_count_statement_timeout(session: Session, *, include_total: bool) -> None:
+    if (
+        include_total
+        and COUNT_STATEMENT_TIMEOUT_MS
+        and session.bind is not None
+        and getattr(session.bind.dialect, "name", None) == "postgresql"
+    ):
+        session.execute(text(f"SET LOCAL statement_timeout = {int(COUNT_STATEMENT_TIMEOUT_MS)}"))
+
+
 def paginate_query_cursor(
     session: Session,
     stmt: Select,
@@ -496,13 +506,7 @@ def paginate_query_cursor(
     changes_cursor: str | None = None,
     row_mapper: Callable[[Mapping[str, Any]], T] | None = None,
 ) -> CursorPage[T]:
-    if (
-        include_total
-        and COUNT_STATEMENT_TIMEOUT_MS
-        and session.bind is not None
-        and getattr(session.bind.dialect, "name", None) == "postgresql"
-    ):
-        session.execute(text(f"SET LOCAL statement_timeout = {int(COUNT_STATEMENT_TIMEOUT_MS)}"))
+    _maybe_set_count_statement_timeout(session, include_total=include_total)
 
     count: int | None = None
     if include_total:
@@ -537,6 +541,50 @@ def paginate_query_cursor(
         limit=limit,
         has_more=has_more,
         next_cursor=next_cursor,
+        total_included=include_total,
+        total_count=count if include_total else None,
+        changes_cursor=str(changes_cursor) if changes_cursor is not None else None,
+    )
+
+    return CursorPage(items=items, meta=meta, facets=None)
+
+
+def paginate_query_page(
+    session: Session,
+    stmt: Select,
+    *,
+    resolved_sort: ResolvedCursorSort[T],
+    limit: int,
+    page: int,
+    include_total: bool = False,
+    changes_cursor: str | None = None,
+    row_mapper: Callable[[Mapping[str, Any]], T] | None = None,
+) -> CursorPage[T]:
+    _maybe_set_count_statement_timeout(session, include_total=include_total)
+
+    ordered_stmt = stmt.order_by(*resolved_sort.order_by)
+    offset = max(page - 1, 0) * limit
+
+    count: int | None = None
+    if include_total:
+        count_stmt = select(func.count()).select_from(stmt.order_by(None).subquery())
+        count = session.execute(count_stmt).scalar_one()
+
+    result = session.execute(ordered_stmt.offset(offset).limit(limit + 1))
+    if row_mapper is None:
+        rows = result.scalars().all()
+    else:
+        rows = [row_mapper(cast(Mapping[str, Any], row)) for row in result.mappings().all()]
+
+    has_more = len(rows) > limit
+    items = rows[:limit]
+    if include_total and count is not None:
+        has_more = offset + len(items) < count
+
+    meta = CursorMeta(
+        limit=limit,
+        has_more=has_more,
+        next_cursor=None,
         total_included=include_total,
         total_count=count if include_total else None,
         changes_cursor=str(changes_cursor) if changes_cursor is not None else None,
@@ -807,6 +855,7 @@ __all__ = [
     "cursor_query_params",
     "decode_cursor",
     "encode_cursor",
+    "paginate_query_page",
     "paginate_query_cursor",
     "paginate_sequence_cursor",
     "parse_bool",

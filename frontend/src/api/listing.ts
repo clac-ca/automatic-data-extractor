@@ -36,6 +36,7 @@ export type FilterItem = {
 
 export type ListQueryParams = {
   limit?: number;
+  page?: number;
   cursor?: string;
   sort?: string;
   filters?: string;
@@ -54,6 +55,7 @@ export function encodeFilters(filters?: readonly FilterItem[] | null): string | 
 
 export function buildListQuery(options: {
   limit?: number;
+  page?: number | null;
   cursor?: string | null;
   sort?: string | null;
   filters?: FilterItem[] | string | null;
@@ -65,6 +67,9 @@ export function buildListQuery(options: {
   const query: ListQueryParams = {};
   if (typeof options.limit === "number" && options.limit > 0) {
     query.limit = options.limit;
+  }
+  if (typeof options.page === "number" && options.page > 0) {
+    query.page = options.page;
   }
   if (options.cursor) {
     query.cursor = options.cursor;

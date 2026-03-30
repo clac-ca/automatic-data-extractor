@@ -86,6 +86,45 @@ describe("queryState", () => {
     expect((encoded as Record<string, unknown>).simpleFilters).toBeUndefined();
   });
 
+  it("round-trips mentionedUserId=me for api payloads and saved views", () => {
+    const snapshot = buildDocumentsQuerySnapshot({
+      q: null,
+      sort: [],
+      filters: [{ id: "mentionedUserId", operator: "inArray", value: ["me", "other-user"] }],
+      joinOperator: "and",
+      lifecycle: "active",
+    });
+
+    const resolved = resolveListFiltersForApi({
+      snapshot,
+      currentUserId: "user-123",
+    });
+    expect(resolved.filters).toEqual([
+      {
+        id: "mentionedUserId",
+        operator: "inArray",
+        value: ["user-123", "other-user"],
+      },
+    ]);
+
+    const encoded = encodeSnapshotForViewPersistence({
+      snapshot: {
+        ...snapshot,
+        filters: [
+          { id: "mentionedUserId", operator: "inArray", value: ["user-123", "other-user"] },
+        ],
+      },
+      currentUserId: "user-123",
+    });
+    expect(encoded.filters).toEqual([
+      {
+        id: "mentionedUserId",
+        operator: "inArray",
+        value: ["me", "other-user"],
+      },
+    ]);
+  });
+
   it("parses persisted view query state", () => {
     const snapshot = parseViewQueryStateToSnapshot({
       q: "sales",

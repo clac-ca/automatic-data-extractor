@@ -446,6 +446,7 @@ def upload_document_version(
                     "includeRunTableColumns",
                     "includeRunFields",
                     "lifecycle",
+                    "page",
                 }
             )
         )
@@ -467,11 +468,21 @@ def list_documents(
     list_query: Annotated[CursorQueryParams, Depends(cursor_query_params)],
     service: DocumentsServiceReadDep,
     actor: DocumentReader,
+    page: Annotated[
+        int | None,
+        Query(ge=1, description="1-based page number for offset pagination."),
+    ] = None,
     lifecycle: Annotated[DocumentListLifecycle, Query()] = DocumentListLifecycle.ACTIVE,
     include_run_metrics: Annotated[bool, Query(alias="includeRunMetrics")] = False,
     include_run_table_columns: Annotated[bool, Query(alias="includeRunTableColumns")] = False,
     include_run_fields: Annotated[bool, Query(alias="includeRunFields")] = False,
 ) -> DocumentListPage:
+    if page is not None and list_query.cursor is not None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Query parameters 'page' and 'cursor' cannot be used together.",
+        )
+
     resolved_sort = resolve_cursor_sort(
         list_query.sort,
         allowed=SORT_FIELDS,
@@ -482,6 +493,7 @@ def list_documents(
     page_result = service.list_documents(
         workspace_id=workspace_id,
         limit=list_query.limit,
+        page=page,
         cursor=list_query.cursor,
         resolved_sort=resolved_sort,
         filters=list_query.filters,
