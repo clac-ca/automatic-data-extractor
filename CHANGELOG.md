@@ -1,5 +1,31 @@
 # Changelog
 
+## [1.12.0](https://github.com/clac-ca/automatic-data-extractor/compare/v1.11.0...v1.12.0) (2026-03-25)
+
+
+### Features
+
+* **api:** make workspace members the canonical effective-access read model ([0c6bb97](https://github.com/clac-ca/automatic-data-extractor/commit/0c6bb97f06f7421ccbdd203488e0df88d16e7a4e))
+
+
+### Bug Fixes
+
+* **api:** restore workspace member lookup for mentions and assignment ([#347](https://github.com/clac-ca/automatic-data-extractor/issues/347)) ([0c6bb97](https://github.com/clac-ca/automatic-data-extractor/commit/0c6bb97f06f7421ccbdd203488e0df88d16e7a4e))
+
+## [1.11.0](https://github.com/clac-ca/automatic-data-extractor/compare/v1.10.1...v1.11.0) (2026-03-18)
+
+
+### Features
+
+* **release:** promote development to main with archived documents ([#344](https://github.com/clac-ca/automatic-data-extractor/issues/344)) ([c065148](https://github.com/clac-ca/automatic-data-extractor/commit/c065148e542e8dfc9580676c5a8474a0dc5f91f7))
+
+## [1.10.1](https://github.com/clac-ca/automatic-data-extractor/compare/v1.10.0...v1.10.1) (2026-03-12)
+
+
+### Bug Fixes
+
+* **api:** align workspace mention search and validation ([#334](https://github.com/clac-ca/automatic-data-extractor/issues/334)) ([fabeacd](https://github.com/clac-ca/automatic-data-extractor/commit/fabeacd78527365922d04520d5fd7c75c027f2ec))
+
 ## [1.10.0](https://github.com/clac-ca/automatic-data-extractor/compare/v1.9.1...v1.10.0) (2026-03-12)
 
 
