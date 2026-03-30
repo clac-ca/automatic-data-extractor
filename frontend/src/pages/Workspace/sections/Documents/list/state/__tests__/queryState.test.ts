@@ -110,9 +110,10 @@ describe("queryState", () => {
     const encoded = encodeSnapshotForViewPersistence({
       snapshot: {
         ...snapshot,
-        filters: [
-          { id: "mentionedUserId", operator: "inArray", value: ["user-123", "other-user"] },
-        ],
+        filters: snapshot.filters.map((filter) => ({
+          ...filter,
+          value: ["user-123", "other-user"],
+        })),
       },
       currentUserId: "user-123",
     });
