@@ -6716,7 +6716,7 @@ export interface operations {
             query?: {
                 /** @description Optional user identifier filter. */
                 userId?: string | null;
-                /** @description Items per page (max 1000) */
+                /** @description Items per page (max 200) */
                 limit?: number;
                 /** @description Opaque cursor token for pagination. */
                 cursor?: string | null;
@@ -6781,7 +6781,7 @@ export interface operations {
     list_my_api_keys_api_v1_users_me_apikeys_get: {
         parameters: {
             query?: {
-                /** @description Items per page (max 1000) */
+                /** @description Items per page (max 200) */
                 limit?: number;
                 /** @description Opaque cursor token for pagination. */
                 cursor?: string | null;
@@ -7029,7 +7029,7 @@ export interface operations {
     list_user_api_keys_api_v1_users__userId__apikeys_get: {
         parameters: {
             query?: {
-                /** @description Items per page (max 1000) */
+                /** @description Items per page (max 200) */
                 limit?: number;
                 /** @description Opaque cursor token for pagination. */
                 cursor?: string | null;
@@ -7287,7 +7287,7 @@ export interface operations {
     list_users_api_v1_users_get: {
         parameters: {
             query?: {
-                /** @description Items per page (max 1000) */
+                /** @description Items per page (max 200) */
                 limit?: number;
                 /** @description Opaque cursor token for pagination. */
                 cursor?: string | null;
@@ -8143,7 +8143,7 @@ export interface operations {
             query?: {
                 workspace_id?: string | null;
                 status?: components["schemas"]["InvitationLifecycleStatus"] | null;
-                /** @description Items per page (max 1000) */
+                /** @description Items per page (max 200) */
                 limit?: number;
                 /** @description Opaque cursor token for pagination. */
                 cursor?: string | null;
@@ -8339,7 +8339,7 @@ export interface operations {
     list_permissions_api_v1_permissions_get: {
         parameters: {
             query?: {
-                /** @description Items per page (max 1000) */
+                /** @description Items per page (max 200) */
                 limit?: number;
                 /** @description Opaque cursor token for pagination. */
                 cursor?: string | null;
@@ -8388,7 +8388,7 @@ export interface operations {
     list_roles_api_v1_roles_get: {
         parameters: {
             query?: {
-                /** @description Items per page (max 1000) */
+                /** @description Items per page (max 200) */
                 limit?: number;
                 /** @description Opaque cursor token for pagination. */
                 cursor?: string | null;
@@ -8591,7 +8591,7 @@ export interface operations {
     list_organization_role_assignments_api_v1_roleAssignments_get: {
         parameters: {
             query?: {
-                /** @description Items per page (max 1000) */
+                /** @description Items per page (max 200) */
                 limit?: number;
                 /** @description Opaque cursor token for pagination. */
                 cursor?: string | null;
@@ -8678,7 +8678,7 @@ export interface operations {
     list_workspace_role_assignments_api_v1_workspaces__workspaceId__roleAssignments_get: {
         parameters: {
             query?: {
-                /** @description Items per page (max 1000) */
+                /** @description Items per page (max 200) */
                 limit?: number;
                 /** @description Opaque cursor token for pagination. */
                 cursor?: string | null;
@@ -9024,7 +9024,7 @@ export interface operations {
     list_workspaces_api_v1_workspaces_get: {
         parameters: {
             query?: {
-                /** @description Items per page (max 1000) */
+                /** @description Items per page (max 200) */
                 limit?: number;
                 /** @description Opaque cursor token for pagination. */
                 cursor?: string | null;
@@ -9397,7 +9397,7 @@ export interface operations {
     list_workspace_members_api_v1_workspaces__workspaceId__members_get: {
         parameters: {
             query?: {
-                /** @description Items per page (max 1000) */
+                /** @description Items per page (max 200) */
                 limit?: number;
                 /** @description Opaque cursor token for pagination. */
                 cursor?: string | null;
@@ -9570,7 +9570,7 @@ export interface operations {
     list_document_tags_api_v1_workspaces__workspaceId__documents_tags_get: {
         parameters: {
             query?: {
-                /** @description Items per page (max 1000) */
+                /** @description Items per page (max 200) */
                 limit?: number;
                 /** @description Opaque cursor token for pagination. */
                 cursor?: string | null;
@@ -11384,7 +11384,7 @@ export interface operations {
     list_configurations_api_v1_workspaces__workspaceId__configurations_get: {
         parameters: {
             query?: {
-                /** @description Items per page (max 1000) */
+                /** @description Items per page (max 200) */
                 limit?: number;
                 /** @description Opaque cursor token for pagination. */
                 cursor?: string | null;
@@ -12260,7 +12260,7 @@ export interface operations {
     list_workspace_runs_endpoint_api_v1_workspaces__workspaceId__runs_get: {
         parameters: {
             query?: {
-                /** @description Items per page (max 1000) */
+                /** @description Items per page (max 200) */
                 limit?: number;
                 /** @description Opaque cursor token for pagination. */
                 cursor?: string | null;

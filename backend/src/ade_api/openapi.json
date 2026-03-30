@@ -1088,13 +1088,13 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 1000,
+              "maximum": 200,
               "minimum": 1,
-              "description": "Items per page (max 1000)",
+              "description": "Items per page (max 200)",
               "default": 50,
               "title": "Limit"
             },
-            "description": "Items per page (max 1000)"
+            "description": "Items per page (max 200)"
           },
           {
             "name": "cursor",
@@ -1285,13 +1285,13 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 1000,
+              "maximum": 200,
               "minimum": 1,
-              "description": "Items per page (max 1000)",
+              "description": "Items per page (max 200)",
               "default": 50,
               "title": "Limit"
             },
-            "description": "Items per page (max 1000)"
+            "description": "Items per page (max 200)"
           },
           {
             "name": "cursor",
@@ -1789,13 +1789,13 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 1000,
+              "maximum": 200,
               "minimum": 1,
-              "description": "Items per page (max 1000)",
+              "description": "Items per page (max 200)",
               "default": 50,
               "title": "Limit"
             },
-            "description": "Items per page (max 1000)"
+            "description": "Items per page (max 200)"
           },
           {
             "name": "cursor",
@@ -2317,13 +2317,13 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 1000,
+              "maximum": 200,
               "minimum": 1,
-              "description": "Items per page (max 1000)",
+              "description": "Items per page (max 200)",
               "default": 50,
               "title": "Limit"
             },
-            "description": "Items per page (max 1000)"
+            "description": "Items per page (max 200)"
           },
           {
             "name": "cursor",
@@ -4130,13 +4130,13 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 1000,
+              "maximum": 200,
               "minimum": 1,
-              "description": "Items per page (max 1000)",
+              "description": "Items per page (max 200)",
               "default": 50,
               "title": "Limit"
             },
-            "description": "Items per page (max 1000)"
+            "description": "Items per page (max 200)"
           },
           {
             "name": "cursor",
@@ -4619,13 +4619,13 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 1000,
+              "maximum": 200,
               "minimum": 1,
-              "description": "Items per page (max 1000)",
+              "description": "Items per page (max 200)",
               "default": 50,
               "title": "Limit"
             },
-            "description": "Items per page (max 1000)"
+            "description": "Items per page (max 200)"
           },
           {
             "name": "cursor",
@@ -4800,13 +4800,13 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 1000,
+              "maximum": 200,
               "minimum": 1,
-              "description": "Items per page (max 1000)",
+              "description": "Items per page (max 200)",
               "default": 50,
               "title": "Limit"
             },
-            "description": "Items per page (max 1000)"
+            "description": "Items per page (max 200)"
           },
           {
             "name": "cursor",
@@ -5297,13 +5297,13 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 1000,
+              "maximum": 200,
               "minimum": 1,
-              "description": "Items per page (max 1000)",
+              "description": "Items per page (max 200)",
               "default": 50,
               "title": "Limit"
             },
-            "description": "Items per page (max 1000)"
+            "description": "Items per page (max 200)"
           },
           {
             "name": "cursor",
@@ -5568,13 +5568,13 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 1000,
+              "maximum": 200,
               "minimum": 1,
-              "description": "Items per page (max 1000)",
+              "description": "Items per page (max 200)",
               "default": 50,
               "title": "Limit"
             },
-            "description": "Items per page (max 1000)"
+            "description": "Items per page (max 200)"
           },
           {
             "name": "cursor",
@@ -6370,13 +6370,13 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 1000,
+              "maximum": 200,
               "minimum": 1,
-              "description": "Items per page (max 1000)",
+              "description": "Items per page (max 200)",
               "default": 50,
               "title": "Limit"
             },
-            "description": "Items per page (max 1000)"
+            "description": "Items per page (max 200)"
           },
           {
             "name": "cursor",
@@ -6977,13 +6977,13 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 1000,
+              "maximum": 200,
               "minimum": 1,
-              "description": "Items per page (max 1000)",
+              "description": "Items per page (max 200)",
               "default": 50,
               "title": "Limit"
             },
-            "description": "Items per page (max 1000)"
+            "description": "Items per page (max 200)"
           },
           {
             "name": "cursor",
@@ -7453,13 +7453,13 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 1000,
+              "maximum": 200,
               "minimum": 1,
-              "description": "Items per page (max 1000)",
+              "description": "Items per page (max 200)",
               "default": 50,
               "title": "Limit"
             },
-            "description": "Items per page (max 1000)"
+            "description": "Items per page (max 200)"
           },
           {
             "name": "cursor",
@@ -11160,13 +11160,13 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 1000,
+              "maximum": 200,
               "minimum": 1,
-              "description": "Items per page (max 1000)",
+              "description": "Items per page (max 200)",
               "default": 50,
               "title": "Limit"
             },
-            "description": "Items per page (max 1000)"
+            "description": "Items per page (max 200)"
           },
           {
             "name": "cursor",
@@ -13574,13 +13574,13 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 1000,
+              "maximum": 200,
               "minimum": 1,
-              "description": "Items per page (max 1000)",
+              "description": "Items per page (max 200)",
               "default": 50,
               "title": "Limit"
             },
-            "description": "Items per page (max 1000)"
+            "description": "Items per page (max 200)"
           },
           {
             "name": "cursor",

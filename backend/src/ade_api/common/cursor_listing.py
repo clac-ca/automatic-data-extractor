@@ -28,7 +28,7 @@ from ade_api.settings import COUNT_STATEMENT_TIMEOUT_MS
 T = TypeVar("T")
 
 DEFAULT_LIMIT = 50
-MAX_LIMIT = 1000
+MAX_LIMIT = 200
 MAX_FILTERS = 25
 MAX_FILTERS_RAW_LENGTH = 8 * 1024
 CURSOR_VERSION = 1
@@ -111,64 +111,71 @@ type OrderByExpr = ColumnElement[Any] | list[ColumnElement[Any]] | tuple[ColumnE
 type OrderByPair = tuple[OrderByExpr, OrderByExpr]
 
 
-def cursor_query_params(
-    limit: int = Query(
-        DEFAULT_LIMIT,
-        ge=1,
-        le=MAX_LIMIT,
-        description=f"Items per page (max {MAX_LIMIT})",
-    ),
-    cursor: str | None = Query(
-        None,
-        description="Opaque cursor token for pagination.",
-    ),
-    sort: str | None = Query(
-        None,
-        description="JSON array of {id, desc}.",
-    ),
-    filters: str | None = Query(
-        None,
-        description="URL-encoded JSON array of filter objects.",
-        examples=[STATUS_FILTER_EXAMPLE],
-    ),
-    join_operator: FilterJoinOperator = JOIN_OPERATOR_QUERY,
-    q: str | None = Query(
-        None,
-        description=(
-            "Free-text search string. Tokens are whitespace-separated, matched case-insensitively "
-            "as substrings; tokens shorter than 2 characters are ignored."
+def build_cursor_query_params(*, max_limit: int = MAX_LIMIT) -> Callable[..., CursorQueryParams]:
+    def dependency(
+        limit: int = Query(
+            DEFAULT_LIMIT,
+            ge=1,
+            le=max_limit,
+            description=f"Items per page (max {max_limit})",
         ),
-        examples=["acme invoice"],
-    ),
-    include_total: bool = Query(
-        False,
-        alias="includeTotal",
-        description="Include totalCount in the response.",
-    ),
-    include_facets: bool = Query(
-        False,
-        alias="includeFacets",
-        description="Include facet counts in the response.",
-    ),
-) -> CursorQueryParams:
-    sort_tokens = parse_sort(sort)
-    filter_items = parse_filter_items(
-        filters,
-        max_filters=MAX_FILTERS,
-        max_raw_length=MAX_FILTERS_RAW_LENGTH,
-    )
-    q_value = parse_q(q).normalized
+        cursor: str | None = Query(
+            None,
+            description="Opaque cursor token for pagination.",
+        ),
+        sort: str | None = Query(
+            None,
+            description="JSON array of {id, desc}.",
+        ),
+        filters: str | None = Query(
+            None,
+            description="URL-encoded JSON array of filter objects.",
+            examples=[STATUS_FILTER_EXAMPLE],
+        ),
+        join_operator: FilterJoinOperator = JOIN_OPERATOR_QUERY,
+        q: str | None = Query(
+            None,
+            description=(
+                "Free-text search string. Tokens are whitespace-separated, "
+                "matched case-insensitively "
+                "as substrings; tokens shorter than 2 characters are ignored."
+            ),
+            examples=["acme invoice"],
+        ),
+        include_total: bool = Query(
+            False,
+            alias="includeTotal",
+            description="Include totalCount in the response.",
+        ),
+        include_facets: bool = Query(
+            False,
+            alias="includeFacets",
+            description="Include facet counts in the response.",
+        ),
+    ) -> CursorQueryParams:
+        sort_tokens = parse_sort(sort)
+        filter_items = parse_filter_items(
+            filters,
+            max_filters=MAX_FILTERS,
+            max_raw_length=MAX_FILTERS_RAW_LENGTH,
+        )
+        q_value = parse_q(q).normalized
 
-    return CursorQueryParams(
-        limit=limit,
-        cursor=cursor,
-        sort=sort_tokens,
-        filters=filter_items,
-        join_operator=join_operator,
-        q=q_value,
-        include_total=include_total,
-        include_facets=include_facets,
-    )
+        return CursorQueryParams(
+            limit=limit,
+            cursor=cursor,
+            sort=sort_tokens,
+            filters=filter_items,
+            join_operator=join_operator,
+            q=q_value,
+            include_total=include_total,
+            include_facets=include_facets,
+        )
+
+    return dependency
+
+
+cursor_query_params = build_cursor_query_params()
 
 
 def strict_cursor_query_guard(

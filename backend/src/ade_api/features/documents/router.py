@@ -35,6 +35,7 @@ from ade_api.api.deps import (
 )
 from ade_api.common.cursor_listing import (
     CursorQueryParams,
+    build_cursor_query_params,
     cursor_query_params,
     resolve_cursor_sort,
     strict_cursor_query_guard,
@@ -144,6 +145,8 @@ tags_router = APIRouter(
 
 logger = logging.getLogger(__name__)
 KEEPALIVE_SECONDS = 15.0
+DOCUMENTS_LIST_MAX_LIMIT = 1000
+documents_cursor_query_params = build_cursor_query_params(max_limit=DOCUMENTS_LIST_MAX_LIMIT)
 
 WorkspacePath = Annotated[
     UUID,
@@ -465,7 +468,7 @@ def upload_document_version(
 )
 def list_documents(
     workspace_id: WorkspacePath,
-    list_query: Annotated[CursorQueryParams, Depends(cursor_query_params)],
+    list_query: Annotated[CursorQueryParams, Depends(documents_cursor_query_params)],
     service: DocumentsServiceReadDep,
     actor: DocumentReader,
     page: Annotated[
