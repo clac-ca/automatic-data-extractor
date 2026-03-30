@@ -437,7 +437,7 @@ async def test_list_documents_filters_by_mentioned_user(
         f"{workspace_base}/documents/{first_id}/archive",
         headers=headers,
     )
-    assert archive.status_code == 200, archive.text
+    assert archive.status_code == 204, archive.text
 
     archived_mentions = await async_client.get(
         f"{workspace_base}/documents",
