@@ -51,7 +51,6 @@ describe("buildDocumentRowActions", () => {
       lifecycle: "active",
       isBusy: false,
       isSelfAssigned: false,
-      canRenameInline: true,
       surface: "overflow",
       onDownloadLatest: handlers.onDownloadLatest,
       onDownloadOriginal: handlers.onDownloadOriginal,
@@ -66,7 +65,6 @@ describe("buildDocumentRowActions", () => {
       lifecycle: "active",
       isBusy: false,
       isSelfAssigned: false,
-      canRenameInline: true,
       surface: "context",
       onOpen: handlers.onOpen,
       onOpenPreview: handlers.onOpenPreview,
@@ -91,13 +89,11 @@ describe("buildDocumentRowActions", () => {
       lifecycle: "archived",
       isBusy: false,
       isSelfAssigned: false,
-      canRenameInline: false,
       surface: "overflow",
       onDownloadLatest: vi.fn(),
       onDownloadOriginal: vi.fn(),
       onDownloadEventsLog: vi.fn(),
       onAssignToMe: vi.fn(),
-      onRename: vi.fn(),
       onDeleteRequest: vi.fn(),
     });
 
@@ -116,7 +112,6 @@ describe("buildDocumentRowActions", () => {
       lifecycle: "archived",
       isBusy: false,
       isSelfAssigned: false,
-      canRenameInline: true,
       surface: "overflow",
       onDownloadLatest: vi.fn(),
       onDownloadOriginal: vi.fn(),
@@ -138,7 +133,6 @@ describe("buildDocumentRowActions", () => {
       lifecycle: "active",
       isBusy: false,
       isSelfAssigned: true,
-      canRenameInline: true,
       surface: "overflow",
       onAssignToMe: vi.fn(),
     });
@@ -157,7 +151,6 @@ describe("buildDocumentRowActions", () => {
       lifecycle: "active",
       isBusy: false,
       isSelfAssigned: false,
-      canRenameInline: true,
       surface: "overflow",
       onDownloadLatest: vi.fn(),
       onDownloadOriginal: vi.fn(),
@@ -168,5 +161,20 @@ describe("buildDocumentRowActions", () => {
     });
 
     expect(actions.find((item) => item.id === "download-events-log")).toBeUndefined();
+  });
+
+  it("hides rename when no rename handler is provided", () => {
+    const document = makeDocument();
+    const actions = buildDocumentRowActions({
+      document,
+      lifecycle: "active",
+      isBusy: false,
+      isSelfAssigned: false,
+      surface: "overflow",
+      onDownloadLatest: vi.fn(),
+      onDownloadOriginal: vi.fn(),
+    });
+
+    expect(actions.find((item) => item.id === "rename")).toBeUndefined();
   });
 });

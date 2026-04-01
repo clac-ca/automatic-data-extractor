@@ -109,6 +109,8 @@ describe("useDocumentPreviewModel", () => {
       expect(latestCall?.[1]).toBe("doc-1");
       expect(latestCall?.[2]).toEqual(
         expect.objectContaining({
+          maxRows: 10_000,
+          maxColumns: 10_000,
           trimEmptyRows: true,
           trimEmptyColumns: true,
         }),
@@ -123,6 +125,8 @@ describe("useDocumentPreviewModel", () => {
       expect(latestCall?.[1]).toBe("doc-1");
       expect(latestCall?.[2]).toEqual(
         expect.objectContaining({
+          maxRows: 10_000,
+          maxColumns: 10_000,
           trimEmptyRows: false,
           trimEmptyColumns: false,
         }),
