@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.15.0](https://github.com/clac-ca/automatic-data-extractor/compare/v1.14.0...v1.15.0) (2026-04-01)
+
+
+### Features
+
+* **documents:** stabilize rename flow and expand preview ([#363](https://github.com/clac-ca/automatic-data-extractor/issues/363)) ([b65b728](https://github.com/clac-ca/automatic-data-extractor/commit/b65b7284c2534ba22c59e41e9f6015ae7dc74b56))
+
 ## [1.14.0](https://github.com/clac-ca/automatic-data-extractor/compare/v1.13.0...v1.14.0) (2026-03-30)
 
 
