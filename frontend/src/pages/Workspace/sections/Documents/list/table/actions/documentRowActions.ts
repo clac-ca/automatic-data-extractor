@@ -23,7 +23,6 @@ export function buildDocumentRowActions({
   lifecycle,
   isBusy,
   isSelfAssigned,
-  canRenameInline,
   surface,
   onOpen,
   onOpenPreview,
@@ -39,7 +38,6 @@ export function buildDocumentRowActions({
   lifecycle: "active" | "archived";
   isBusy: boolean;
   isSelfAssigned: boolean;
-  canRenameInline: boolean;
   surface: DocumentRowActionSurface;
   onOpen?: () => void;
   onOpenPreview?: () => void;
@@ -119,7 +117,7 @@ export function buildDocumentRowActions({
     });
   }
 
-  if (canRenameInline && onRename) {
+  if (onRename) {
     pushCore({
       id: "rename",
       label: "Rename",
