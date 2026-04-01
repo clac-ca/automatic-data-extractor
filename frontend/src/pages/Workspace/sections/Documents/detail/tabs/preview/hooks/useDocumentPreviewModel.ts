@@ -16,8 +16,8 @@ import type { DocumentRow } from "@/pages/Workspace/sections/Documents/shared/ty
 import { getNormalizedPreviewState } from "../state";
 import { buildPreviewCountSummary, type PreviewDisplayPreferences } from "../model";
 
-const DEFAULT_MAX_ROWS = 200;
-const DEFAULT_MAX_COLUMNS = 50;
+const DEFAULT_MAX_ROWS = 10_000;
+const DEFAULT_MAX_COLUMNS = 10_000;
 
 export type PreviewSheet = {
   name: string;

@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Check, Ellipsis, Pencil, RotateCcw, X } from "lucide-react";
+import { useMemo, type ReactNode } from "react";
+import { Ellipsis, Pencil, RotateCcw } from "lucide-react";
 
 import { ChatIcon, CloseIcon, EyeIcon, RefreshIcon } from "@/components/icons";
 import { Button } from "@/components/ui/button";
@@ -9,13 +9,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import type { DocumentPresenceEntry } from "@/pages/Workspace/hooks/presence/presenceParticipants";
-import {
-  composeFileName,
-  splitFileName,
-} from "@/pages/Workspace/sections/Documents/shared/rename/fileNameParts";
 
 import type { DocumentRow } from "../../../shared/types";
 import { DocumentPresenceBadges } from "../../../shared/presence/DocumentPresenceBadges";
@@ -33,7 +28,7 @@ export function DocumentNameCell({
   currentUserId,
   onOpenPreview,
   onOpenActivity,
-  onRename,
+  onRenameRequest,
   onAssignToMe,
   onDeleteRequest,
   onRestoreRequest,
@@ -42,7 +37,6 @@ export function DocumentNameCell({
   onDownloadEventsLog,
   onReprocessRequest,
   onCancelRunRequest,
-  externalRenameSignal,
 }: {
   document: DocumentRow;
   lifecycle: "active" | "archived";
@@ -51,7 +45,7 @@ export function DocumentNameCell({
   currentUserId?: string;
   onOpenPreview?: () => void;
   onOpenActivity?: () => void;
-  onRename?: (nextName: string) => Promise<void> | void;
+  onRenameRequest?: () => void;
   onAssignToMe?: () => void;
   onDeleteRequest?: (document: DocumentRow) => void;
   onRestoreRequest?: (document: DocumentRow) => void;
@@ -60,83 +54,20 @@ export function DocumentNameCell({
   onDownloadEventsLog?: (document: DocumentRow) => void;
   onReprocessRequest?: (document: DocumentRow) => void;
   onCancelRunRequest?: (document: DocumentRow) => void;
-  externalRenameSignal?: number;
 }) {
-  const [isEditing, setIsEditing] = useState(false);
-  const [draftBaseName, setDraftBaseName] = useState(() => splitFileName(document.name).baseName);
-  const [lockedExtension, setLockedExtension] = useState(() => splitFileName(document.name).extension);
-  const [renameError, setRenameError] = useState<string | null>(null);
-  const [isSubmittingRename, setIsSubmittingRename] = useState(false);
-  const lastRenameSignalRef = useRef(externalRenameSignal ?? 0);
-
   const isArchivedLifecycle = lifecycle === "archived";
   const runActive = isRunActive(document);
   const runActionLabel = isArchivedLifecycle ? "Restore" : runActive ? "Cancel run" : "Reprocess";
   const commentCount = document.commentCount ?? 0;
   const commentBadgeLabel = commentCount > 99 ? "99+" : String(commentCount);
   const isSelfAssigned = Boolean(currentUserId && document.assignee?.id === currentUserId);
-
-  const canRenameInline = Boolean(onRename);
-  const resetDraftFromName = useCallback((name: string) => {
-    const next = splitFileName(name);
-    setDraftBaseName(next.baseName);
-    setLockedExtension(next.extension);
-  }, []);
-
-  const startRename = useCallback(() => {
-    if (!canRenameInline || isBusy) return;
-    resetDraftFromName(document.name);
-    setIsEditing(true);
-    setRenameError(null);
-  }, [canRenameInline, document.name, isBusy, resetDraftFromName]);
-
-  useEffect(() => {
-    if (isEditing) return;
-    resetDraftFromName(document.name);
-  }, [document.name, isEditing, resetDraftFromName]);
-
-  const submitRename = async () => {
-    if (!onRename) return;
-    const normalizedBase = draftBaseName.trim();
-    if (!normalizedBase) {
-      setRenameError("Document name cannot be blank.");
-      return;
-    }
-    const nextName = composeFileName({
-      baseName: normalizedBase,
-      extension: lockedExtension,
-    });
-    if (nextName === document.name) {
-      setIsEditing(false);
-      setRenameError(null);
-      return;
-    }
-
-    setIsSubmittingRename(true);
-    setRenameError(null);
-    try {
-      await onRename(nextName);
-      setIsEditing(false);
-      setRenameError(null);
-    } catch (error) {
-      setRenameError(error instanceof Error ? error.message : "Unable to rename document.");
-    } finally {
-      setIsSubmittingRename(false);
-    }
-  };
+  const canRename = Boolean(onRenameRequest);
 
   const runActionIcon = useMemo(() => {
     if (isArchivedLifecycle) return <RotateCcw className="h-4 w-4" />;
     if (runActive) return <CloseIcon className="h-4 w-4" />;
     return <RefreshIcon className="h-4 w-4" />;
   }, [isArchivedLifecycle, runActive]);
-
-  useEffect(() => {
-    const nextSignal = externalRenameSignal ?? 0;
-    if (nextSignal === lastRenameSignalRef.current) return;
-    lastRenameSignalRef.current = nextSignal;
-    startRename();
-  }, [externalRenameSignal, startRename]);
 
   const overflowActions = useMemo(
     () =>
@@ -145,18 +76,16 @@ export function DocumentNameCell({
         lifecycle,
         isBusy,
         isSelfAssigned,
-        canRenameInline,
         surface: "overflow",
         onDownloadLatest,
         onDownloadOriginal,
         onDownloadEventsLog,
         onAssignToMe,
-        onRename: startRename,
+        onRename: onRenameRequest,
         onDeleteRequest,
         onRestoreRequest,
       }),
     [
-      canRenameInline,
       document,
       isBusy,
       isSelfAssigned,
@@ -166,100 +95,17 @@ export function DocumentNameCell({
       onDownloadLatest,
       onDownloadOriginal,
       onDownloadEventsLog,
+      onRenameRequest,
       onRestoreRequest,
-      startRename,
     ],
   );
 
   return (
     <div className="group/name-cell flex min-w-0 items-start gap-2">
       <div className="min-w-0 flex-1">
-        {isEditing ? (
-          <div className="space-y-1" data-row-interactive data-ignore-row-click>
-            <div className="flex items-center gap-1">
-              <Input
-                value={draftBaseName}
-                onChange={(event) => setDraftBaseName(event.target.value)}
-                autoFocus
-                disabled={isSubmittingRename || isBusy}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    void submitRename();
-                  }
-                  if (event.key === "Escape") {
-                    event.preventDefault();
-                    resetDraftFromName(document.name);
-                    setIsEditing(false);
-                    setRenameError(null);
-                  }
-                }}
-                className={lockedExtension ? "h-8 rounded-r-none border-r-0" : "h-8"}
-              />
-              {lockedExtension ? (
-                <div className="inline-flex h-8 items-center rounded-r-md border border-input bg-muted/40 px-2 text-xs text-muted-foreground">
-                  {lockedExtension}
-                </div>
-              ) : null}
-              <Button
-                type="button"
-                size="icon"
-                variant="ghost"
-                className="h-8 w-8"
-                onClick={() => {
-                  void submitRename();
-                }}
-                disabled={isSubmittingRename || isBusy}
-                aria-label="Save document name"
-                data-row-interactive
-              >
-                <Check className="h-4 w-4" />
-              </Button>
-              <Button
-                type="button"
-                size="icon"
-                variant="ghost"
-                className="h-8 w-8"
-                onClick={() => {
-                  resetDraftFromName(document.name);
-                  setIsEditing(false);
-                  setRenameError(null);
-                }}
-                disabled={isSubmittingRename || isBusy}
-                aria-label="Cancel rename"
-                data-row-interactive
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-            {renameError ? <p className="text-xs text-destructive">{renameError}</p> : null}
-          </div>
-        ) : (
-          <>
-            {canRenameInline ? (
-              <button
-                type="button"
-                data-allow-row-activate
-                className="w-full truncate text-left font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-                title={document.name}
-                onDoubleClick={() => {
-                  startRename();
-                }}
-                onKeyDown={(event) => {
-                  if (event.key !== "F2") return;
-                  event.preventDefault();
-                  startRename();
-                }}
-              >
-                {document.name}
-              </button>
-            ) : (
-              <div className="truncate font-medium" title={document.name}>
-                {document.name}
-              </div>
-            )}
-          </>
-        )}
+        <div className="truncate font-medium" title={document.name}>
+          {document.name}
+        </div>
         <DocumentPresenceBadges entries={presenceEntries} />
       </div>
 
@@ -268,11 +114,11 @@ export function DocumentNameCell({
         data-row-interactive
         data-ignore-row-click
       >
-        {canRenameInline ? (
+        {canRename ? (
           <IconButton
             label="Rename document"
-            onClick={startRename}
-            disabled={isSubmittingRename || isBusy}
+            onClick={() => onRenameRequest?.()}
+            disabled={isBusy}
           >
             <Pencil className="h-4 w-4" />
           </IconButton>

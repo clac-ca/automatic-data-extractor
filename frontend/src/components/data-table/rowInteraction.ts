@@ -28,8 +28,6 @@ const ROW_INTERACTIVE_SELECTOR = [
 ].join(",");
 
 const CONTEXT_MENU_BLOCK_SELECTOR = [
-  "[data-row-interactive]",
-  "[data-ignore-row-click]",
   "[data-radix-popper-content-wrapper]",
   "[data-slot='popover-content']",
   "[data-slot='dropdown-menu-content']",
@@ -37,19 +35,13 @@ const CONTEXT_MENU_BLOCK_SELECTOR = [
   "[cmdk-root]",
   "[cmdk-item]",
   "[cmdk-input]",
-  "button",
-  "a[href]",
-  "input",
-  "select",
-  "textarea",
-  "[role='button']",
+  "[role='dialog']",
+  "[role='menu']",
   "[role='menuitem']",
   "[role='menuitemcheckbox']",
   "[role='menuitemradio']",
-  "[role='combobox']",
   "[role='listbox']",
   "[role='option']",
-  "[role='textbox']",
   "[contenteditable='true']",
 ].join(",");
 

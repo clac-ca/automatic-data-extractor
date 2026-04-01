@@ -35,37 +35,31 @@ function makeDocument(): DocumentRow {
 }
 
 describe("DocumentNameCell", () => {
-  it("supports inline rename via F2 + Enter", async () => {
+  it("triggers rename from the row action button", async () => {
     const user = userEvent.setup();
     const document = makeDocument();
-    const onRename = vi.fn().mockResolvedValue(undefined);
+    const onRenameRequest = vi.fn();
 
     render(
       <DocumentNameCell
         document={document}
         lifecycle="active"
         presenceEntries={[]}
-        onRename={onRename}
+        onRenameRequest={onRenameRequest}
       />,
     );
 
-    const name = screen.getByText("source.csv");
-    name.focus();
-    await user.keyboard("{F2}");
+    await user.click(screen.getByLabelText("Rename document"));
 
-    const input = await screen.findByRole("textbox");
-    await user.clear(input);
-    await user.type(input, "renamed");
-    await user.keyboard("{Enter}");
-
-    expect(onRename).toHaveBeenCalledWith("renamed.csv");
+    expect(onRenameRequest).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
   });
 
   it("renders shared overflow actions and supports assign-to-me", async () => {
     const user = userEvent.setup();
     const document = makeDocument();
     const onAssignToMe = vi.fn();
-    const onRename = vi.fn().mockResolvedValue(undefined);
+    const onRenameRequest = vi.fn();
     const onDownloadLatest = vi.fn();
     const onDownloadOriginal = vi.fn();
     const onDownloadEventsLog = vi.fn();
@@ -77,7 +71,7 @@ describe("DocumentNameCell", () => {
         presenceEntries={[]}
         currentUserId="user_me"
         onAssignToMe={onAssignToMe}
-        onRename={onRename}
+        onRenameRequest={onRenameRequest}
         onDownloadLatest={onDownloadLatest}
         onDownloadOriginal={onDownloadOriginal}
         onDownloadEventsLog={onDownloadEventsLog}
@@ -93,6 +87,27 @@ describe("DocumentNameCell", () => {
     await user.click(screen.getByRole("menuitem", { name: "Assign to me" }));
 
     expect(onAssignToMe).toHaveBeenCalledTimes(1);
+  });
+
+  it("triggers the overflow rename handler", async () => {
+    const user = userEvent.setup();
+    const document = makeDocument();
+    const onRenameRequest = vi.fn();
+
+    render(
+      <DocumentNameCell
+        document={document}
+        lifecycle="active"
+        presenceEntries={[]}
+        onRenameRequest={onRenameRequest}
+      />,
+    );
+
+    await user.click(screen.getByLabelText("More actions"));
+    await user.click(screen.getByRole("menuitem", { name: "Rename" }));
+
+    expect(onRenameRequest).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
   });
 
   it("triggers the overflow events log handler", async () => {
@@ -113,34 +128,5 @@ describe("DocumentNameCell", () => {
     await user.click(screen.getByRole("menuitem", { name: "Download events log" }));
 
     expect(onDownloadEventsLog).toHaveBeenCalledWith(document);
-  });
-
-  it("locks extension while renaming inline", async () => {
-    const user = userEvent.setup();
-    const document = makeDocument();
-    const onRename = vi.fn().mockResolvedValue(undefined);
-
-    render(
-      <DocumentNameCell
-        document={document}
-        lifecycle="active"
-        presenceEntries={[]}
-        onRename={onRename}
-      />,
-    );
-
-    const name = screen.getByText("source.csv");
-    name.focus();
-    await user.keyboard("{F2}");
-
-    expect(screen.getByText(".csv")).toBeInTheDocument();
-
-    const input = await screen.findByRole("textbox");
-    await user.clear(input);
-    await user.type(input, "new-name");
-    await user.keyboard("{Enter}");
-
-    expect(onRename).toHaveBeenCalledWith("new-name.csv");
-    expect(onRename).not.toHaveBeenCalledWith("new-name");
   });
 });
