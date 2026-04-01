@@ -86,6 +86,11 @@ type BulkTagPatch = {
   remove: string[];
 };
 
+type RenameTarget = {
+  id: string;
+  name: string;
+};
+
 const BULK_DOWNLOAD_WARNING_THRESHOLD = 12;
 const BULK_DOWNLOAD_DELAY_MS = 80;
 const ASSIGN_CHOICE_UNASSIGN = "__unassign__";
@@ -202,6 +207,8 @@ export function DocumentsTableContainer({
   const navigate = useNavigate();
   const [deleteTarget, setDeleteTarget] = useState<DocumentRow | null>(null);
   const [restoreTarget, setRestoreTarget] = useState<DocumentRow | null>(null);
+  const [renameTarget, setRenameTarget] = useState<RenameTarget | null>(null);
+  const [renameError, setRenameError] = useState<string | null>(null);
   const [restoreRenameTarget, setRestoreRenameTarget] = useState<DocumentRow | null>(null);
   const [restoreRenameInitialName, setRestoreRenameInitialName] = useState("");
   const [restoreRenameError, setRestoreRenameError] = useState<string | null>(null);
@@ -218,10 +225,6 @@ export function DocumentsTableContainer({
   const [reprocessTargets, setReprocessTargets] = useState<ReprocessTargetDocument[]>([]);
   const [isReprocessSubmitting, setIsReprocessSubmitting] = useState(false);
   const [selectionResetToken, setSelectionResetToken] = useState(0);
-  const [inlineRenameRequest, setInlineRenameRequest] = useState<{
-    documentId: string;
-    nonce: number;
-  } | null>(null);
   const renameMutation = useRenameDocumentMutation({ workspaceId });
   const canManagePublicViews = hasPermission("workspace.documents.views.public.manage");
   const {
@@ -314,11 +317,12 @@ export function DocumentsTableContainer({
 
   const handledUploadsRef = useRef(new Set<string>());
   const completedUploadsRef = useRef(new Set<string>());
-  const inlineRenameNonceRef = useRef(0);
 
   useEffect(() => {
     setDeleteTarget(null);
     setRestoreTarget(null);
+    setRenameTarget(null);
+    setRenameError(null);
     setRestoreRenameTarget(null);
     setRestoreRenameInitialName("");
     setRestoreRenameError(null);
@@ -337,7 +341,6 @@ export function DocumentsTableContainer({
     setIsReprocessSubmitting(false);
     resetBulkActions();
     setSelectionResetToken(0);
-    setInlineRenameRequest(null);
     setStaleViewKey(null);
     handledUploadsRef.current.clear();
     completedUploadsRef.current.clear();
@@ -1294,9 +1297,30 @@ export function DocumentsTableContainer({
     ],
   );
 
-  const onRenameInline = useCallback(
-    async (document: DocumentRow, nextName: string) => {
-      const current = documentsById[document.id] ?? document;
+  const openRenameDialog = useCallback(
+    (document: RenameTarget) => {
+      renameMutation.reset();
+      setRenameTarget({
+        id: document.id,
+        name: document.name,
+      });
+      setRenameError(null);
+    },
+    [renameMutation],
+  );
+
+  const closeRenameDialog = useCallback(() => {
+    if (renameMutation.isRenaming) return;
+    renameMutation.reset();
+    setRenameTarget(null);
+    setRenameError(null);
+  }, [renameMutation]);
+
+  const confirmRenameDialog = useCallback(
+    async (nextName: string) => {
+      if (!renameTarget) return;
+      const current = documentsById[renameTarget.id] ?? renameTarget;
+      setRenameError(null);
       markRowPending(current.id, "rename");
       try {
         const result = await renameMutation.renameDocument({
@@ -1304,34 +1328,38 @@ export function DocumentsTableContainer({
           currentName: current.name,
           nextName,
         });
-        if (result) {
-          notifyToast({
-            title: "Document renamed.",
-            intent: "success",
-            duration: 2500,
-          });
+        if (!result) {
+          closeRenameDialog();
+          return;
         }
+        notifyToast({
+          title: "Document renamed.",
+          intent: "success",
+          duration: 2500,
+        });
+        closeRenameDialog();
       } catch (error) {
         const description = getRenameDocumentErrorMessage(error);
+        setRenameError(description);
         notifyToast({
           title: "Unable to rename document",
           description,
           intent: "danger",
         });
-        throw new Error(description);
       } finally {
         clearRowPending(current.id, "rename");
       }
     },
-    [clearRowPending, documentsById, markRowPending, notifyToast, renameMutation],
+    [
+      clearRowPending,
+      closeRenameDialog,
+      documentsById,
+      markRowPending,
+      notifyToast,
+      renameMutation,
+      renameTarget,
+    ],
   );
-  const requestInlineRename = useCallback((documentId: string) => {
-    inlineRenameNonceRef.current += 1;
-    setInlineRenameRequest({
-      documentId,
-      nonce: inlineRenameNonceRef.current,
-    });
-  }, []);
 
   const onDeleteRequest = useCallback((document: DocumentRow) => {
     setDeleteTarget(document);
@@ -1565,7 +1593,7 @@ export function DocumentsTableContainer({
     onAssign,
     onToggleTag,
     onTagOptionsChange: handleTagOptionsChange,
-    onRenameInline,
+    onRenameRequest: openRenameDialog,
     onDeleteRequest,
     onRestoreRequest,
     onReprocessRequest,
@@ -1574,7 +1602,6 @@ export function DocumentsTableContainer({
     onDownloadOriginal: handleDownloadOriginal,
     onDownloadEventsLog: handleDownloadEventsLog,
     isRowActionPending: isRowMutationPending,
-    inlineRenameRequest,
   });
 
   const { table, debounceMs, throttleMs, shallow } = useDataTable({
@@ -1814,7 +1841,6 @@ export function DocumentsTableContainer({
         lifecycle,
         isBusy: isRowMutationPending(row.id),
         isSelfAssigned: row.assignee?.id === currentUser.id,
-        canRenameInline: true,
         surface: "context",
         onOpen: () => openDocument(row.id, "activity"),
         onOpenPreview: () => openDocument(row.id, "preview"),
@@ -1826,7 +1852,7 @@ export function DocumentsTableContainer({
           },
         onRename:
           () => {
-            requestInlineRename(row.id);
+            openRenameDialog(row);
           },
         onDeleteRequest: lifecycle === "active" ? onDeleteRequest : undefined,
         onRestoreRequest: lifecycle === "archived" ? onRestoreRequest : undefined,
@@ -1840,10 +1866,10 @@ export function DocumentsTableContainer({
       handleDownloadOriginal,
       isRowMutationPending,
       lifecycle,
+      openRenameDialog,
       onAssign,
       onDeleteRequest,
       openDocument,
-      requestInlineRename,
     ],
   );
 
@@ -1925,6 +1951,8 @@ export function DocumentsTableContainer({
 
   const deletePending =
     deleteTarget ? pendingMutations[deleteTarget.id]?.has("delete") ?? false : false;
+  const renamePending =
+    renameTarget ? renameMutation.pendingDocumentId === renameTarget.id : false;
   const restorePending =
     restoreTarget ? pendingMutations[restoreTarget.id]?.has("restore") ?? false : false;
   const restoreRenamePending =
@@ -2228,6 +2256,19 @@ export function DocumentsTableContainer({
         onConfirmDeleteView={() => {
           void handleDeleteViewConfirm();
         }}
+      />
+      <RenameDocumentDialog
+        open={Boolean(renameTarget)}
+        documentName={renameTarget?.name ?? ""}
+        isPending={renamePending}
+        errorMessage={renameError}
+        onOpenChange={(open) => {
+          if (!open) closeRenameDialog();
+        }}
+        onClearError={() => {
+          if (renameError) setRenameError(null);
+        }}
+        onSubmit={confirmRenameDialog}
       />
       <RenameDocumentDialog
         open={Boolean(restoreRenameTarget)}

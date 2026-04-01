@@ -42,6 +42,7 @@ function TestHarness({
             <div role="option" aria-selected="false" data-row-interactive>
               Faceted option
             </div>
+            <div data-slot="dropdown-menu-content">Open menu content</div>
           </div>
         ),
       },
@@ -141,7 +142,7 @@ describe("DataTable", () => {
     expect(onContext).toHaveBeenCalledTimes(0);
   });
 
-  it("supports row context menu and ignores interactive targets", () => {
+  it("supports row context menu across the full row surface but ignores overlay targets", () => {
     const onActivate = vi.fn();
     const onContext = vi.fn();
     render(<TestHarness onActivate={onActivate} onContext={onContext} />);
@@ -154,7 +155,10 @@ describe("DataTable", () => {
     expect(onContext).toHaveBeenLastCalledWith("doc_1");
 
     fireEvent.contextMenu(screen.getByRole("button", { name: "Inner action" }));
-    expect(onContext).toHaveBeenCalledTimes(1);
+    expect(onContext).toHaveBeenCalledTimes(2);
+
+    fireEvent.contextMenu(screen.getByText("Open menu content"));
+    expect(onContext).toHaveBeenCalledTimes(2);
   });
 
   it("opens row context menu even after prior interactive pointer intent", () => {

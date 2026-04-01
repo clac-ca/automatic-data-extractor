@@ -26,7 +26,7 @@ export type DocumentsColumnContext = {
   onOpenActivity?: (documentId: string) => void;
   onAssign: (documentId: string, assigneeId: string | null) => void;
   onToggleTag: (documentId: string, tag: string) => void;
-  onRenameInline: (document: DocumentRow, nextName: string) => Promise<void>;
+  onRenameRequest: (document: DocumentRow) => void;
   onDeleteRequest: (document: DocumentRow) => void;
   onRestoreRequest: (document: DocumentRow) => void;
   onDownloadLatest: (document: DocumentRow) => void;
@@ -35,7 +35,6 @@ export type DocumentsColumnContext = {
   onReprocessRequest: (document: DocumentRow) => void;
   onCancelRunRequest: (document: DocumentRow) => void;
   isRowActionPending?: (documentId: string) => boolean;
-  inlineRenameRequest?: { documentId: string; nonce: number } | null;
 };
 
 type DocumentsColumnMeta = {
@@ -60,7 +59,7 @@ export function useDocumentsColumns({
   onOpenActivity,
   onAssign,
   onToggleTag,
-  onRenameInline,
+  onRenameRequest,
   onDeleteRequest,
   onRestoreRequest,
   onDownloadLatest,
@@ -69,7 +68,6 @@ export function useDocumentsColumns({
   onReprocessRequest,
   onCancelRunRequest,
   isRowActionPending,
-  inlineRenameRequest,
 }: DocumentsColumnContext) {
   const runStatusOptions = useMemo(() => {
     const statuses = (["queued", "running", "succeeded", "failed", "cancelled"] as RunStatus[]).map((value) => ({
@@ -148,7 +146,7 @@ export function useDocumentsColumns({
               currentUserId={currentUserId}
               onOpenPreview={onOpenPreview ? () => onOpenPreview(row.original.id) : undefined}
               onOpenActivity={onOpenActivity ? () => onOpenActivity(row.original.id) : undefined}
-              onRename={(nextName) => onRenameInline(row.original, nextName)}
+              onRenameRequest={() => onRenameRequest(row.original)}
               onAssignToMe={() => onAssign(row.original.id, currentUserId)}
               onDeleteRequest={onDeleteRequest}
               onRestoreRequest={onRestoreRequest}
@@ -157,9 +155,6 @@ export function useDocumentsColumns({
               onDownloadEventsLog={onDownloadEventsLog}
               onReprocessRequest={onReprocessRequest}
               onCancelRunRequest={onCancelRunRequest}
-              externalRenameSignal={
-                inlineRenameRequest?.documentId === row.original.id ? inlineRenameRequest.nonce : 0
-              }
             />
           );
         },
@@ -402,8 +397,7 @@ export function useDocumentsColumns({
       onDownloadEventsLog,
       onReprocessRequest,
       onCancelRunRequest,
-      inlineRenameRequest,
-      onRenameInline,
+      onRenameRequest,
       onTagOptionsChange,
       onToggleTag,
       people,
