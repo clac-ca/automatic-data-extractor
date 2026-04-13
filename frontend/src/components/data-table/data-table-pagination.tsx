@@ -18,12 +18,14 @@ import { cn } from "@/lib/utils";
 
 interface DataTablePaginationProps<TData> extends React.ComponentProps<"div"> {
   table: Table<TData>;
-  pageSizeOptions?: number[];
+  pageSizeOptions?: readonly number[];
+  onPageSizeChange?: (pageSize: number) => void;
 }
 
 export function DataTablePagination<TData>({
   table,
   pageSizeOptions = [10, 20, 30, 40, 50],
+  onPageSizeChange,
   className,
   ...props
 }: DataTablePaginationProps<TData>) {
@@ -45,7 +47,9 @@ export function DataTablePagination<TData>({
           <Select
             value={`${table.getState().pagination.pageSize}`}
             onValueChange={(value) => {
-              table.setPageSize(Number(value));
+              const pageSize = Number(value);
+              onPageSizeChange?.(pageSize);
+              table.setPageSize(pageSize);
             }}
           >
             <SelectTrigger className="h-8 w-24 data-size:h-8">

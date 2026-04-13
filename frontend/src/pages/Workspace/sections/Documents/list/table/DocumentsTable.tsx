@@ -20,9 +20,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { DocumentRow } from "../../shared/types";
+import { DOCUMENTS_PAGE_SIZE_OPTIONS } from "../../shared/constants";
 import { DocumentsActiveFiltersRail } from "./DocumentsActiveFiltersRail";
-
-const DOCUMENTS_PAGE_SIZE_OPTIONS = [10, 20, 30, 40, 50, 100, 500, 1000];
 
 interface DocumentsTableProps {
   table: Table<DocumentRow>;
@@ -31,6 +30,7 @@ interface DocumentsTableProps {
   shallow: boolean;
   leadingToolbarActions?: ReactNode;
   toolbarActions?: ReactNode;
+  onPageSizeChange?: (pageSize: number) => void;
   onRowActivate?: (document: DocumentRow) => void;
   onBulkReprocessRequest?: (documents: DocumentRow[]) => void;
   onBulkCancelRequest?: (documents: DocumentRow[]) => void;
@@ -51,6 +51,7 @@ export function DocumentsTable({
   shallow,
   leadingToolbarActions,
   toolbarActions,
+  onPageSizeChange,
   onRowActivate,
   onBulkReprocessRequest,
   onBulkCancelRequest,
@@ -233,6 +234,7 @@ export function DocumentsTable({
           table={table}
           actionBar={actionBar}
           pageSizeOptions={DOCUMENTS_PAGE_SIZE_OPTIONS}
+          onPageSizeChange={onPageSizeChange}
           onRowActivate={
             onRowActivate
               ? (row) => {

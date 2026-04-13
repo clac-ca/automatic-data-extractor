@@ -10,6 +10,7 @@ import {
   DEFAULT_PAGE_SIZE,
   DOCUMENTS_FILTER_IDS,
   DOCUMENTS_SORT_IDS,
+  normalizeDocumentsPageSize,
 } from "../../shared/constants";
 import type { DocumentListRow } from "../../shared/types";
 
@@ -39,7 +40,6 @@ export type DocumentsQuerySnapshot = {
 const USER_TOKEN_FILTER_IDS = new Set(["assigneeId", "mentionedUserId"]);
 
 export const documentsPageParser = parseAsInteger.withDefault(1);
-export const documentsPerPageParser = parseAsInteger.withDefault(DEFAULT_PAGE_SIZE);
 export const documentsViewIdParser = parseAsString;
 export const documentsSortParser = getSortingStateParser<DocumentListRow>(DOCUMENTS_SORT_IDS);
 export const documentsFiltersParser = getFiltersStateParser<DocumentListRow>(DOCUMENTS_FILTER_IDS);
@@ -58,6 +58,10 @@ export const documentsQueryParsers = {
   joinOperator: documentsJoinOperatorParser,
   lifecycle: documentsLifecycleParser,
 };
+
+export function createDocumentsPerPageParser(defaultPerPage: number = DEFAULT_PAGE_SIZE) {
+  return parseAsInteger.withDefault(normalizeDocumentsPageSize(defaultPerPage));
+}
 
 function normalizeString(value: string | null): string | null {
   const trimmed = value?.trim() ?? "";
