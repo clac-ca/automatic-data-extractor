@@ -6,21 +6,28 @@ import type { DocumentLifecycle } from "@/api/documents";
 import type { DocumentsListParams } from "../../shared/types";
 import {
   buildDocumentsQuerySnapshot,
+  createDocumentsPerPageParser,
   documentsFiltersParser,
   documentsJoinOperatorParser,
   documentsLifecycleParser,
   documentsPageParser,
-  documentsPerPageParser,
   documentsSearchParser,
   documentsSortParser,
   resolveListFiltersForApi,
 } from "../state/queryState";
+import { DEFAULT_PAGE_SIZE } from "../../shared/constants";
 
 export function useDocumentsListParams({
   currentUserId = null,
+  defaultPerPage = DEFAULT_PAGE_SIZE,
 }: {
   currentUserId?: string | null;
+  defaultPerPage?: number;
 } = {}): DocumentsListParams {
+  const documentsPerPageParser = useMemo(
+    () => createDocumentsPerPageParser(defaultPerPage),
+    [defaultPerPage],
+  );
   const [page] = useQueryState("page", documentsPageParser);
   const [perPage] = useQueryState("perPage", documentsPerPageParser);
   const [q] = useQueryState("q", documentsSearchParser);

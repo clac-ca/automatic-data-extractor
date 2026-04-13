@@ -25,7 +25,8 @@ import { cn } from "@/lib/utils";
 interface DataTableProps<TData> extends React.ComponentProps<"div"> {
   table: TanstackTable<TData>;
   actionBar?: React.ReactNode;
-  pageSizeOptions?: number[];
+  pageSizeOptions?: readonly number[];
+  onPageSizeChange?: (pageSize: number) => void;
   onRowActivate?: (row: Row<TData>) => void;
   onRowContextMenu?: (row: Row<TData>, position: { x: number; y: number }) => void;
 }
@@ -34,6 +35,7 @@ export function DataTable<TData>({
   table,
   actionBar,
   pageSizeOptions,
+  onPageSizeChange,
   onRowActivate,
   onRowContextMenu,
   children,
@@ -201,7 +203,11 @@ export function DataTable<TData>({
         </Table>
       </div>
       <div className="flex flex-col gap-2.5">
-        <DataTablePagination table={table} pageSizeOptions={pageSizeOptions} />
+        <DataTablePagination
+          table={table}
+          pageSizeOptions={pageSizeOptions}
+          onPageSizeChange={onPageSizeChange}
+        />
         {actionBar &&
           table.getFilteredSelectedRowModel().rows.length > 0 &&
           actionBar}

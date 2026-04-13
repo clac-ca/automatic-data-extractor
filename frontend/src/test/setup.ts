@@ -6,6 +6,18 @@ if (typeof Element !== "undefined" && !Element.prototype.scrollIntoView) {
   Element.prototype.scrollIntoView = vi.fn();
 }
 
+if (typeof HTMLElement !== "undefined") {
+  if (typeof HTMLElement.prototype.hasPointerCapture !== "function") {
+    HTMLElement.prototype.hasPointerCapture = vi.fn(() => false);
+  }
+  if (typeof HTMLElement.prototype.setPointerCapture !== "function") {
+    HTMLElement.prototype.setPointerCapture = vi.fn();
+  }
+  if (typeof HTMLElement.prototype.releasePointerCapture !== "function") {
+    HTMLElement.prototype.releasePointerCapture = vi.fn();
+  }
+}
+
 if (typeof window !== "undefined") {
   if (typeof globalThis.fetch === "function") {
     Object.defineProperty(window, "fetch", {

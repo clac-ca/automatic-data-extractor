@@ -172,7 +172,7 @@ export default function DocumentsListPage() {
 
   return (
     <div className="documents flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background text-foreground">
-      <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden py-3 sm:py-4">
+      <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden pt-3 sm:pt-4">
         <DocumentsTableView
           workspaceId={workspace.id}
           currentUser={currentUser}
