@@ -7,6 +7,8 @@ export const uiStorageKeys = {
   workspaceLastActive: `${UI_STORAGE_PREFIX}.workspace.lastActive`,
   documentsCursor: (workspaceId: string) => `${UI_STORAGE_PREFIX}.workspace.${workspaceId}.documents.cursor`,
   documentsLastView: (workspaceId: string) => `${UI_STORAGE_PREFIX}.workspace.${workspaceId}.documents.lastView`,
+  documentsRowsPerPage: (workspaceId: string) =>
+    `${UI_STORAGE_PREFIX}.workspace.${workspaceId}.documents.rowsPerPage`,
   documentsTableColumnSizing: (workspaceId: string) =>
     `${UI_STORAGE_PREFIX}.workspace.${workspaceId}.documents.table.columnSizing`,
   documentsPreviewPaneHeight: (workspaceId: string) =>

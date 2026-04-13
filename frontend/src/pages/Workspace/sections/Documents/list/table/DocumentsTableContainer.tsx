@@ -47,6 +47,7 @@ import { partitionDocumentChanges } from "../../shared/documentChanges";
 import type { DocumentRow, WorkspacePerson } from "../../shared/types";
 import { useDocumentsListParams } from "../hooks/useDocumentsListParams";
 import { useDocumentsListData } from "../hooks/useDocumentsListData";
+import { useDocumentsPageSizePreference } from "../hooks/useDocumentsPageSizePreference";
 import { useDocumentsDeltaSync } from "../../shared/hooks/useDocumentsDeltaSync";
 import { getRenameDocumentErrorMessage, useRenameDocumentMutation } from "../../shared/hooks/useRenameDocumentMutation";
 import { buildDocumentDetailUrl } from "../../shared/navigation";
@@ -65,7 +66,7 @@ import { buildDocumentRowActions, toContextMenuItems } from "./actions/documentR
 import { useWorkspacePresence } from "@/pages/Workspace/context/WorkspacePresenceContext";
 import { useWorkspaceContext } from "@/pages/Workspace/context/WorkspaceContext";
 import { useDataTable } from "@/hooks/use-data-table";
-import { DEFAULT_PAGE_SIZE, DEFAULT_SORTING } from "../../shared/constants";
+import { DEFAULT_SORTING } from "../../shared/constants";
 import { useDocumentViews } from "../hooks/useDocumentViews";
 import {
   ReprocessPreflightDialog,
@@ -261,8 +262,10 @@ export function DocumentsTableContainer({
   } = useDocumentsRowActions();
 
   const presence = useWorkspacePresence();
+  const { defaultPageSize, setPageSizePreference } = useDocumentsPageSizePreference(workspaceId);
   const { page, perPage, sort, q, lifecycle, filters, joinOperator } = useDocumentsListParams({
     currentUserId: currentUser.id,
+    defaultPerPage: defaultPageSize,
   });
   const filtersKey = useMemo(() => (filters?.length ? JSON.stringify(filters) : ""), [filters]);
   const viewKey = useMemo(
@@ -1616,7 +1619,7 @@ export function DocumentsTableContainer({
     },
     initialState: {
       sorting: DEFAULT_SORTING,
-      pagination: { pageIndex: 0, pageSize: DEFAULT_PAGE_SIZE },
+      pagination: { pageIndex: 0, pageSize: defaultPageSize },
       columnVisibility: {
         select: true,
         id: false,
@@ -1978,7 +1981,7 @@ export function DocumentsTableContainer({
 
   const tableContent = (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col px-3 pb-4 pt-2 sm:px-4 sm:pb-6 lg:px-6">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col px-3 pt-2 sm:px-4 lg:px-6">
         {configBanner}
         {updatesBanner}
         <DocumentsTable
@@ -1988,6 +1991,7 @@ export function DocumentsTableContainer({
           shallow={shallow}
           leadingToolbarActions={viewsToolbarControl}
           toolbarActions={toolbarContent}
+          onPageSizeChange={setPageSizePreference}
           onRowActivate={(document) => openDocument(document.id, "activity")}
           onBulkReprocessRequest={lifecycle === "active" ? onBulkReprocessRequest : undefined}
           onBulkCancelRequest={lifecycle === "active" ? onBulkCancelRequest : undefined}
