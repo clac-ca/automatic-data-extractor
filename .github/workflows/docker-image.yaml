@@ -11,8 +11,6 @@ on:
       - ".devcontainer/**"
       - "scripts/**"
       - ".github/workflows/docker-image.yaml"
-  push:
-    branches: [main, development]
   release:
     types: [published]
   workflow_dispatch:
@@ -93,8 +91,6 @@ jobs:
             app_version="${{ steps.release-meta.outputs.app_version }}"
           elif [ "${GITHUB_REF}" = "refs/heads/main" ]; then
             app_version="main"
-          elif [ "${GITHUB_REF}" = "refs/heads/development" ]; then
-            app_version="development"
           else
             app_version="dev"
           fi
@@ -123,10 +119,28 @@ jobs:
           docker compose -f docker-compose.prod.split.yaml config >/dev/null
 
       - name: Build production target (smoke)
-        run: docker build --target production --platform linux/amd64 -t ade-ci:production .
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          target: production
+          platforms: linux/amd64
+          push: false
+          load: false
+          cache-from: type=gha,scope=production
+          cache-to: type=gha,scope=production,mode=max
 
       - name: Build devcontainer target (smoke)
-        run: docker build --target devcontainer --platform linux/amd64 -t ade-ci:devcontainer .
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          target: devcontainer
+          platforms: linux/amd64
+          push: false
+          load: false
+          cache-from: type=gha,scope=devcontainer
+          cache-to: type=gha,scope=devcontainer,mode=max
 
       - name: Log in to GHCR
         if: github.event_name != 'pull_request'
@@ -168,7 +182,6 @@ jobs:
           tags: |
             # Branch channel tags
             type=raw,value=main,enable=${{ github.ref == 'refs/heads/main' }}
-            type=raw,value=development,enable=${{ github.ref == 'refs/heads/development' }}
             # Stable releases: immutable tag + convenience aliases
             type=raw,value=${{ steps.release-meta.outputs.release_tag }},enable=${{ steps.release-meta.outputs.is_stable == 'true' }}
             type=raw,value=${{ steps.release-meta.outputs.semver_patch }},enable=${{ steps.release-meta.outputs.is_stable == 'true' }}
@@ -191,5 +204,5 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=production
+          cache-to: type=gha,scope=production,mode=max

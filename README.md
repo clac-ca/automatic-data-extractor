@@ -3,7 +3,7 @@
 ADE is a self-hosted platform for normalizing messy Excel/CSV inputs into
 consistent, auditable outputs.
 
-[![PR Gates](https://github.com/clac-ca/automatic-data-extractor/actions/workflows/ci-pr-gates.yaml/badge.svg?branch=development)](https://github.com/clac-ca/automatic-data-extractor/actions/workflows/ci-pr-gates.yaml)
+[![PR Gates](https://github.com/clac-ca/automatic-data-extractor/actions/workflows/ci-pr-gates.yaml/badge.svg?branch=main)](https://github.com/clac-ca/automatic-data-extractor/actions/workflows/ci-pr-gates.yaml)
 [![Latest Release](https://img.shields.io/github/v/release/clac-ca/automatic-data-extractor?display_name=tag)](https://github.com/clac-ca/automatic-data-extractor/releases)
 [![License](https://img.shields.io/github/license/clac-ca/automatic-data-extractor)](LICENSE)
 
@@ -132,7 +132,7 @@ cd backend && uv run ade dev
 
 ## Contributing
 
-- Default branch: `development`
+- Default branch: `main`
 - Conventional Commits: `feat:`, `fix:`, `deps:`, `chore:`
 - Stage only task-related files
 - Run relevant checks before merge

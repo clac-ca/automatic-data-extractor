@@ -150,90 +150,26 @@ deploy_development_environment="false"
 
 That line belongs in `infra/azure/deploy.sh`; it is not a standalone terminal command.
 
-Do not delete existing development Azure resources yet. Clean them up only after the release-image/manual-deploy path succeeds.
+Do not delete existing development Azure resources yet. Clean them up only after the release/manual-deploy path succeeds.
 
-## Step 3: Add Release Image Publishing Workflow
+## Step 3: Use The Existing Release Image Publisher
 
-Create a branch:
+Release image publishing is owned by `.github/workflows/docker-image.yaml`.
 
-```bash
-git checkout development
-git pull --ff-only
-git checkout -b codex/release-tagged-image-flow
-```
+That workflow:
 
-Add `.github/workflows/release-image.yaml`:
+- runs on published GitHub releases
+- publishes GHCR release tags
+- preserves immutable release and rebuild tag behavior
+- does not log in to Azure or deploy production
 
-```yaml
-name: Publish Release Image
+Do not add a second release-published image workflow. Production deployment stays manual until a separate automatic Azure deployment model is chosen.
 
-on:
-  release:
-    types: [published]
+## Step 4: Keep One Docker Publishing Workflow
 
-permissions:
-  contents: read
-  packages: write
+Keep `.github/workflows/docker-image.yaml` as the only GHCR image publishing workflow.
 
-jobs:
-  publish:
-    name: Build and publish release image
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: docker/setup-buildx-action@v3
-
-      - uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Resolve image
-        id: image
-        run: |
-          tag="${{ github.event.release.tag_name }}"
-          echo "ref=ghcr.io/${{ github.repository }}:${tag}" >> "$GITHUB_OUTPUT"
-
-      - uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: Dockerfile
-          target: production
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.image.outputs.ref }}
-          build-args: |
-            APP_VERSION=${{ github.event.release.tag_name }}
-            APP_COMMIT_SHA=${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-```
-
-This workflow does not log in to Azure and does not deploy production. It only publishes the release image to GHCR.
-
-Commit and open a PR using the current branch model:
-
-```bash
-git add .github/workflows/release-image.yaml docs/how-to/new-deployment-setup.md docs/how-to/README.md
-git commit -m "chore(deploy): add release image migration guide"
-git push -u origin codex/release-tagged-image-flow
-gh pr create --base development --title "chore(deploy): add release image migration guide" --body "Adds the manual-first release image migration guide and release-triggered image publishing workflow."
-```
-
-Merge after checks pass.
-
-## Step 4: Keep The Existing Docker Workflow Temporarily
-
-Do not remove `.github/workflows/docker-image.yaml` yet.
-
-During the first migration release, both can exist:
-
-- existing Docker workflow for current behavior
-- new `release-image.yaml` workflow for the manual-deploy release image path
-
-After one manual production deploy succeeds from a release image, simplify the Docker workflow in a separate PR.
+Remove any temporary release-only image workflow after confirming `docker-image.yaml` publishes the needed release tags.
 
 ## Step 5: Publish The First Low-Risk Release Image
 
@@ -269,7 +205,7 @@ Open the draft release in GitHub, review the generated notes, and publish it.
 Watch the image workflow:
 
 ```bash
-gh run list --repo "$GH_REPO" --workflow release-image.yaml --limit 5
+gh run list --repo "$GH_REPO" --workflow docker-image.yaml --limit 5
 gh run watch --repo "$GH_REPO" --exit-status
 ```
 
@@ -451,7 +387,7 @@ Commit and open PR:
 git add .github AGENTS.md CONTRIBUTING.md docs
 git commit -m "chore(deploy): remove development promotion flow"
 git push -u origin codex/remove-development-promotion-flow
-gh pr create --base main --title "chore(deploy): remove development promotion flow" --body "Moves deployment docs and workflow triggers to the single-main release-image model."
+gh pr create --base main --title "chore(deploy): remove development promotion flow" --body "Moves deployment docs and workflow triggers to the single-main release model."
 ```
 
 ## Step 9: Choose Release Please Or Native GitHub Releases
@@ -612,7 +548,7 @@ git branch -d development
 
 ## Later: Automatic Azure Deploys
 
-After manual release-image deploys are stable, choose one automatic production deployment model:
+After manual release deploys are stable, choose one automatic production deployment model:
 
 - GitHub Actions OIDC to Azure with a protected `production` environment
 - Azure Container Apps Jobs for migrations, then Container App image update
