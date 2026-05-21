@@ -33,24 +33,22 @@ We use **Conventional Commits**:
 
 ## Releases
 
-- Releases are handled automatically by **Release Please** on `main`
-- Do not bump `VERSION` or `CHANGELOG.md` manually
-- Version bumps are inferred from commit messages:
+- Releases are created manually through GitHub Releases from `main`
+- Keep `VERSION` and `CHANGELOG.md` in the repo and update them intentionally in release-prep PRs
+- Version selection follows SemVer:
   - `fix:` / `deps:` -> patch
   - `feat:` -> minor
   - `feat!:` or `BREAKING CHANGE:` footer -> major
-- If you need to force a version, use commit footer: `Release-As: X.Y.Z`
 - Runtime version metadata (`ADE_APP_VERSION`, `ADE_APP_COMMIT_SHA`) is injected by CI; do not set these in `.env` for normal runtime config
 - Deployable image versions are published as release tags (`vX.Y.Z`); production should deploy pinned tags via `ADE_DOCKER_TAG=vX.Y.Z`
 - See `docs/reference/release-process.md` for details
 
 ## Quick Flows
 
-### Normal release (hands-off)
-1. Merge conventional commits to `main`.
-2. Release Please opens/updates a release PR.
-3. Merge the release PR.
-4. GitHub release publish triggers container publish.
+### Normal release
+1. Merge release-prep changes to `main`, including any intended `VERSION` and `CHANGELOG.md` updates.
+2. Create and publish a GitHub release with tag `vX.Y.Z` targeting `main`.
+3. GitHub release publish triggers container publish.
 
 ### Rebuild release (`vX.Y.Z-rN`)
 1. Run the rebuild workflow (`.github/workflows/rebuild-release.yaml`) with:

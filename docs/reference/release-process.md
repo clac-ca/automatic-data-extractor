@@ -6,30 +6,31 @@ Explain how ADE versions and container images are produced, including rebuild re
 
 ## Source of Truth
 
-- commit history (Conventional Commits)
+- manual GitHub Releases from `main`
 - `VERSION`
 - `CHANGELOG.md`
-- release config in `.github/release-please/`
 
-## Automated Flow
+## Manual Flow
 
-1. `release-please.yaml` runs on pushes to `main`.
-2. Release Please creates or updates release PRs.
-3. Merging the release PR updates `VERSION`/`CHANGELOG` and creates GitHub release tag `vX.Y.Z`.
+1. Prepare a release PR with any intended `VERSION` and `CHANGELOG.md` updates.
+2. Merge the release-prep PR to `main`.
+3. Create and publish a GitHub release with tag `vX.Y.Z` targeting `main`.
 4. Publishing that release triggers `docker-image.yaml` and publishes images.
 
-### Conventional Commit Requirement On `main`
+### Version Selection
 
-Release Please only increments versions from parseable Conventional Commit messages on `main`.
-If a squash-merged PR lands with a non-conventional title, Release Please can skip release creation for that push.
-If you need to force a specific version, use a `Release-As: X.Y.Z` footer on a follow-up commit.
+Use SemVer when choosing the manual release version:
+
+- `fix:` / `deps:` changes usually map to a patch release.
+- `feat:` changes usually map to a minor release.
+- Breaking changes map to a major release.
 
 ## Current Workflow Targets
 
-- `release-please.yaml` runs on pushes to `main`.
 - `docker-image.yaml` publishes on:
-  - pushes to `main`
   - published GitHub releases
+  - manual workflow dispatch
+- `docker-image.yaml` runs smoke builds on matching pull requests.
 
 ## Image Tag Policy
 
