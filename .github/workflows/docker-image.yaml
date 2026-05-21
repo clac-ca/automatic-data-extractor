@@ -121,10 +121,28 @@ jobs:
           docker compose -f docker-compose.prod.split.yaml config >/dev/null
 
       - name: Build production target (smoke)
-        run: docker build --target production --platform linux/amd64 -t ade-ci:production .
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          target: production
+          platforms: linux/amd64
+          push: false
+          load: false
+          cache-from: type=gha,scope=production
+          cache-to: type=gha,scope=production,mode=max
 
       - name: Build devcontainer target (smoke)
-        run: docker build --target devcontainer --platform linux/amd64 -t ade-ci:devcontainer .
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          target: devcontainer
+          platforms: linux/amd64
+          push: false
+          load: false
+          cache-from: type=gha,scope=devcontainer
+          cache-to: type=gha,scope=devcontainer,mode=max
 
       - name: Log in to GHCR
         if: github.event_name != 'pull_request'
@@ -188,5 +206,5 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=production
+          cache-to: type=gha,scope=production,mode=max
