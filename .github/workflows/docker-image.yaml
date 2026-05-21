@@ -11,8 +11,6 @@ on:
       - ".devcontainer/**"
       - "scripts/**"
       - ".github/workflows/docker-image.yaml"
-  push:
-    branches: [main]
   release:
     types: [published]
   workflow_dispatch:
