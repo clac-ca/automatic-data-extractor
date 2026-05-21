@@ -108,6 +108,26 @@ cd backend && uv run ade dev
 - To auto-open the browser when web is ready:
   `cd backend && uv run ade dev --open`.
 
+### Recommended Development Workflow (with Live Reloading)
+
+For a rapid development feedback loop, you should run only the external infrastructure in Docker and run the application services directly on your host machine. This enables hot-reloading out-of-the-box for both backend and frontend:
+
+Start the database and object storage containers:
+
+```bash
+docker compose -f docker-compose.infra.yaml up -d
+```
+
+Start the dev server (API, worker, and Vite frontend with hot reloading):
+
+```bash
+cd backend
+uv run ade dev
+```
+
+This configuration watches your local files for changes and instantly updates the API and web UI as you type.
+
+
 ## Daily Development Commands
 
 | Task | Command |
