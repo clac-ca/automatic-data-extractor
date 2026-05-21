@@ -232,6 +232,7 @@ class RunColumnResource(BaseSchema):
     header_raw: str | None = None
     header_normalized: str | None = None
     non_empty_cells: int
+    valid_cells: int
     mapping_status: Literal["mapped", "unmapped"]
     mapped_field: str | None = None
     mapping_score: float | None = None

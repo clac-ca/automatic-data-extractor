@@ -324,6 +324,7 @@ def test_replace_run_table_columns_is_idempotent(engine) -> None:
             "header_raw": "Email",
             "header_normalized": "email",
             "non_empty_cells": 10,
+            "valid_cells": 10,
             "mapping_status": "mapped",
             "mapped_field": "email",
             "mapping_score": 1.0,

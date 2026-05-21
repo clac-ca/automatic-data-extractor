@@ -4852,6 +4852,8 @@ export type components = {
             header_normalized?: string | null;
             /** Non Empty Cells */
             non_empty_cells: number;
+            /** Valid Cells */
+            valid_cells: number;
             /**
              * Mapping Status
              * @enum {string}

@@ -78,8 +78,12 @@ def _sample_payload() -> dict:
                                         {
                                             "index": 1,
                                             "header": {"raw": "Notes", "normalized": "notes"},
-                                            "non_empty_cells": 0,
-                                            "mapping": {"status": "unknown"},
+                                            "non_empty_cells": 12,
+                                            "valid_cells": 8,
+                                            "mapping": {
+                                                "status": "unmapped",
+                                                "unmapped_reason": "no_signal",
+                                            },
                                         },
                                     ]
                                 },
@@ -115,12 +119,22 @@ def test_parse_run_fields() -> None:
 
 def test_parse_run_table_columns() -> None:
     rows = parse_run_table_columns(_sample_payload())
-    assert len(rows) == 1
-    row = rows[0]
-    assert row["workbook_index"] == 0
-    assert row["sheet_name"] == "Sheet1"
-    assert row["mapping_status"] == "mapped"
-    assert row["mapped_field"] == "email"
+    assert len(rows) == 2
+    row0 = rows[0]
+    assert row0["workbook_index"] == 0
+    assert row0["sheet_name"] == "Sheet1"
+    assert row0["mapping_status"] == "mapped"
+    assert row0["mapped_field"] == "email"
+    assert row0["non_empty_cells"] == 10
+    assert row0["valid_cells"] == 10  # Fallback to non_empty_cells since valid_cells was missing/None
+
+    row1 = rows[1]
+    assert row1["workbook_index"] == 0
+    assert row1["sheet_name"] == "Sheet1"
+    assert row1["mapping_status"] == "unmapped"
+    assert row1["mapped_field"] is None
+    assert row1["non_empty_cells"] == 12
+    assert row1["valid_cells"] == 8  # Explicitly parsed valid_cells
 
 
 def test_as_str_accepts_uuid_values() -> None:

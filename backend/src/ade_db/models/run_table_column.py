@@ -28,6 +28,7 @@ class RunTableColumn(Base):
     header_raw: Mapped[str | None] = mapped_column(Text, nullable=True)
     header_normalized: Mapped[str | None] = mapped_column(Text, nullable=True)
     non_empty_cells: Mapped[int] = mapped_column(Integer, nullable=False)
+    valid_cells: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     mapping_status: Mapped[str] = mapped_column(String(32), nullable=False)
     mapped_field: Mapped[str | None] = mapped_column(String(128), nullable=True)

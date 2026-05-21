@@ -702,6 +702,11 @@ def parse_run_table_columns(payload: dict[str, Any]) -> list[dict[str, Any]]:
                         continue
 
                     header = _as_dict(column_data.get("header")) or {}
+                    non_empty = _as_int(column_data.get("non_empty_cells")) or 0
+                    valid = _as_int(column_data.get("valid_cells"))
+                    if valid is None:
+                        valid = non_empty
+
                     rows.append(
                         {
                             "workbook_index": workbook_index,
@@ -712,7 +717,8 @@ def parse_run_table_columns(payload: dict[str, Any]) -> list[dict[str, Any]]:
                             "column_index": column_index,
                             "header_raw": _as_str(header.get("raw")),
                             "header_normalized": _as_str(header.get("normalized")),
-                            "non_empty_cells": _as_int(column_data.get("non_empty_cells")) or 0,
+                            "non_empty_cells": non_empty,
+                            "valid_cells": valid,
                             "mapping_status": mapping_status,
                             "mapped_field": _as_str(mapping.get("field")),
                             "mapping_score": _as_float(mapping.get("score")),

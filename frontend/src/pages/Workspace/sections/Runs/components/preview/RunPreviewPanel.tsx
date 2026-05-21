@@ -349,14 +349,15 @@ function ColumnsTab({
       </div>
 
       <div className="overflow-x-auto">
-        <div className="min-w-[860px]">
-          <div className="grid grid-cols-[1.5fr_1.4fr_140px_140px_120px_120px] border-b border-border bg-muted/40 px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        <div className="min-w-[940px]">
+          <div className="grid grid-cols-[1.5fr_1.4fr_140px_140px_100px_90px_90px] border-b border-border bg-muted/40 px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
             <span>Location</span>
             <span>Header</span>
             <span>Status</span>
             <span>Mapped field</span>
             <span>Score</span>
             <span>Non-empty</span>
+            <span>Valid</span>
           </div>
           {columns.map((column, index) => {
             const sheetLabel = column.sheet_name ?? `Sheet ${column.sheet_index + 1}`;
@@ -368,7 +369,7 @@ function ColumnsTab({
 
             return (
               <div key={`${column.workbook_index}-${column.sheet_index}-${column.table_index}-${column.column_index}-${index}`} className="border-b border-border/70 px-4 py-3">
-                <div className="grid grid-cols-[1.5fr_1.4fr_140px_140px_120px_120px] items-center">
+                <div className="grid grid-cols-[1.5fr_1.4fr_140px_140px_100px_90px_90px] items-center">
                   <div>
                     <p className="text-sm font-semibold text-foreground">{sheetLabel}</p>
                     <p className="text-xs text-muted-foreground">{workbookLabel} / {tableLabel}</p>
@@ -383,6 +384,7 @@ function ColumnsTab({
                   <span className="text-xs text-muted-foreground">{mappedField}</span>
                   <span className="text-xs text-muted-foreground">{formatScore(column.mapping_score)}</span>
                   <span className="text-xs text-muted-foreground">{formatNumber(column.non_empty_cells)}</span>
+                  <span className="text-xs text-muted-foreground">{formatNumber(column.valid_cells)}</span>
                 </div>
               </div>
             );

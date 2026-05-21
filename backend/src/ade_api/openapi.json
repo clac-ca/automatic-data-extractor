@@ -22664,6 +22664,10 @@
             "type": "integer",
             "title": "Non Empty Cells"
           },
+          "valid_cells": {
+            "type": "integer",
+            "title": "Valid Cells"
+          },
           "mapping_status": {
             "type": "string",
             "enum": [
@@ -22727,6 +22731,7 @@
           "table_index",
           "column_index",
           "non_empty_cells",
+          "valid_cells",
           "mapping_status"
         ],
         "title": "RunColumnResource",
