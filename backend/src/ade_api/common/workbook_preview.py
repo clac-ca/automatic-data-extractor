@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import csv
+import xml.etree.ElementTree as ET
+import zipfile
 from collections.abc import Sequence
 from datetime import date, datetime
 from pathlib import Path
@@ -27,6 +29,88 @@ class WorkbookSheetPreview(BaseSchema):
     total_columns: int = Field(alias="totalColumns")
     truncated_rows: bool = Field(alias="truncatedRows")
     truncated_columns: bool = Field(alias="truncatedColumns")
+    hidden_columns: list[int] = Field(default_factory=list, alias="hiddenColumns")
+
+
+def get_xlsx_hidden_columns(
+    path: Path,
+    sheet_name: str | None = None,
+    sheet_index: int | None = None,
+) -> list[int]:
+    """Extract 0-based hidden column indices without loading the whole workbook."""
+
+    try:
+        with zipfile.ZipFile(path, "r") as archive:
+            # Step 1: Parse workbook to map sheet to relationship ID
+            wb_content = archive.read("xl/workbook.xml")
+            wb_root = ET.fromstring(wb_content)
+            ns = {
+                "ns": "http://schemas.openxmlformats.org/spreadsheetml/2006/main",
+                "r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
+            }
+
+            sheets = []
+            for sheet_el in wb_root.findall(".//ns:sheet", ns):
+                name = sheet_el.attrib.get("name")
+                r_id = sheet_el.attrib.get(
+                    "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id"
+                )
+                sheets.append({"name": name, "r_id": r_id})
+
+            # Step 2: Determine which sheet we need
+            target_sheet = None
+            if sheet_name is not None:
+                for s in sheets:
+                    if s["name"] == sheet_name:
+                        target_sheet = s
+                        break
+            else:
+                idx = sheet_index if sheet_index is not None else 0
+                if 0 <= idx < len(sheets):
+                    target_sheet = sheets[idx]
+
+            if not target_sheet:
+                return []
+
+            # Step 3: Find relationship targets to get sheet file path
+            rel_content = archive.read("xl/_rels/workbook.xml.rels")
+            rel_root = ET.fromstring(rel_content)
+            rel_ns = {"rel": "http://schemas.openxmlformats.org/package/2006/relationships"}
+
+            rel_map = {}
+            for rel in rel_root.findall(".//rel:Relationship", rel_ns):
+                rel_map[rel.attrib.get("Id")] = rel.attrib.get("Target")
+
+            rel_path = rel_map.get(target_sheet["r_id"])
+            if not rel_path:
+                return []
+
+            rel_path = rel_path.lstrip("/")
+            if not rel_path.startswith("xl/"):
+                rel_path = "xl/" + rel_path
+
+            # Step 4: Parse sheet XML to find hidden columns
+            sheet_xml = archive.read(rel_path)
+            sheet_root = ET.fromstring(sheet_xml)
+
+            hidden_cols = []
+            cols_el = sheet_root.find(".//ns:cols", ns)
+            if cols_el is not None:
+                for col in cols_el.findall("ns:col", ns):
+                    if col.attrib.get("hidden") in ("1", "true"):
+                        min_attr = col.attrib.get("min")
+                        max_attr = col.attrib.get("max")
+                        if min_attr is None or max_attr is None:
+                            continue
+                        c_min = int(min_attr)
+                        c_max = int(max_attr)
+                        # min and max are 1-based, convert to 0-based for list indices
+                        for col_idx in range(c_min, c_max + 1):
+                            hidden_cols.append(col_idx - 1)
+            return sorted(list(set(hidden_cols)))
+    except Exception:
+        # Fallback gracefully if ZIP/XML parsing fails for any reason
+        return []
 
 
 def build_workbook_preview_from_xlsx(
@@ -48,7 +132,7 @@ def build_workbook_preview_from_xlsx(
         )
         try:
             index, sheet = _select_xlsx_sheet(workbook, sheet_name, sheet_index)
-            return _preview_xlsx_sheet(
+            preview = _preview_xlsx_sheet(
                 sheet,
                 index=index,
                 max_rows=max_rows,
@@ -56,6 +140,8 @@ def build_workbook_preview_from_xlsx(
                 trim_empty_columns=trim_empty_columns,
                 trim_empty_rows=trim_empty_rows,
             )
+            preview.hidden_columns = get_xlsx_hidden_columns(path, sheet_name=preview.name)
+            return preview
         finally:
             workbook.close()
 

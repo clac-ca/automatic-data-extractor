@@ -216,6 +216,7 @@ class RunFieldResource(BaseSchema):
     label: str | None = None
     detected: bool
     best_mapping_score: float | None = None
+    valid_cells: int
     occurrences_tables: int
     occurrences_columns: int
 
@@ -232,6 +233,7 @@ class RunColumnResource(BaseSchema):
     header_raw: str | None = None
     header_normalized: str | None = None
     non_empty_cells: int
+    valid_cells: int
     mapping_status: Literal["mapped", "unmapped"]
     mapped_field: str | None = None
     mapping_score: float | None = None

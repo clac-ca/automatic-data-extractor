@@ -272,17 +272,18 @@ function FieldsTab({
       </div>
 
       <div className="overflow-x-auto">
-        <div className="min-w-[720px]">
-          <div className="grid grid-cols-[1.6fr_120px_140px_120px_120px] border-b border-border bg-muted/40 px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        <div className="min-w-[820px]">
+          <div className="grid grid-cols-[1.6fr_120px_140px_120px_120px_120px] border-b border-border bg-muted/40 px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
             <span>Field</span>
             <span>Status</span>
             <span>Best score</span>
             <span>Tables</span>
             <span>Columns</span>
+            <span>Valid cells</span>
           </div>
           {fields.map((field) => (
             <div key={field.field} className="border-b border-border/70 px-4 py-3">
-              <div className="grid grid-cols-[1.6fr_120px_140px_120px_120px] items-center">
+              <div className="grid grid-cols-[1.6fr_120px_140px_120px_120px_120px] items-center">
                 <div>
                   <p className="text-sm font-semibold text-foreground">{field.label ?? field.field}</p>
                   <p className="text-xs text-muted-foreground">{field.field}</p>
@@ -291,6 +292,7 @@ function FieldsTab({
                 <span className="text-xs text-foreground">{formatScore(field.best_mapping_score)}</span>
                 <span className="text-xs text-muted-foreground">{formatNumber(field.occurrences_tables)}</span>
                 <span className="text-xs text-muted-foreground">{formatNumber(field.occurrences_columns)}</span>
+                <span className="text-xs text-muted-foreground">{formatNumber(field.valid_cells)}</span>
               </div>
             </div>
           ))}
@@ -349,8 +351,8 @@ function ColumnsTab({
       </div>
 
       <div className="overflow-x-auto">
-        <div className="min-w-[860px]">
-          <div className="grid grid-cols-[1.5fr_1.4fr_140px_140px_120px_120px] border-b border-border bg-muted/40 px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        <div className="min-w-[850px]">
+          <div className="grid grid-cols-[1.5fr_1.4fr_140px_140px_100px_90px] border-b border-border bg-muted/40 px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
             <span>Location</span>
             <span>Header</span>
             <span>Status</span>
@@ -368,7 +370,7 @@ function ColumnsTab({
 
             return (
               <div key={`${column.workbook_index}-${column.sheet_index}-${column.table_index}-${column.column_index}-${index}`} className="border-b border-border/70 px-4 py-3">
-                <div className="grid grid-cols-[1.5fr_1.4fr_140px_140px_120px_120px] items-center">
+                <div className="grid grid-cols-[1.5fr_1.4fr_140px_140px_100px_90px] items-center">
                   <div>
                     <p className="text-sm font-semibold text-foreground">{sheetLabel}</p>
                     <p className="text-xs text-muted-foreground">{workbookLabel} / {tableLabel}</p>

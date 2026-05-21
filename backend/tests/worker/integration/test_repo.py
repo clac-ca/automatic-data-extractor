@@ -152,9 +152,7 @@ def test_activate_configuration_publish_updates_target_and_archives_previous_act
                 configurations.c.id,
                 configurations.c.status,
                 configurations.c.published_digest,
-            ).where(
-                configurations.c.id.in_([draft_configuration_id, active_configuration_id])
-            )
+            ).where(configurations.c.id.in_([draft_configuration_id, active_configuration_id]))
         ).all()
     by_id = {str(row.id): row for row in rows}
     assert by_id[draft_configuration_id].status == "active"
@@ -254,6 +252,7 @@ def test_replace_run_fields_is_idempotent(engine) -> None:
             "label": "Email",
             "detected": False,
             "best_mapping_score": None,
+            "valid_cells": 0,
             "occurrences_tables": 0,
             "occurrences_columns": 0,
         },
@@ -262,6 +261,7 @@ def test_replace_run_fields_is_idempotent(engine) -> None:
             "label": "First Name",
             "detected": True,
             "best_mapping_score": 1.0,
+            "valid_cells": 7,
             "occurrences_tables": 1,
             "occurrences_columns": 1,
         },
@@ -284,6 +284,7 @@ def test_replace_run_fields_is_idempotent(engine) -> None:
                     "label": "Last Name",
                     "detected": True,
                     "best_mapping_score": 0.9,
+                    "valid_cells": 8,
                     "occurrences_tables": 1,
                     "occurrences_columns": 1,
                 }
@@ -294,6 +295,7 @@ def test_replace_run_fields_is_idempotent(engine) -> None:
         second = conn.execute(select(run_fields)).mappings().all()
     assert len(second) == 1
     assert second[0]["field"] == "last_name"
+    assert second[0]["valid_cells"] == 8
 
 
 def test_replace_run_table_columns_is_idempotent(engine) -> None:
@@ -324,6 +326,7 @@ def test_replace_run_table_columns_is_idempotent(engine) -> None:
             "header_raw": "Email",
             "header_normalized": "email",
             "non_empty_cells": 10,
+            "valid_cells": 10,
             "mapping_status": "mapped",
             "mapped_field": "email",
             "mapping_score": 1.0,

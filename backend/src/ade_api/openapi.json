@@ -22664,6 +22664,10 @@
             "type": "integer",
             "title": "Non Empty Cells"
           },
+          "valid_cells": {
+            "type": "integer",
+            "title": "Valid Cells"
+          },
           "mapping_status": {
             "type": "string",
             "enum": [
@@ -22727,6 +22731,7 @@
           "table_index",
           "column_index",
           "non_empty_cells",
+          "valid_cells",
           "mapping_status"
         ],
         "title": "RunColumnResource",
@@ -22835,6 +22840,10 @@
             ],
             "title": "Best Mapping Score"
           },
+          "valid_cells": {
+            "type": "integer",
+            "title": "Valid Cells"
+          },
           "occurrences_tables": {
             "type": "integer",
             "title": "Occurrences Tables"
@@ -22849,6 +22858,7 @@
         "required": [
           "field",
           "detected",
+          "valid_cells",
           "occurrences_tables",
           "occurrences_columns"
         ],
@@ -25797,6 +25807,13 @@
           "truncatedColumns": {
             "type": "boolean",
             "title": "Truncatedcolumns"
+          },
+          "hiddenColumns": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Hiddencolumns"
           }
         },
         "additionalProperties": false,

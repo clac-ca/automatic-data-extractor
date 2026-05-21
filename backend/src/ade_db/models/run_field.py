@@ -22,6 +22,7 @@ class RunField(Base):
     label: Mapped[str | None] = mapped_column(String(255), nullable=True)
     detected: Mapped[bool] = mapped_column(Boolean, nullable=False)
     best_mapping_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    valid_cells: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     occurrences_tables: Mapped[int] = mapped_column(Integer, nullable=False)
     occurrences_columns: Mapped[int] = mapped_column(Integer, nullable=False)
 

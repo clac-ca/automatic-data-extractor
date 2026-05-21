@@ -4852,6 +4852,8 @@ export type components = {
             header_normalized?: string | null;
             /** Non Empty Cells */
             non_empty_cells: number;
+            /** Valid Cells */
+            valid_cells: number;
             /**
              * Mapping Status
              * @enum {string}
@@ -4915,6 +4917,8 @@ export type components = {
             detected: boolean;
             /** Best Mapping Score */
             best_mapping_score?: number | null;
+            /** Valid Cells */
+            valid_cells: number;
             /** Occurrences Tables */
             occurrences_tables: number;
             /** Occurrences Columns */
@@ -5879,6 +5883,8 @@ export type components = {
             truncatedRows: boolean;
             /** Truncatedcolumns */
             truncatedColumns: boolean;
+            /** Hiddencolumns */
+            hiddenColumns?: number[];
         };
         /**
          * WorkspaceCreate
