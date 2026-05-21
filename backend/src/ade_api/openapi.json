@@ -25807,6 +25807,13 @@
           "truncatedColumns": {
             "type": "boolean",
             "title": "Truncatedcolumns"
+          },
+          "hiddenColumns": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Hiddencolumns"
           }
         },
         "additionalProperties": false,

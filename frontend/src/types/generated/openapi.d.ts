@@ -5883,6 +5883,8 @@ export type components = {
             truncatedRows: boolean;
             /** Truncatedcolumns */
             truncatedColumns: boolean;
+            /** Hiddencolumns */
+            hiddenColumns?: number[];
         };
         /**
          * WorkspaceCreate

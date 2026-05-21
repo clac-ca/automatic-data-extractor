@@ -148,22 +148,48 @@ export function useDocumentPreviewModel({
     staleTime: 30_000,
   });
 
-  const previewRows = useMemo(() => previewQuery.data?.rows ?? [], [previewQuery.data]);
+  const hiddenColumns = useMemo(() => {
+    return new Set(previewQuery.data?.hiddenColumns ?? []);
+  }, [previewQuery.data?.hiddenColumns]);
 
-  const visibleColumnCount = useMemo(
-    () => previewRows.reduce((max, row) => Math.max(max, row.length), 0),
-    [previewRows],
+  const rawRows = useMemo(() => previewQuery.data?.rows ?? [], [previewQuery.data]);
+
+  const rawColumnCount = useMemo(
+    () => rawRows.reduce((max, row) => Math.max(max, row.length), 0),
+    [rawRows],
   );
 
-  const columnLabels = useMemo(() => {
+  const visibleIndices = useMemo(() => {
     const totalColumnCount =
       typeof previewQuery.data?.totalColumns === "number"
         ? previewQuery.data.totalColumns
-        : visibleColumnCount;
-    const renderedColumnCount = displayPreferences.trimEmptyColumns ? visibleColumnCount : totalColumnCount;
+        : rawColumnCount;
+    const renderedColumnCount = displayPreferences.trimEmptyColumns ? rawColumnCount : totalColumnCount;
 
-    return Array.from({ length: renderedColumnCount }, (_, index) => spreadsheetColumnLabel(index));
-  }, [displayPreferences.trimEmptyColumns, previewQuery.data?.totalColumns, visibleColumnCount]);
+    const indices: number[] = [];
+    for (let index = 0; index < renderedColumnCount; index += 1) {
+      if (!hiddenColumns.has(index)) {
+        indices.push(index);
+      }
+    }
+    return indices;
+  }, [displayPreferences.trimEmptyColumns, previewQuery.data?.totalColumns, rawColumnCount, hiddenColumns]);
+
+  const previewRows = useMemo(() => {
+    if (hiddenColumns.size === 0) {
+      return rawRows;
+    }
+    return rawRows.map((row) => visibleIndices.map((index) => row[index] ?? ""));
+  }, [rawRows, visibleIndices, hiddenColumns.size]);
+
+  const visibleColumnCount = useMemo(
+    () => visibleIndices.filter((idx) => idx < rawColumnCount).length,
+    [visibleIndices, rawColumnCount],
+  );
+
+  const columnLabels = useMemo(() => {
+    return visibleIndices.map((index) => spreadsheetColumnLabel(index));
+  }, [visibleIndices]);
 
   const previewMeta = useMemo(() => {
     if (!previewQuery.data) {

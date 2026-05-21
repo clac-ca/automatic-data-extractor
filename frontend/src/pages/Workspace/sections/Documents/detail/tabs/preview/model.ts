@@ -135,20 +135,31 @@ export function buildPreviewInlineStats(metrics: RunMetricsResource | null | und
 
 function buildMappedColumnsStat(metrics: RunMetricsResource): PreviewInlineStat | null {
   const total = metrics.column_count_total;
+  const empty = metrics.column_count_empty ?? 0;
   const mapped = metrics.column_count_mapped;
 
   if (typeof total !== "number" || total <= 0 || typeof mapped !== "number") {
     return null;
   }
 
-  const boundedMapped = Math.min(Math.max(mapped, 0), total);
-  const percentage = Math.round((boundedMapped / total) * 100);
+  const activeTotal = Math.max(0, total - empty);
+  if (activeTotal <= 0) {
+    return {
+      id: "mappedColumns",
+      label: "Mapped columns",
+      value: `0/0 (100%)`,
+      tone: "success",
+    };
+  }
+
+  const boundedMapped = Math.min(Math.max(mapped, 0), activeTotal);
+  const percentage = Math.round((boundedMapped / activeTotal) * 100);
 
   return {
     id: "mappedColumns",
     label: "Mapped columns",
-    value: `${formatCount(boundedMapped)}/${formatCount(total)} (${percentage}%)`,
-    tone: boundedMapped === total ? "success" : boundedMapped === 0 ? "warning" : "neutral",
+    value: `${formatCount(boundedMapped)}/${formatCount(activeTotal)} (${percentage}%)`,
+    tone: boundedMapped === activeTotal ? "success" : boundedMapped === 0 ? "warning" : "neutral",
   };
 }
 

@@ -42,6 +42,25 @@ describe("DocumentPreviewStatsRow", () => {
     expect(screen.getByText("80/100 (80%)")).toBeInTheDocument();
   });
 
+  it("renders correct mapped columns ratio when column_count_empty is specified", () => {
+    render(
+      <DocumentPreviewStatsRow
+        previewCountSummary={null}
+        isCompactMode={false}
+        onCompactModeChange={vi.fn()}
+        metrics={{
+          column_count_total: 10,
+          column_count_empty: 2,
+          column_count_mapped: 4,
+          validation_issues_total: 0,
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Mapped columns:")).toBeInTheDocument();
+    expect(screen.getByText("4/8 (50%)")).toBeInTheDocument();
+  });
+
   it("toggles compact mode with one interaction", async () => {
     const user = userEvent.setup();
     const onCompactModeChange = vi.fn();
