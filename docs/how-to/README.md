@@ -8,6 +8,7 @@ Back to [Docs Home](../README.md).
 
 - [Run Local Dev Loop](run-local-dev-loop.md)
 - [Deploy Azure Infra (Bicep)](deploy-azure-bicep-scenarios.md)
+- [Migrate to Release-Tagged Images With Manual Azure Deploys](new-deployment-setup.md)
 - [Deploy to Production](deploy-production.md)
 - [Operate Runs](operate-runs.md)
 - [Manage Runtime Settings](manage-runtime-settings.md)
