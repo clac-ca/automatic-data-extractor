@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import csv
+import xml.etree.ElementTree as ET
+import zipfile
 from collections.abc import Sequence
 from datetime import date, datetime
 from pathlib import Path
@@ -35,9 +37,7 @@ def get_xlsx_hidden_columns(
     sheet_name: str | None = None,
     sheet_index: int | None = None,
 ) -> list[int]:
-    """Extract 0-based hidden column indices from an XLSX file without loading the whole workbook."""
-    import zipfile
-    import xml.etree.ElementTree as ET
+    """Extract 0-based hidden column indices without loading the whole workbook."""
 
     try:
         with zipfile.ZipFile(path, "r") as archive:
@@ -52,7 +52,9 @@ def get_xlsx_hidden_columns(
             sheets = []
             for sheet_el in wb_root.findall(".//ns:sheet", ns):
                 name = sheet_el.attrib.get("name")
-                r_id = sheet_el.attrib.get("{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id")
+                r_id = sheet_el.attrib.get(
+                    "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id"
+                )
                 sheets.append({"name": name, "r_id": r_id})
 
             # Step 2: Determine which sheet we need
@@ -96,8 +98,12 @@ def get_xlsx_hidden_columns(
             if cols_el is not None:
                 for col in cols_el.findall("ns:col", ns):
                     if col.attrib.get("hidden") in ("1", "true"):
-                        c_min = int(col.attrib.get("min"))
-                        c_max = int(col.attrib.get("max"))
+                        min_attr = col.attrib.get("min")
+                        max_attr = col.attrib.get("max")
+                        if min_attr is None or max_attr is None:
+                            continue
+                        c_min = int(min_attr)
+                        c_max = int(max_attr)
                         # min and max are 1-based, convert to 0-based for list indices
                         for col_idx in range(c_min, c_max + 1):
                             hidden_cols.append(col_idx - 1)
