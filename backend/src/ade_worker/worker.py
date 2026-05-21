@@ -590,8 +590,51 @@ def parse_run_metrics(payload: dict[str, Any]) -> dict[str, Any] | None:
     columns = _as_dict(counts.get("columns")) or {}
     metrics["column_count_total"] = _as_int(columns.get("total"))
     metrics["column_count_empty"] = _as_int(columns.get("empty"))
-    metrics["column_count_mapped"] = _as_int(columns.get("mapped"))
-    metrics["column_count_unmapped"] = _as_int(columns.get("unmapped"))
+
+    # Count how many columns are mapped but have valid_cells == 0
+    mapped_with_zero_valid = 0
+    workbooks = payload.get("workbooks")
+    if isinstance(workbooks, list):
+        for workbook in workbooks:
+            workbook_data = _as_dict(workbook) or {}
+            sheets = workbook_data.get("sheets")
+            if not isinstance(sheets, list):
+                continue
+            for sheet in sheets:
+                sheet_data = _as_dict(sheet) or {}
+                tables = sheet_data.get("tables")
+                if not isinstance(tables, list):
+                    continue
+                for table in tables:
+                    table_data = _as_dict(table) or {}
+                    structure = _as_dict(table_data.get("structure")) or {}
+                    columns_list = structure.get("columns")
+                    if not isinstance(columns_list, list):
+                        continue
+                    for column in columns_list:
+                        column_data = _as_dict(column) or {}
+                        mapping = _as_dict(column_data.get("mapping")) or {}
+                        mapping_status = _normalize_mapping_status(mapping.get("status"))
+                        if mapping_status == "mapped":
+                            non_empty = _as_int(column_data.get("non_empty_cells")) or 0
+                            valid = _as_int(column_data.get("valid_cells"))
+                            if valid is None:
+                                valid = non_empty
+                            if valid == 0:
+                                mapped_with_zero_valid += 1
+
+    column_count_mapped = _as_int(columns.get("mapped"))
+    column_count_unmapped = _as_int(columns.get("unmapped"))
+
+    if column_count_mapped is not None:
+        metrics["column_count_mapped"] = max(0, column_count_mapped - mapped_with_zero_valid)
+    else:
+        metrics["column_count_mapped"] = None
+
+    if column_count_unmapped is not None:
+        metrics["column_count_unmapped"] = column_count_unmapped + mapped_with_zero_valid
+    else:
+        metrics["column_count_unmapped"] = None
 
     fields = _as_dict(counts.get("fields")) or {}
     metrics["field_count_expected"] = _as_int(fields.get("expected"))
@@ -634,6 +677,7 @@ def parse_run_fields(payload: dict[str, Any]) -> list[dict[str, Any]]:
                 "label": _as_str(data.get("label")),
                 "detected": detected,
                 "best_mapping_score": _as_float(data.get("best_mapping_score")),
+                "valid_cells": _as_int(data.get("valid_cells")) or 0,
                 "occurrences_tables": _as_int(occurrences.get("tables")) or 0,
                 "occurrences_columns": _as_int(occurrences.get("columns")) or 0,
             }
@@ -707,6 +751,18 @@ def parse_run_table_columns(payload: dict[str, Any]) -> list[dict[str, Any]]:
                     if valid is None:
                         valid = non_empty
 
+                    mapped_field = _as_str(mapping.get("field"))
+                    mapping_score = _as_float(mapping.get("score"))
+                    mapping_method = _as_str(mapping.get("method"))
+                    unmapped_reason = _as_str(mapping.get("unmapped_reason"))
+
+                    if mapping_status == "mapped" and valid == 0:
+                        mapping_status = "unmapped"
+                        mapped_field = None
+                        mapping_score = None
+                        mapping_method = None
+                        unmapped_reason = "no_valid_cells"
+
                     rows.append(
                         {
                             "workbook_index": workbook_index,
@@ -720,10 +776,10 @@ def parse_run_table_columns(payload: dict[str, Any]) -> list[dict[str, Any]]:
                             "non_empty_cells": non_empty,
                             "valid_cells": valid,
                             "mapping_status": mapping_status,
-                            "mapped_field": _as_str(mapping.get("field")),
-                            "mapping_score": _as_float(mapping.get("score")),
-                            "mapping_method": _as_str(mapping.get("method")),
-                            "unmapped_reason": _as_str(mapping.get("unmapped_reason")),
+                            "mapped_field": mapped_field,
+                            "mapping_score": mapping_score,
+                            "mapping_method": mapping_method,
+                            "unmapped_reason": unmapped_reason,
                         }
                     )
 
@@ -1281,15 +1337,14 @@ class Worker:
         run_dir: Path | None = None
         log_uploader: tuple[threading.Event, threading.Thread] | None = None
         try:
-    
             with self.session_factory() as session:
                 run = db.load_run(session, run_id)
             if not run:
                 logger.error("run not found: %s", run_id)
                 return
-    
+
             run_started_at = run.get("started_at") if isinstance(run.get("started_at"), datetime) else now
-    
+
             workspace_id = str(run["workspace_id"])
             configuration_id = str(run["configuration_id"])
             deps_digest = str(run.get("deps_digest") or "")
@@ -1320,7 +1375,7 @@ class Worker:
                         f"Invalid run operation: {operation_raw!r}",
                     )
                     return
-    
+
             ctx = {
                 "job_id": run_id,
                 "workspace_id": workspace_id,
@@ -1328,7 +1383,7 @@ class Worker:
                 "environment_id": None,
                 "operation": operation.value,
             }
-    
+
             event_log = EventLog(self.paths.run_event_log_path(workspace_id, run_id))
             log_uploader = self._start_run_log_uploader(
                 workspace_id=workspace_id,
@@ -1366,9 +1421,9 @@ class Worker:
                 return
             python_bin = venv_result.python_bin
             ctx["environment_id"] = deps_digest
-    
+
             event_log.emit(event="run.start", message="Starting run", context=ctx)
-    
+
             if not python_bin.exists():
                 logger.warning("environment python missing: %s", python_bin)
                 self._handle_run_failure(
@@ -1383,7 +1438,7 @@ class Worker:
                     "Environment missing on disk",
                 )
                 return
-    
+
             config_dir = self.paths.config_package_dir(workspace_id, configuration_id)
             if not config_dir.exists():
                 self._handle_run_failure(
@@ -1398,7 +1453,7 @@ class Worker:
                     f"Missing config package dir: {config_dir}",
                 )
                 return
-    
+
             options = parse_run_options(
                 run.get("run_options"),
                 default_log_level=self.settings.effective_worker_log_level,
@@ -1407,7 +1462,7 @@ class Worker:
             sheet_names = options.input_sheet_names or _parse_input_sheet_names(run.get("input_sheet_names"))
             run_dir = self.paths.run_dir(workspace_id, run_id)
             _ensure_dir(run_dir)
-    
+
             if options.dry_run:
                 finished_at = utcnow()
                 with session_scope(self.session_factory) as session:
@@ -1444,7 +1499,7 @@ class Worker:
                 )
                 self._upload_run_log(workspace_id=workspace_id, run_id=run_id)
                 return
-    
+
             if operation is RunOperation.VALIDATE:
                 cmd = engine_config_validate_cmd(
                     python_bin=python_bin,
@@ -1700,7 +1755,7 @@ class Worker:
                     "Process operation requires input_file_version_id",
                 )
                 return
-    
+
             with self.session_factory() as session:
                 file_version = db.load_file_version(session, input_file_version_id)
                 if not file_version:
@@ -1773,12 +1828,12 @@ class Worker:
                     f"Document deleted: {document_id}",
                 )
                 return
-    
+
             input_dir = self.paths.run_input_dir(workspace_id, run_id)
             output_dir = self.paths.run_output_dir(workspace_id, run_id)
             _ensure_dir(input_dir)
             _ensure_dir(output_dir)
-    
+
             original_name = Path(
                 str(file_version.get("filename_at_upload") or file_row.get("name") or "input")
             ).name
@@ -1815,16 +1870,16 @@ class Worker:
                     f"Document download failed: {exc}",
                 )
                 return
-    
+
             engine_payload: dict[str, Any] | None = None
-    
+
             def on_event(rec: dict[str, Any]) -> None:
                 nonlocal engine_payload
                 if rec.get("event") == "engine.run.completed":
                     data = rec.get("data")
                     if isinstance(data, dict):
                         engine_payload = data
-    
+
             cmd = engine_process_file_cmd(
                 python_bin=python_bin,
                 input_path=staged_input,
@@ -1859,7 +1914,7 @@ class Worker:
                 return
 
             finished_at = utcnow()
-    
+
             if res.timed_out:
                 self._handle_run_failure(
                     claim,
@@ -1873,7 +1928,7 @@ class Worker:
                     "Run timed out",
                 )
                 return
-    
+
             if res.exit_code == 0:
                 output_path = _normalize_output_path(
                     _extract_output_path(engine_payload),
@@ -1888,7 +1943,7 @@ class Worker:
                 output_file_row: dict[str, Any] | None = None
                 output_upload: Any | None = None
                 output_filename: str | None = None
-    
+
                 if output_path:
                     output_abs = (run_dir / output_path).resolve()
                     if output_abs.is_file():
@@ -1932,9 +1987,14 @@ class Worker:
                         now=finished_at,
                     )
                     if not ok:
-                        event_log.emit(event="run.lost_claim", level="warning", message="Lost run claim before ack", context=ctx)
+                        event_log.emit(
+                            event="run.lost_claim",
+                            level="warning",
+                            message="Lost run claim before ack",
+                            context=ctx,
+                        )
                         return
-    
+
                     output_file_version_id: str | None = None
                     if output_upload and output_file_row:
                         storage_version_id = output_upload.version_id
@@ -1953,7 +2013,7 @@ class Worker:
                             now=finished_at,
                         )
                         output_file_version_id = str(version_payload["id"])
-    
+
                     db.record_run_result(
                         session,
                         run_id=run_id,
@@ -1962,7 +2022,7 @@ class Worker:
                         output_file_version_id=output_file_version_id,
                         error_message=None,
                     )
-    
+
                     if results_payload is None:
                         logger.warning("run.results.missing_payload run_id=%s", run_id)
                     else:
@@ -1985,7 +2045,7 @@ class Worker:
                                 )
                         except Exception:
                             logger.exception("run.results.persist_failed run_id=%s", run_id)
-    
+
                 _emit_run_complete(
                     event_log,
                     status="succeeded",
@@ -1997,7 +2057,7 @@ class Worker:
                 )
                 self._upload_run_log(workspace_id=workspace_id, run_id=run_id)
                 return
-    
+
             self._handle_run_failure(
                 claim,
                 run_id,
@@ -2009,7 +2069,7 @@ class Worker:
                 res.exit_code,
                 f"Engine failed (exit {res.exit_code})",
             )
-    
+
         finally:
             if workspace_id and log_uploader is not None:
                 self._stop_run_log_uploader(

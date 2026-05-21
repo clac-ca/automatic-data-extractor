@@ -4917,6 +4917,8 @@ export type components = {
             detected: boolean;
             /** Best Mapping Score */
             best_mapping_score?: number | null;
+            /** Valid Cells */
+            valid_cells: number;
             /** Occurrences Tables */
             occurrences_tables: number;
             /** Occurrences Columns */

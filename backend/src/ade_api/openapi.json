@@ -22840,6 +22840,10 @@
             ],
             "title": "Best Mapping Score"
           },
+          "valid_cells": {
+            "type": "integer",
+            "title": "Valid Cells"
+          },
           "occurrences_tables": {
             "type": "integer",
             "title": "Occurrences Tables"
@@ -22854,6 +22858,7 @@
         "required": [
           "field",
           "detected",
+          "valid_cells",
           "occurrences_tables",
           "occurrences_columns"
         ],

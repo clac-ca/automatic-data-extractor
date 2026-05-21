@@ -216,6 +216,7 @@ class RunFieldResource(BaseSchema):
     label: str | None = None
     detected: bool
     best_mapping_score: float | None = None
+    valid_cells: int
     occurrences_tables: int
     occurrences_columns: int
 
