@@ -18,38 +18,23 @@ Explain how ADE versions and container images are produced, including rebuild re
 3. Merging the release PR updates `VERSION`/`CHANGELOG` and creates GitHub release tag `vX.Y.Z`.
 4. Publishing that release triggers `docker-image.yaml` and publishes images.
 
-### Conventional commit requirement on `main`
+### Conventional Commit Requirement On `main`
 
 Release Please only increments versions from parseable Conventional Commit messages on `main`.
 If a squash-merged PR lands with a non-conventional title, Release Please can skip release creation for that push.
-For `development` -> `main` promotions, prefer adding releasable metadata to the promotion PR itself:
-
-- use a releasable PR title such as `fix: ...`, `feat: ...`, or `deps: ...`
-- or add a `BEGIN_COMMIT_OVERRIDE` / `END_COMMIT_OVERRIDE` block to the PR body so Release Please can use those commit lines after squash merge
-
-Example:
-
-```text
-BEGIN_COMMIT_OVERRIDE
-feat(documents): redesign activity threads (#329)
-feat(documents): support deleting activity comments (#330)
-END_COMMIT_OVERRIDE
-```
-
 If you need to force a specific version, use a `Release-As: X.Y.Z` footer on a follow-up commit.
 
 ## Current Workflow Targets
 
 - `release-please.yaml` runs on pushes to `main`.
 - `docker-image.yaml` publishes on:
-  - pushes to `main` and `development`
+  - pushes to `main`
   - published GitHub releases
 
 ## Image Tag Policy
 
 ### Branch channels
 - `main` (moving)
-- `development` (moving)
 
 ### Stable releases (`vX.Y.Z`)
 - Immutable tag: `vX.Y.Z`

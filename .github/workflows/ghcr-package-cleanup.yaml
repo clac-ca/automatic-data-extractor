@@ -10,7 +10,7 @@ on:
       keep_tags:
         description: Comma-separated tags to keep
         required: true
-        default: main,development
+        default: main
       keep_tag_regex:
         description: Regex pattern for additional tags to keep
         required: true

@@ -129,12 +129,12 @@ ade-engine process batch \
 
 ## Agent primer (collaboration norms)
 
-- Default branch: `development` (PRs and direct work target this branch).
+- Default branch: `main` (PRs and direct work target this branch).
 - Commit style: Conventional Commits (`feat:`, `fix:`, `deps:`, `chore:`).
 - Use `deps:` for dependency updates that should trigger a patch release.
 - Stage only task-related files; avoid bundling unrelated changes.
 - Versions/changelog are managed by Release Please; do not bump `VERSION` or `CHANGELOG.md` manually unless requested.
-- Official releases are created from `main`; `development` and `main` are branch channels for image tags.
+- Official releases are created from `main`; `main` is the branch channel for image tags.
 - SemVer mapping:
   - `fix:` / `deps:` -> patch release
   - `feat:` -> minor release
@@ -159,20 +159,20 @@ git add <files...>
 git commit -m "fix(scope): concise summary"
 ```
 
-### Create PR to `development`
-- Branch from `development`.
+### Create PR to `main`
+- Branch from `main`.
 - Keep PR focused to one topic.
 - Include test evidence in PR body.
 
 ```bash
-git checkout development
+git checkout main
 git pull --ff-only
 git checkout -b <topic-branch>
 git push -u origin <topic-branch>
-gh pr create --base development --fill
+gh pr create --base main --fill
 ```
 
-### Merge to `development` (PR-first default)
+### Merge to `main` (PR-first default)
 - Do not merge directly by default.
 - Merge after required checks are green.
 
@@ -207,7 +207,6 @@ gh run list --workflow rebuild-release.yaml --limit 5
 ```bash
 gh run list --workflow docker-image.yaml --limit 5
 docker buildx imagetools inspect ghcr.io/<org>/<repo>:main
-docker buildx imagetools inspect ghcr.io/<org>/<repo>:development
 docker buildx imagetools inspect ghcr.io/<org>/<repo>:vX.Y.Z
 ```
 
@@ -217,7 +216,7 @@ docker buildx imagetools inspect ghcr.io/<org>/<repo>:vX.Y.Z
 ```bash
 gh workflow run .github/workflows/ghcr-package-cleanup.yaml \
   -f package_name=automatic-data-extractor \
-  -f keep_tags=main,development \
+  -f keep_tags=main \
   -f keep_tag_regex='^v[0-9]+\\.[0-9]+\\.[0-9]+(-r[0-9]+)?$' \
   -f retention_days=30 \
   -f dry_run=true
@@ -226,11 +225,8 @@ gh workflow run .github/workflows/ghcr-package-cleanup.yaml \
 ## Release and merge guardrails
 - No manual edits to `VERSION` or `CHANGELOG.md` for normal releases.
 - Never overwrite existing `vX.Y.Z` or `vX.Y.Z-rN` tags.
-- PR-first workflow is default for merges to `development`.
+- PR-first workflow is default for merges to `main`.
 - Keep releases aligned with Release Please; avoid ad-hoc custom versioning.
-- For `development` -> `main` promotion PRs that will be squash-merged, ensure Release Please can see releasable metadata:
-  - use a releasable PR title (`fix:`, `feat:`, `deps:`), or
-  - add a `BEGIN_COMMIT_OVERRIDE` / `END_COMMIT_OVERRIDE` block to the PR body with releasable conventional commit lines.
 
 ## 🤖 Agent rules
 

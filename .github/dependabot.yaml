@@ -6,7 +6,7 @@ updates:
   # -----------------------------
   - package-ecosystem: "npm"
     directory: "/frontend"
-    target-branch: "development"
+    target-branch: "main"
     schedule:
       interval: "weekly"
     commit-message:
@@ -21,7 +21,7 @@ updates:
   # -----------------------------
   - package-ecosystem: "uv"
     directory: "/backend"
-    target-branch: "development"
+    target-branch: "main"
     schedule:
       interval: "weekly"
     commit-message:

@@ -3,7 +3,7 @@ name: PR Gates
 on:
   pull_request:
   push:
-    branches: [development]
+    branches: [main]
 
 concurrency:
   group: pr-gates-${{ github.ref }}
