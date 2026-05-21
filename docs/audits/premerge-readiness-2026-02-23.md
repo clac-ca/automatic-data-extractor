@@ -90,12 +90,12 @@
 
 ## 6. Gate 7 post-merge release automation verification
 
-- Main-branch Release Please run after promotion merge:
+- Main-branch legacy release automation run after promotion merge:
   - [Run 22327343293](https://github.com/clac-ca/automatic-data-extractor/actions/runs/22327343293) -> success
 - Release PR opened and merged:
   - [#319](https://github.com/clac-ca/automatic-data-extractor/pull/319)
   - merge commit `f70fc5089df720bfa13d2c46921eb13099655c0c`
-- Release Please run on release commit:
+- Legacy release automation run on release commit:
   - [Run 22327515604](https://github.com/clac-ca/automatic-data-extractor/actions/runs/22327515604) -> success
 - Docker image publication:
   - [Run 22327514038 (push)](https://github.com/clac-ca/automatic-data-extractor/actions/runs/22327514038) -> success

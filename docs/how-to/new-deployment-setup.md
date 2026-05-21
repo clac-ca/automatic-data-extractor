@@ -320,7 +320,7 @@ docs/how-to/new-deployment-setup.md
 Search for remaining `development` branch instructions:
 
 ```bash
-rg -n "development|target-branch|promotion|Release Please|release-please" AGENTS.md CONTRIBUTING.md docs .github
+rg -n "development|target-branch|promotion" AGENTS.md CONTRIBUTING.md docs .github
 ```
 
 Patch only the docs/workflows that are part of the deployment migration.
@@ -390,63 +390,25 @@ git push -u origin codex/remove-development-promotion-flow
 gh pr create --base main --title "chore(deploy): remove development promotion flow" --body "Moves deployment docs and workflow triggers to the single-main release model."
 ```
 
-## Step 9: Choose Release Please Or Native GitHub Releases
+## Step 9: Use Native GitHub Releases
 
-Choose one release source.
+Manual GitHub Releases are the release source of truth.
 
-### Option A: Native GitHub Releases
-
-Use this if maintainers want the simplest model.
-
-Remove Release Please:
-
-```bash
-git checkout main
-git pull --ff-only
-git checkout -b codex/remove-release-please
-git rm .github/workflows/release-please.yaml
-git rm -r .github/release-please
-```
-
-Decide how to handle:
+Keep these release-prep files in the repo:
 
 ```text
 VERSION
 CHANGELOG.md
 ```
 
-Recommended native-release options:
+Update `VERSION` and `CHANGELOG.md` intentionally in release-prep PRs before creating the GitHub release.
 
-- keep `VERSION` only if the app reads it and update it in release PRs
-- keep `CHANGELOG.md` only if operators actively use it
-- otherwise treat GitHub Releases as the release notes source of truth
-
-Commit:
+Normal release flow:
 
 ```bash
-git add VERSION CHANGELOG.md docs CONTRIBUTING.md AGENTS.md
-git commit -m "chore(release): use native GitHub releases"
-git push -u origin codex/remove-release-please
-gh pr create --base main --title "chore(release): use native GitHub releases" --body "Removes Release Please after production deploys move to release-published images."
-```
-
-### Option B: Keep Release Please
-
-Use this if you still want automated `VERSION` and `CHANGELOG.md` updates.
-
-Keep:
-
-```text
-.github/workflows/release-please.yaml
-.github/release-please/
-VERSION
-CHANGELOG.md
-```
-
-Update docs to say:
-
-```text
-merge PRs to main -> Release Please PR -> merge Release Please PR -> GitHub release -> GHCR image -> manual Azure deploy
+gh release create vX.Y.Z --target main --title "vX.Y.Z" --notes-file RELEASE_NOTES.md
+gh run list --workflow docker-image.yaml --limit 5
+docker buildx imagetools inspect ghcr.io/<org>/<repo>:vX.Y.Z
 ```
 
 ## Step 10: Clean Up Azure Development Resources

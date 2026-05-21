@@ -133,13 +133,13 @@ ade-engine process batch \
 - Commit style: Conventional Commits (`feat:`, `fix:`, `deps:`, `chore:`).
 - Use `deps:` for dependency updates that should trigger a patch release.
 - Stage only task-related files; avoid bundling unrelated changes.
-- Versions/changelog are managed by Release Please; do not bump `VERSION` or `CHANGELOG.md` manually unless requested.
+- Releases are created manually through GitHub Releases from `main`.
+- Keep `VERSION` and `CHANGELOG.md` in the repo; update them intentionally in release-prep PRs.
 - Official releases are created from `main`; `main` is the branch channel for image tags.
 - SemVer mapping:
   - `fix:` / `deps:` -> patch release
   - `feat:` -> minor release
   - `feat!:` or `BREAKING CHANGE:` footer -> major release
-- If a specific version must be forced, use a `Release-As: X.Y.Z` footer in the commit body.
 - Runtime version metadata (`ADE_APP_VERSION`, `ADE_APP_COMMIT_SHA`) is CI-managed; do not ask users to set these in `.env` for normal deployments.
 - Production deployments should pin immutable release tags via `ADE_DOCKER_TAG=vX.Y.Z`.
 - See `CONTRIBUTING.md` for the full collaboration and release flow.
@@ -181,13 +181,13 @@ gh pr checks <pr-number>
 gh pr merge <pr-number> --squash --delete-branch
 ```
 
-### Trigger and verify Release Please
-- Release Please runs from pushes to `main`.
-- Agent may verify release PR/tag creation status.
+### Create and verify a manual GitHub release
+- Releases are created manually from `main` with an immutable `vX.Y.Z` tag.
+- Publishing the GitHub release triggers the GHCR image workflow.
 
 ```bash
-gh run list --workflow release-please.yaml --limit 5
-gh pr list --search "chore(main): release"
+gh release create vX.Y.Z --target main --title "vX.Y.Z" --notes-file RELEASE_NOTES.md
+gh run list --workflow docker-image.yaml --limit 5
 gh release list --limit 10
 ```
 
@@ -223,10 +223,10 @@ gh workflow run .github/workflows/ghcr-package-cleanup.yaml \
 ```
 
 ## Release and merge guardrails
-- No manual edits to `VERSION` or `CHANGELOG.md` for normal releases.
+- Keep `VERSION` and `CHANGELOG.md` aligned with manual GitHub releases.
 - Never overwrite existing `vX.Y.Z` or `vX.Y.Z-rN` tags.
 - PR-first workflow is default for merges to `main`.
-- Keep releases aligned with Release Please; avoid ad-hoc custom versioning.
+- Avoid ad-hoc custom versioning outside the documented GitHub release flow.
 
 ## 🤖 Agent rules
 
