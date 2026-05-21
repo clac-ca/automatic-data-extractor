@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.17.0](https://github.com/clac-ca/automatic-data-extractor/compare/v1.16.0...v1.17.0) (2026-05-21)
+
+
+### Features
+
+* **runs:** save and report valid cells for run columns ([#383](https://github.com/clac-ca/automatic-data-extractor/issues/383)) ([bc212f8](https://github.com/clac-ca/automatic-data-extractor/commit/bc212f8de401a86ef8654ed6565532a277330395))
+
+### Bug Fixes
+
+* **api:** satisfy workbook preview lint checks ([#383](https://github.com/clac-ca/automatic-data-extractor/issues/383)) ([bc212f8](https://github.com/clac-ca/automatic-data-extractor/commit/bc212f8de401a86ef8654ed6565532a277330395))
+
+### Chores
+
+* **deploy:** add release image migration guide ([#377](https://github.com/clac-ca/automatic-data-extractor/issues/377)) ([7fdcecb](https://github.com/clac-ca/automatic-data-extractor/commit/7fdcecb0868f0376ffefd0752495ea52e7240df0))
+* **release:** remove Release Please and update manual release docs ([#382](https://github.com/clac-ca/automatic-data-extractor/issues/382)) ([cbfb1b8](https://github.com/clac-ca/automatic-data-extractor/commit/cbfb1b88e154f24efb4dfcd5ee7431e5f0883656))
+* **ci:** update dependabot target branch ([#379](https://github.com/clac-ca/automatic-data-extractor/issues/379)) ([d4669a7](https://github.com/clac-ca/automatic-data-extractor/commit/d4669a7c64a387532d56e792ab7c3852821930a3))
+* **docs:** add recommended dev workflow with live reloading ([#383](https://github.com/clac-ca/automatic-data-extractor/issues/383)) ([bc212f8](https://github.com/clac-ca/automatic-data-extractor/commit/bc212f8de401a86ef8654ed6565532a277330395))
+
+
 ## [1.16.0](https://github.com/clac-ca/automatic-data-extractor/compare/v1.15.0...v1.16.0) (2026-04-13)
 
 
