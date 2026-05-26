@@ -719,6 +719,18 @@ class DocumentSheet(BaseSchema):
     is_active: bool = False
 
 
+class UserNotificationOut(BaseSchema):
+    """Serialized representation of a user notification (e.g. mention)."""
+
+    id: UUIDStr
+    workspace_id: UUIDStr = Field(alias="workspaceId")
+    is_read: bool = Field(alias="isRead")
+    created_at: datetime = Field(alias="createdAt")
+    comment: DocumentCommentOut
+    document_id: UUIDStr = Field(alias="documentId")
+    document_name: str = Field(alias="documentName")
+
+
 __all__ = [
     "DocumentBatchArchiveRequest",
     "DocumentBatchArchiveResponse",
@@ -769,4 +781,5 @@ __all__ = [
     "TagCatalogItem",
     "TagCatalogPage",
     "UserSummary",
+    "UserNotificationOut",
 ]

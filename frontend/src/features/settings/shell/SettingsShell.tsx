@@ -135,14 +135,18 @@ export function SettingsShell({
       ? "Organization"
       : routeContext.scope === "workspaces"
         ? "Workspaces"
-        : "Home";
+        : routeContext.scope === "user"
+          ? "Account"
+          : "Home";
 
   const sectionSubtitle =
     routeContext.scope === "organization"
       ? "Manage identity, policy, and security controls"
       : routeContext.scope === "workspaces"
         ? "Manage workspace access, processing, and lifecycle"
-        : "Unified administration for organization and workspace settings";
+        : routeContext.scope === "user"
+          ? "Manage your display name, security posture, and developer keys"
+          : "Unified administration for organization and workspace settings";
 
   return (
     <SidebarProvider defaultOpen className="flex h-full min-h-0 w-full overflow-hidden bg-background">

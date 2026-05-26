@@ -41,6 +41,18 @@ export function parseSettingsRouteContext(pathname: string): SettingsRouteContex
     return { scope: "home", section: "home" };
   }
 
+  if (pathname === "/settings/profile") {
+    return { scope: "user", section: "profile" };
+  }
+
+  if (pathname === "/settings/security") {
+    return { scope: "user", section: "security" };
+  }
+
+  if (pathname === "/settings/api-keys") {
+    return { scope: "user", section: "api-keys" };
+  }
+
   if (pathname === settingsPaths.organization.usersCreate) {
     return { scope: "organization", section: "users.create" };
   }

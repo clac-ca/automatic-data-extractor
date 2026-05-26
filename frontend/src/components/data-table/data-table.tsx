@@ -88,15 +88,13 @@ export function DataTable<TData>({
   };
 
   const tableWidth = Math.max(table.getTotalSize(), 1);
+  const tableMinWidth = `max(${tableWidth}px, 100%)`;
 
   return (
-    <div
-      className={cn("flex w-full flex-col gap-2.5 overflow-auto", className)}
-      {...props}
-    >
+    <div className={cn("flex w-full flex-col gap-3 overflow-auto", className)} {...props}>
       {children}
-      <div className="overflow-hidden rounded-md border">
-        <Table className="table-fixed" style={{ width: `${tableWidth}px` }}>
+      <div className="overflow-hidden rounded-md border bg-background">
+        <Table className="table-auto" style={{ minWidth: tableMinWidth, width: "max-content" }}>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
@@ -105,7 +103,7 @@ export function DataTable<TData>({
                     key={header.id}
                     colSpan={header.colSpan}
                     className={cn(
-                      "relative",
+                      "group/header relative after:absolute after:right-0 after:top-1/2 after:h-5 after:-translate-y-1/2 after:border-r after:border-border last:after:hidden",
                       (header.column.columnDef.meta as { headerClassName?: string } | undefined)
                         ?.headerClassName,
                     )}
@@ -135,12 +133,14 @@ export function DataTable<TData>({
                             onTouchStart={header.getResizeHandler()}
                             aria-label={`Resize ${String(header.column.columnDef.meta?.label ?? header.column.id)} column`}
                             className={cn(
-                              "absolute right-0 top-0 h-full w-2 cursor-col-resize touch-none select-none border-0 bg-transparent p-0 transition-colors",
+                              "absolute -right-1 top-0 flex h-full w-2 cursor-col-resize touch-none select-none items-center justify-center border-0 bg-transparent p-0",
                               header.column.getIsResizing()
-                                ? "bg-border"
-                                : "hover:bg-border/70",
+                                ? "[&_span]:bg-primary [&_span]:opacity-100"
+                                : "[&_span]:opacity-0 hover:[&_span]:bg-primary/70 hover:[&_span]:opacity-100 group-hover/header:[&_span]:opacity-100",
                             )}
-                          />
+                          >
+                            <span className="h-6 w-px rounded-full bg-border transition-colors" />
+                          </button>
                         ) : null}
                       </>
                     )}
@@ -202,7 +202,7 @@ export function DataTable<TData>({
           </TableBody>
         </Table>
       </div>
-      <div className="flex flex-col gap-2.5">
+      <div className="flex flex-col gap-3">
         <DataTablePagination
           table={table}
           pageSizeOptions={pageSizeOptions}

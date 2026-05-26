@@ -250,6 +250,15 @@ class DocumentViewImmutableError(Exception):
         super().__init__(message)
 
 
+class UserNotificationNotFoundError(Exception):
+    """Raised when a requested user notification does not exist."""
+
+    def __init__(self, notification_id: UUID | str) -> None:
+        identifier = str(notification_id)
+        super().__init__(f"Notification {identifier!r} not found")
+        self.notification_id = identifier
+
+
 __all__ = [
     "DocumentNotFoundError",
     "DocumentFileMissingError",
@@ -274,4 +283,5 @@ __all__ = [
     "DocumentViewNotFoundError",
     "DocumentViewConflictError",
     "DocumentViewImmutableError",
+    "UserNotificationNotFoundError",
 ]

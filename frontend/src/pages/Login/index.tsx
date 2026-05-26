@@ -90,7 +90,7 @@ function buildPasswordChangePath(returnTo: string | null | undefined) {
   if (safeReturnTo && safeReturnTo !== DEFAULT_RETURN_TO) {
     queryPayload.returnTo = safeReturnTo;
   }
-  return `/account/security?${createSearchParams(queryPayload).toString()}`;
+  return `/settings/security?${createSearchParams(queryPayload).toString()}`;
 }
 
 function mapMfaApiError(error: ApiError): string {

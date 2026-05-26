@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useUnsavedChangesGuard } from "@/pages/Workspace/sections/ConfigurationEditor/workbench/state/useUnsavedChangesGuard";
 import type { WorkspaceProfile } from "@/types/workspaces";
 
@@ -144,10 +145,17 @@ export function WorkspaceProcessingPage({ workspace }: { readonly workspace: Wor
             : "Processing is active. Uploaded files can start runs automatically."}
         </Alert>
 
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={isPaused} onChange={(event) => setIsPaused(event.target.checked)} disabled={updateMutation.isPending} />
-          Pause processing
-        </label>
+        <div className="flex items-center gap-2 select-none">
+          <Checkbox
+            id="pause-processing"
+            checked={isPaused}
+            onCheckedChange={(checked) => setIsPaused(Boolean(checked))}
+            disabled={updateMutation.isPending}
+          />
+          <label htmlFor="pause-processing" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer select-none">
+            Pause processing
+          </label>
+        </div>
       </SettingsDetailSection>
 
       <SettingsStickyActionBar

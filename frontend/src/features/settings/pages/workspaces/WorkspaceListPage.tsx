@@ -84,7 +84,7 @@ export function WorkspaceListPage({
           ]}
           getRowId={(workspace) => workspace.id}
           onRowOpen={(workspace) =>
-            navigate(listState.withCurrentSearch(settingsPaths.workspaces.general(workspace.id)))
+            navigate(`/workspaces/${workspace.id}/settings/general`)
           }
           page={listState.state.page}
           pageSize={listState.state.pageSize}

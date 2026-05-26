@@ -101,7 +101,7 @@ export function DocumentNameCell({
   );
 
   return (
-    <div className="group/name-cell flex min-w-0 items-start gap-2">
+    <div className="group/name-cell flex min-w-0 items-center gap-2">
       <div className="min-w-0 flex-1">
         <div className="truncate font-medium" title={document.name}>
           {document.name}

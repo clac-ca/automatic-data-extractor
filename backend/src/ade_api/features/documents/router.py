@@ -89,6 +89,7 @@ from .exceptions import (
     InvalidDocumentCommentMentionsError,
     InvalidDocumentRenameError,
     InvalidDocumentTagsError,
+    UserNotificationNotFoundError,
 )
 from .schemas import (
     DocumentActivityCommentCreate,
@@ -122,6 +123,7 @@ from .schemas import (
     DocumentViewOut,
     DocumentViewUpdate,
     TagCatalogPage,
+    UserNotificationOut,
 )
 from .service import DocumentsService
 from .sorting import (
@@ -941,6 +943,95 @@ def patch_document_tags(
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except InvalidDocumentTagsError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
+
+
+@router.get(
+    "/notifications",
+    response_model=list[UserNotificationOut],
+    status_code=status.HTTP_200_OK,
+    summary="List unread and read notifications for the current user",
+    response_model_exclude_none=True,
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {
+            "description": "Authentication required to read notifications.",
+        },
+        status.HTTP_403_FORBIDDEN: {
+            "description": "Workspace permissions do not allow notification access.",
+        },
+    },
+)
+def list_user_notifications(
+    workspace_id: WorkspacePath,
+    service: DocumentsServiceReadDep,
+    actor: DocumentReader,
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+) -> list[UserNotificationOut]:
+    return service.list_user_notifications(
+        workspace_id=workspace_id,
+        user_id=actor.id,
+        limit=limit,
+    )
+
+
+@router.patch(
+    "/notifications/{notificationId}/read",
+    dependencies=[Security(require_csrf)],
+    response_model=UserNotificationOut,
+    status_code=status.HTTP_200_OK,
+    summary="Mark a specific notification as read",
+    response_model_exclude_none=True,
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {
+            "description": "Authentication required to mark notifications as read.",
+        },
+        status.HTTP_403_FORBIDDEN: {
+            "description": "Workspace permissions do not allow notification access.",
+        },
+        status.HTTP_404_NOT_FOUND: {
+            "description": "Notification not found.",
+        },
+    },
+)
+def mark_notification_as_read(
+    workspace_id: WorkspacePath,
+    notification_id: Annotated[UUID, Path(alias="notificationId")],
+    service: DocumentsServiceDep,
+    actor: DocumentReader,
+) -> UserNotificationOut:
+    try:
+        return service.mark_notification_as_read(
+            workspace_id=workspace_id,
+            notification_id=notification_id,
+            user_id=actor.id,
+        )
+    except UserNotificationNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.post(
+    "/notifications/readAll",
+    dependencies=[Security(require_csrf)],
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Mark all unread notifications for the current user as read",
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {
+            "description": "Authentication required to mark notifications as read.",
+        },
+        status.HTTP_403_FORBIDDEN: {
+            "description": "Workspace permissions do not allow notification access.",
+        },
+    },
+)
+def mark_all_notifications_as_read(
+    workspace_id: WorkspacePath,
+    service: DocumentsServiceDep,
+    actor: DocumentReader,
+) -> Response:
+    service.mark_all_notifications_as_read(
+        workspace_id=workspace_id,
+        user_id=actor.id,
+    )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get(
@@ -1779,6 +1870,7 @@ def list_document_tags(
         )
     except InvalidDocumentTagsError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
+
 
 
 __all__ = ["router", "tags_router"]

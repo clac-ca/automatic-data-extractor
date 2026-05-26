@@ -675,3 +675,19 @@ body,
     --ring: var(--topbar-ring);
   }
 }
+
+@keyframes comment-pulse-once {
+  0% {
+    background-color: oklch(0.775 0.165 80 / 0.22);
+  }
+  30% {
+    background-color: oklch(0.775 0.165 80 / 0.35);
+  }
+  100% {
+    background-color: oklch(0.775 0.165 80 / 0.1);
+  }
+}
+
+.animate-pulse-once {
+  animation: comment-pulse-once 2.2s cubic-bezier(0.22, 1, 0.36, 1) 1;
+}

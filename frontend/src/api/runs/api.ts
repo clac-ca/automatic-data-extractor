@@ -20,6 +20,7 @@ export type RunColumnsQuery =
   paths["/api/v1/workspaces/{workspaceId}/runs/{runId}/columns"]["get"]["parameters"]["query"];
 export type WorkbookSheetPreview = components["schemas"]["WorkbookSheetPreview"];
 export type RunOutputSheet = components["schemas"]["RunOutputSheet"];
+export type RunOutput = components["schemas"]["RunOutput"];
 
 export type RunsQuery = {
   limit?: number;
@@ -226,6 +227,24 @@ export async function fetchRunOutputPreview(
   });
 
   if (!data) throw new Error("Expected run output preview payload.");
+  return data;
+}
+
+export async function saveRunOutputEdits(
+  workspaceId: string,
+  runId: string,
+  payload: {
+    sheetName?: string | null;
+    sheetIndex?: number | null;
+    rows: string[][];
+  },
+): Promise<RunOutput> {
+  const { data } = await client.POST("/api/v1/workspaces/{workspaceId}/runs/{runId}/output/edit", {
+    params: { path: workspaceRunPath(workspaceId, runId) },
+    body: payload,
+  });
+
+  if (!data) throw new Error("Expected run output payload.");
   return data;
 }
 

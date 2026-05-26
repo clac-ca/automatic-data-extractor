@@ -15,6 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useUnsavedChangesGuard } from "@/pages/Workspace/sections/ConfigurationEditor/workbench/state/useUnsavedChangesGuard";
 import type { WorkspacePrincipalType, WorkspaceProfile } from "@/types/workspaces";
 
@@ -330,13 +331,11 @@ export function WorkspacePrincipalCreatePage({ workspace }: { readonly workspace
               const checked = selectedRoleIds.includes(role.id);
               const checkboxId = `workspace-principal-create-role-${role.id}`;
               return (
-                <div key={role.id} className="flex items-start gap-2 text-sm">
-                  <input
+                <div key={role.id} className="flex items-start gap-2 text-sm select-none">
+                  <Checkbox
                     id={checkboxId}
-                    type="checkbox"
                     checked={checked}
-                    onChange={(event) => {
-                      const nextChecked = event.target.checked;
+                    onCheckedChange={(nextChecked) => {
                       setSelectedRoleIds((current) => {
                         if (nextChecked) {
                           return current.includes(role.id) ? current : [...current, role.id];
@@ -345,9 +344,9 @@ export function WorkspacePrincipalCreatePage({ workspace }: { readonly workspace
                       });
                     }}
                   />
-                  <label htmlFor={checkboxId}>
-                    <span className="font-medium text-foreground">{role.name}</span>
-                    <span className="block text-xs text-muted-foreground">{role.description || role.slug}</span>
+                  <label htmlFor={checkboxId} className="font-medium text-foreground cursor-pointer select-none leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                    <span>{role.name}</span>
+                    <span className="block text-xs text-muted-foreground mt-1">{role.description || role.slug}</span>
                   </label>
                 </div>
               );
@@ -517,14 +516,12 @@ export function WorkspacePrincipalDetailPage({ workspace }: { readonly workspace
               const checked = selectedRoleIds.includes(role.id);
               const checkboxId = `workspace-principal-detail-role-${role.id}`;
               return (
-                <div key={role.id} className="flex items-start gap-2 text-sm">
-                  <input
+                <div key={role.id} className="flex items-start gap-2 text-sm select-none">
+                  <Checkbox
                     id={checkboxId}
-                    type="checkbox"
                     checked={checked}
                     disabled={!canManage || updateMutation.isPending}
-                    onChange={(event) => {
-                      const nextChecked = event.target.checked;
+                    onCheckedChange={(nextChecked) => {
                       setSelectedRoleIds((current) => {
                         if (nextChecked) {
                           return current.includes(role.id) ? current : [...current, role.id];
@@ -533,9 +530,9 @@ export function WorkspacePrincipalDetailPage({ workspace }: { readonly workspace
                       });
                     }}
                   />
-                  <label htmlFor={checkboxId}>
-                    <span className="font-medium text-foreground">{role.name}</span>
-                    <span className="block text-xs text-muted-foreground">{role.description || role.slug}</span>
+                  <label htmlFor={checkboxId} className="font-medium text-foreground cursor-pointer select-none leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                    <span>{role.name}</span>
+                    <span className="block text-xs text-muted-foreground mt-1">{role.description || role.slug}</span>
                   </label>
                 </div>
               );

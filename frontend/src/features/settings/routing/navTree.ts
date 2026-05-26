@@ -8,6 +8,7 @@ import {
   ShieldCheck,
   ShieldUser,
   Users,
+  UserRound,
   UserRoundCog,
   type LucideIcon,
 } from "lucide-react";
@@ -37,6 +38,33 @@ export const settingsRail: readonly SettingsRailGroup[] = [
         path: settingsPaths.home,
         scope: "home",
         icon: Home,
+      },
+    ],
+  },
+  {
+    id: "user",
+    label: "Account Settings",
+    items: [
+      {
+        id: "user.profile",
+        label: "Profile",
+        path: "/settings/profile",
+        scope: "user",
+        icon: UserRound,
+      },
+      {
+        id: "user.security",
+        label: "Security",
+        path: "/settings/security",
+        scope: "user",
+        icon: ShieldCheck,
+      },
+      {
+        id: "user.apiKeys",
+        label: "API keys",
+        path: "/settings/api-keys",
+        scope: "user",
+        icon: KeyRound,
       },
     ],
   },

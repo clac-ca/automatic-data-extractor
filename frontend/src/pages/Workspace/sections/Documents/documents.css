@@ -1,12 +1,7 @@
 .documents-table > div.overflow-hidden {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
   background: var(--card);
   border-color: var(--border);
-  border-radius: 0.75rem;
-  box-shadow: var(--app-shadow-2xs);
+  border-radius: 0.375rem;
 }
 
 .documents-table [data-slot="table-head"] {
@@ -25,13 +20,12 @@
 }
 
 .documents-table [data-slot="table-row"] {
-  transition: background-color 140ms ease, box-shadow 140ms ease, outline-color 140ms ease;
+  transition: background-color 140ms ease, outline-color 140ms ease;
   background-color: var(--card);
 }
 
 .documents-table [data-slot="table-row"]:hover {
   background-color: hsl(var(--muted) / 0.58);
-  box-shadow: inset 3px 0 0 hsl(var(--primary) / 0.42);
 }
 
 .documents-table [data-slot="table-row"][data-state="selected"] {
@@ -40,13 +34,11 @@
 
 .documents-table [data-slot="table-row"][data-state="selected"]:hover {
   background-color: hsl(var(--accent) / 0.68);
-  box-shadow: inset 3px 0 0 hsl(var(--primary) / 0.5);
 }
 
 .documents-table [data-slot="table-row"]:focus-visible {
   outline: 2px solid hsl(var(--ring) / 0.75);
   outline-offset: -2px;
-  box-shadow: inset 3px 0 0 hsl(var(--primary) / 0.6);
 }
 
 .documents-toolbar-row > * {
@@ -108,7 +100,7 @@
 
 @media (max-width: 1279px) {
   .documents-table > div.overflow-hidden {
-    border-radius: 0.625rem;
+    border-radius: 0.375rem;
   }
 }
 

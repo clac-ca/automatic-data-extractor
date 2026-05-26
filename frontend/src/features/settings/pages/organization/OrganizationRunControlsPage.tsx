@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useGlobalPermissions } from "@/hooks/auth/useGlobalPermissions";
 import { useUnsavedChangesGuard } from "@/pages/Workspace/sections/ConfigurationEditor/workbench/state/useUnsavedChangesGuard";
 
@@ -106,22 +107,24 @@ export function OrganizationRunControlsPage() {
             : "Safe mode is inactive. Run creation is allowed."}
         </Alert>
 
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
+        <div className="flex items-center gap-2 select-none">
+          <Checkbox
+            id="safe-mode-enabled"
             checked={enabled}
-            onChange={(event) => {
-              const nextChecked = event.target.checked;
-              if (nextChecked && !enabled) {
+            onCheckedChange={(nextChecked) => {
+              const isChecked = Boolean(nextChecked);
+              if (isChecked && !enabled) {
                 setConfirmEnableOpen(true);
                 return;
               }
-              setEnabled(nextChecked);
+              setEnabled(isChecked);
             }}
             disabled={!canManage || patchMutation.isPending}
           />
-          Safe mode enabled
-        </label>
+          <label htmlFor="safe-mode-enabled" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer select-none">
+            Safe mode enabled
+          </label>
+        </div>
 
         <FormField label="Safe mode detail message" hint="Displayed while safe mode is active.">
           <Input

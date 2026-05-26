@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -272,14 +273,28 @@ export function OrganizationAuthenticationPage() {
       </SettingsDetailSection>
 
       <SettingsDetailSection id="password-policy" title="Password policy">
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={resetEnabled} onChange={(event) => setResetEnabled(event.target.checked)} disabled={!canManage || patchMutation.isPending} />
-          Allow password reset
-        </label>
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={mfaRequired} onChange={(event) => setMfaRequired(event.target.checked)} disabled={!canManage || patchMutation.isPending} />
-          Require MFA for password sign-in
-        </label>
+        <div className="flex items-center gap-2 select-none">
+          <Checkbox
+            id="allow-password-reset"
+            checked={resetEnabled}
+            onCheckedChange={(checked) => setResetEnabled(Boolean(checked))}
+            disabled={!canManage || patchMutation.isPending}
+          />
+          <label htmlFor="allow-password-reset" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer select-none">
+            Allow password reset
+          </label>
+        </div>
+        <div className="flex items-center gap-2 select-none">
+          <Checkbox
+            id="require-mfa"
+            checked={mfaRequired}
+            onCheckedChange={(checked) => setMfaRequired(Boolean(checked))}
+            disabled={!canManage || patchMutation.isPending}
+          />
+          <label htmlFor="require-mfa" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer select-none">
+            Require MFA for password sign-in
+          </label>
+        </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
           <FormField label="Minimum length">
@@ -293,11 +308,51 @@ export function OrganizationAuthenticationPage() {
           </FormField>
         </div>
 
-        <div className="grid gap-2 rounded-lg border border-border/70 bg-muted/20 p-3">
-          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={requireUppercase} onChange={(event) => setRequireUppercase(event.target.checked)} disabled={!canManage || patchMutation.isPending} />Require uppercase</label>
-          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={requireLowercase} onChange={(event) => setRequireLowercase(event.target.checked)} disabled={!canManage || patchMutation.isPending} />Require lowercase</label>
-          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={requireNumber} onChange={(event) => setRequireNumber(event.target.checked)} disabled={!canManage || patchMutation.isPending} />Require number</label>
-          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={requireSymbol} onChange={(event) => setRequireSymbol(event.target.checked)} disabled={!canManage || patchMutation.isPending} />Require symbol</label>
+        <div className="grid gap-3 rounded-lg border border-border/70 bg-muted/20 p-4">
+          <div className="flex items-center gap-2 select-none">
+            <Checkbox
+              id="req-uppercase"
+              checked={requireUppercase}
+              onCheckedChange={(checked) => setRequireUppercase(Boolean(checked))}
+              disabled={!canManage || patchMutation.isPending}
+            />
+            <label htmlFor="req-uppercase" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer select-none">
+              Require uppercase
+            </label>
+          </div>
+          <div className="flex items-center gap-2 select-none">
+            <Checkbox
+              id="req-lowercase"
+              checked={requireLowercase}
+              onCheckedChange={(checked) => setRequireLowercase(Boolean(checked))}
+              disabled={!canManage || patchMutation.isPending}
+            />
+            <label htmlFor="req-lowercase" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer select-none">
+              Require lowercase
+            </label>
+          </div>
+          <div className="flex items-center gap-2 select-none">
+            <Checkbox
+              id="req-number"
+              checked={requireNumber}
+              onCheckedChange={(checked) => setRequireNumber(Boolean(checked))}
+              disabled={!canManage || patchMutation.isPending}
+            />
+            <label htmlFor="req-number" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer select-none">
+              Require number
+            </label>
+          </div>
+          <div className="flex items-center gap-2 select-none">
+            <Checkbox
+              id="req-symbol"
+              checked={requireSymbol}
+              onCheckedChange={(checked) => setRequireSymbol(Boolean(checked))}
+              disabled={!canManage || patchMutation.isPending}
+            />
+            <label htmlFor="req-symbol" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer select-none">
+              Require symbol
+            </label>
+          </div>
         </div>
       </SettingsDetailSection>
 

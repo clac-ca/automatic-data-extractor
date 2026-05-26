@@ -3,12 +3,12 @@ import { cn } from "@/lib/utils";
 
 import type { RunStatus } from "@/types";
 
-const STATUS_BADGE_STYLES: Record<RunStatus, string> = {
-  queued: "border-border/60 bg-secondary text-secondary-foreground",
-  running: "border-info/30 bg-info/10 text-info dark:bg-info/20",
-  succeeded: "border-success/30 bg-success/10 text-success dark:bg-success/20",
-  failed: "border-destructive/40 bg-destructive/10 text-destructive dark:bg-destructive/20",
-  cancelled: "border-border/60 bg-muted text-muted-foreground",
+const STATUS_TONES: Record<RunStatus, string> = {
+  queued: "border-secondary bg-secondary text-secondary-foreground",
+  running: "border-info/40 bg-info/15 text-info dark:bg-info/20",
+  succeeded: "border-success/40 bg-success/15 text-success dark:bg-success/20",
+  failed: "border-destructive/40 bg-destructive/15 text-destructive dark:bg-destructive/20",
+  cancelled: "border-muted bg-muted text-muted-foreground",
 };
 
 export function DocumentRunPhaseCell({
@@ -20,11 +20,14 @@ export function DocumentRunPhaseCell({
 }) {
   const showUpload = typeof uploadProgress === "number";
   const label = showUpload ? "Uploading" : status ? status.replace(/_/g, " ") : "No runs";
-  const tone = status ? STATUS_BADGE_STYLES[status] : "border-border bg-muted text-muted-foreground";
+  const tone = status ? STATUS_TONES[status] : "border-muted bg-muted text-muted-foreground";
 
   return (
-    <div className="flex min-w-[120px] flex-col gap-1">
-      <Badge variant="outline" className={cn("capitalize", tone)}>
+    <div className="flex min-w-[140px] flex-col gap-1">
+      <Badge
+        variant="outline"
+        className={cn("h-7 w-fit min-w-[112px] rounded-md px-2 text-[11px] font-medium capitalize shadow-xs", tone)}
+      >
         {label}
       </Badge>
       {showUpload ? (

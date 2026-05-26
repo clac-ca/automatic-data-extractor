@@ -65,6 +65,7 @@ from ade_db.models import (
     RunStatus,
     RunTableColumn,
     User,
+    UserNotification,
 )
 from ade_storage import StorageAdapter, StorageError, StorageLimitError, StoredObject
 
@@ -97,6 +98,7 @@ from .exceptions import (
     InvalidDocumentCommentMentionsError,
     InvalidDocumentRenameError,
     InvalidDocumentTagsError,
+    UserNotificationNotFoundError,
 )
 from .filters import apply_document_filters
 from .repository import DocumentsRepository
@@ -126,6 +128,7 @@ from .schemas import (
     DocumentViewUpdate,
     TagCatalogItem,
     TagCatalogPage,
+    UserNotificationOut,
 )
 from .tags import (
     MAX_TAGS_PER_DOCUMENT,
@@ -885,6 +888,15 @@ class DocumentsService:
             mentions=mentions,
         )
 
+        for mention in comment.mentions:
+            if mention.mentioned_user.id != actor.id:
+                notif = UserNotification(
+                    workspace_id=workspace_id,
+                    user_id=mention.mentioned_user.id,
+                    comment=comment,
+                )
+                self._session.add(notif)
+
         document.comment_count = (document.comment_count or 0) + 1
         self._touch_document(document)
 
@@ -932,6 +944,15 @@ class DocumentsService:
             mentions=mentions,
         )
 
+        for mention in comment.mentions:
+            if mention.mentioned_user.id != actor.id:
+                notif = UserNotification(
+                    workspace_id=workspace_id,
+                    user_id=mention.mentioned_user.id,
+                    comment=comment,
+                )
+                self._session.add(notif)
+
         document.comment_count = (document.comment_count or 0) + 1
         self._touch_document(document)
 
@@ -959,12 +980,30 @@ class DocumentsService:
         if comment.author_user_id != actor.id:
             raise DocumentCommentEditForbiddenError()
 
+        old_mentioned_user_ids = {
+            m.mentioned_user_id or m.mentioned_user.id for m in comment.mentions
+        }
+
         comment.body = body
+        comment.mentions = []
+        self._session.flush()
         comment.mentions = self._build_comment_mentions(
             workspace_id=workspace_id,
             body=body,
             mentions=mentions,
         )
+
+        # Notify newly mentioned users
+        for mention in comment.mentions:
+            is_new = mention.mentioned_user.id not in old_mentioned_user_ids
+            if is_new and mention.mentioned_user.id != actor.id:
+                notif = UserNotification(
+                    workspace_id=workspace_id,
+                    user_id=mention.mentioned_user.id,
+                    comment=comment,
+                )
+                self._session.add(notif)
+
         comment.updated_at = utc_now()
         self._touch_document(document)
         self._session.flush()
@@ -998,6 +1037,95 @@ class DocumentsService:
         else:
             self._session.delete(comment)
 
+        self._session.flush()
+
+    def list_user_notifications(
+        self,
+        *,
+        workspace_id: UUID,
+        user_id: UUID,
+        limit: int = 50,
+    ) -> list[UserNotificationOut]:
+        """List all notifications for the given user, ordered by creation time descending."""
+        
+        stmt = (
+            select(UserNotification)
+            .where(UserNotification.workspace_id == workspace_id)
+            .where(UserNotification.user_id == user_id)
+            .order_by(UserNotification.created_at.desc(), UserNotification.id.desc())
+            .limit(limit)
+        )
+        notifications = list(self._session.execute(stmt).scalars())
+        
+        results = []
+        for n in notifications:
+            comment_payload = DocumentCommentOut.model_validate(n.comment)
+            results.append(
+                UserNotificationOut(
+                    id=str(n.id),
+                    workspace_id=str(n.workspace_id),
+                    is_read=n.is_read,
+                    created_at=n.created_at,
+                    comment=comment_payload,
+                    document_id=str(n.comment.file_id),
+                    document_name=n.comment.file.name,
+                )
+            )
+        return results
+
+    def mark_notification_as_read(
+        self,
+        *,
+        workspace_id: UUID,
+        notification_id: UUID,
+        user_id: UUID,
+    ) -> UserNotificationOut:
+        """Mark a specific user notification as read."""
+        
+        stmt = (
+            select(UserNotification)
+            .where(UserNotification.workspace_id == workspace_id)
+            .where(UserNotification.id == notification_id)
+            .where(UserNotification.user_id == user_id)
+        )
+        notification = self._session.execute(stmt).scalar_one_or_none()
+        if notification is None:
+            raise UserNotificationNotFoundError(notification_id)
+            
+        notification.is_read = True
+        notification.updated_at = utc_now()
+        self._session.flush()
+        
+        comment_payload = DocumentCommentOut.model_validate(notification.comment)
+        return UserNotificationOut(
+            id=str(notification.id),
+            workspace_id=str(notification.workspace_id),
+            is_read=notification.is_read,
+            created_at=notification.created_at,
+            comment=comment_payload,
+            document_id=str(notification.comment.file_id),
+            document_name=notification.comment.file.name,
+        )
+
+    def mark_all_notifications_as_read(
+        self,
+        *,
+        workspace_id: UUID,
+        user_id: UUID,
+    ) -> None:
+        """Mark all unread notifications for the given user in a workspace as read."""
+        
+        stmt = (
+            select(UserNotification)
+            .where(UserNotification.workspace_id == workspace_id)
+            .where(UserNotification.user_id == user_id)
+            .where(UserNotification.is_read.is_(False))
+        )
+        notifications = list(self._session.execute(stmt).scalars())
+        for n in notifications:
+            n.is_read = True
+            n.updated_at = utc_now()
+            
         self._session.flush()
 
     def build_list_row_for_document(
@@ -2222,6 +2350,7 @@ class DocumentsService:
         return [
             FileCommentMention(
                 mentioned_user=user,
+                mentioned_user_id=user.id,
                 start_index=mention.start,
                 end_index=mention.end,
             )

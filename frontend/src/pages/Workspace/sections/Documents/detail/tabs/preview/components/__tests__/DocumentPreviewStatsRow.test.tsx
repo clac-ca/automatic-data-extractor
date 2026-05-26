@@ -6,7 +6,7 @@ import { render, screen } from "@/test/test-utils";
 import { DocumentPreviewStatsRow } from "../DocumentPreviewStatsRow";
 
 describe("DocumentPreviewStatsRow", () => {
-  it("renders one meta row with compact checkbox, counts, and up to three inline run metrics", () => {
+  it("renders one meta row with hidden-row controls, counts, and up to three inline run metrics", () => {
     render(
       <DocumentPreviewStatsRow
         previewCountSummary={{
@@ -16,8 +16,8 @@ describe("DocumentPreviewStatsRow", () => {
           columnsVisibleLabel: "Showing first 102 columns",
           hasReduction: true,
         }}
-        isCompactMode
-        onCompactModeChange={vi.fn()}
+        showHiddenRowsAndColumns
+        onShowHiddenRowsAndColumnsChange={vi.fn()}
         metrics={{
           column_count_total: 10,
           column_count_mapped: 8,
@@ -29,7 +29,7 @@ describe("DocumentPreviewStatsRow", () => {
       />,
     );
 
-    expect(screen.getByRole("checkbox", { name: "Hide empty rows and columns" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Show hidden rows and columns" })).toBeChecked();
     expect(screen.getByText("93 rows")).toBeInTheDocument();
     expect(screen.getByText("102 columns")).toBeInTheDocument();
     expect(screen.getByText("Showing 65 of 93 rows")).toBeInTheDocument();
@@ -46,8 +46,8 @@ describe("DocumentPreviewStatsRow", () => {
     render(
       <DocumentPreviewStatsRow
         previewCountSummary={null}
-        isCompactMode={false}
-        onCompactModeChange={vi.fn()}
+        showHiddenRowsAndColumns={false}
+        onShowHiddenRowsAndColumnsChange={vi.fn()}
         metrics={{
           column_count_total: 10,
           column_count_empty: 2,
@@ -61,22 +61,22 @@ describe("DocumentPreviewStatsRow", () => {
     expect(screen.getByText("4/8 (50%)")).toBeInTheDocument();
   });
 
-  it("toggles compact mode with one interaction", async () => {
+  it("toggles hidden row and column visibility with one interaction", async () => {
     const user = userEvent.setup();
-    const onCompactModeChange = vi.fn();
+    const onShowHiddenRowsAndColumnsChange = vi.fn();
 
     render(
       <DocumentPreviewStatsRow
         previewCountSummary={null}
-        isCompactMode
-        onCompactModeChange={onCompactModeChange}
+        showHiddenRowsAndColumns
+        onShowHiddenRowsAndColumnsChange={onShowHiddenRowsAndColumnsChange}
         metrics={null}
       />,
     );
 
-    await user.click(screen.getByRole("checkbox", { name: "Hide empty rows and columns" }));
+    await user.click(screen.getByRole("checkbox", { name: "Show hidden rows and columns" }));
 
-    expect(onCompactModeChange).toHaveBeenCalledWith(false);
+    expect(onShowHiddenRowsAndColumnsChange).toHaveBeenCalledWith(false);
   });
 
   it("omits metric pills when no metrics are available while preserving summary and controls", () => {
@@ -89,13 +89,13 @@ describe("DocumentPreviewStatsRow", () => {
           columnsVisibleLabel: null,
           hasReduction: false,
         }}
-        isCompactMode={false}
-        onCompactModeChange={vi.fn()}
+        showHiddenRowsAndColumns={false}
+        onShowHiddenRowsAndColumnsChange={vi.fn()}
         metrics={null}
       />,
     );
 
-    expect(screen.getByRole("checkbox", { name: "Hide empty rows and columns" })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Show hidden rows and columns" })).not.toBeChecked();
     expect(screen.getByText("12 rows")).toBeInTheDocument();
     expect(screen.getByText("8 columns")).toBeInTheDocument();
     expect(screen.queryByText("Mapped columns:")).not.toBeInTheDocument();

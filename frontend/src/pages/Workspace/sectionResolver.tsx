@@ -11,6 +11,7 @@ const DocumentsDetailPage = lazy(async () => {
 const RunsScreen = lazy(() => import("@/pages/Workspace/sections/Runs"));
 const ConfigurationEditorEntryRoute = lazy(() => import("@/pages/Workspace/sections/ConfigurationEditor"));
 const ConfigurationEditorRoute = lazy(() => import("@/pages/Workspace/sections/ConfigurationEditor/workbench"));
+const WorkspaceSettingsSection = lazy(() => import("@/pages/Workspace/sections/Settings"));
 
 export const DEFAULT_WORKSPACE_SECTION_PATH = "documents";
 
@@ -33,6 +34,7 @@ const workspaceSectionResolvers: Record<string, WorkspaceSectionResolver> = {
   [DEFAULT_WORKSPACE_SECTION_PATH]: resolveDocumentsSection,
   runs: resolveRunsSection,
   [CONFIGURATIONS_SECTION_SEGMENT]: resolveConfigurationEditorSection,
+  settings: resolveSettingsSection,
 };
 
 function createSectionContent(
@@ -76,6 +78,13 @@ function resolveConfigurationEditorSection(segments: string[]): WorkspaceSection
     <ConfigurationEditorRouteWithParams configId={configId} />,
     { fullHeight: true },
   );
+}
+
+function resolveSettingsSection(): WorkspaceSectionRender {
+  return createSectionContent("settings", <WorkspaceSettingsSection />, {
+    fullWidth: true,
+    fullHeight: true,
+  });
 }
 
 function resolveUnknownSection(segments: string[]): WorkspaceSectionRender {

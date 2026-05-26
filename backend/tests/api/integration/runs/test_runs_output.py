@@ -147,3 +147,97 @@ async def test_run_input_download_uses_current_document_stem(
     assert download.status_code == 200
     assert download.text == "demo-input"
     assert 'filename="Quarterly Intake.csv"' in download.headers["content-disposition"]
+
+
+async def test_run_output_edit_endpoint_saves_edits(
+    async_client,
+    seed_identity,
+    db_session,
+    settings: Settings,
+) -> None:
+    workspace_id = seed_identity.workspace_id
+    configuration = make_configuration(
+        workspace_id=workspace_id,
+        name="Edit Config",
+    )
+    db_session.add(configuration)
+    await anyio.to_thread.run_sync(db_session.flush)
+
+    document = make_document(workspace_id=workspace_id, filename="Intake.csv")
+    db_session.add_all([document])
+    await anyio.to_thread.run_sync(db_session.flush)
+
+    run = make_run(
+        workspace_id=workspace_id,
+        configuration_id=configuration.id,
+        file_version_id=document.current_version_id,
+        status=RunStatus.SUCCEEDED,
+    )
+    run.completed_at = utc_now()
+    db_session.add(run)
+    await anyio.to_thread.run_sync(db_session.flush)
+
+    output_file_id = generate_uuid7()
+    output_blob_name = f"{workspace_id}/files/{output_file_id}"
+    output_file = File(
+        id=output_file_id,
+        workspace_id=workspace_id,
+        kind=FileKind.OUTPUT,
+        name=f"{document.name} (Output)",
+        name_key=f"output:{document.id}",
+        blob_name=output_blob_name,
+        source_file_id=document.id,
+        attributes={},
+        uploaded_by_user_id=None,
+        comment_count=0,
+    )
+
+    storage = build_storage_adapter(settings)
+    stored = storage.write(output_blob_name, io.BytesIO(b"col1,col2\nval1,val2"))
+
+    output_version = FileVersion(
+        id=generate_uuid7(),
+        file_id=output_file_id,
+        version_no=1,
+        origin=FileVersionOrigin.GENERATED,
+        run_id=run.id,
+        created_by_user_id=None,
+        sha256=stored.sha256,
+        byte_size=stored.byte_size,
+        content_type="text/csv",
+        filename_at_upload="normalized.csv",
+        storage_version_id=stored.version_id or stored.sha256,
+    )
+    output_file.current_version = output_version
+    output_file.versions.append(output_version)
+    db_session.add_all([output_file, output_version])
+    await anyio.to_thread.run_sync(db_session.flush)
+    run.output_file_version_id = output_version.id
+    await anyio.to_thread.run_sync(db_session.commit)
+
+    headers = await auth_headers(async_client, seed_identity.workspace_owner)
+
+    # Edit the output sheet (CSV)
+    payload = {
+        "sheetName": "normalized",
+        "rows": [
+            ["headerA", "headerB"],
+            ["newValA", "newValB"]
+        ]
+    }
+    response = await async_client.post(
+        f"/api/v1/workspaces/{workspace_id}/runs/{run.id}/output/edit",
+        json=payload,
+        headers=headers,
+    )
+    assert response.status_code == 201
+    res_payload = response.json()
+    assert res_payload["ready"] is True
+    assert res_payload["fileVersionId"] != str(output_version.id)
+
+    # Verify download serves edited CSV
+    download = await async_client.get(res_payload["download_url"], headers=headers)
+    assert download.status_code == 200
+    assert "headerA,headerB" in download.text
+    assert "newValA,newValB" in download.text
+

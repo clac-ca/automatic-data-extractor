@@ -129,7 +129,13 @@ export function useDocumentsColumns({
         enableHiding: false,
         enableColumnFilter: false,
         enableResizing: false,
-        size: 48,
+        meta: {
+          headerClassName: "px-0",
+          cellClassName: "px-0",
+        } as DocumentsColumnMeta,
+        size: 36,
+        minSize: 36,
+        maxSize: 36,
       },
       {
         id: "name",
@@ -164,10 +170,11 @@ export function useDocumentsColumns({
           variant: "text",
           cellClassName: "overflow-hidden",
         } as DocumentsColumnMeta,
-        size: 420,
+        size: 360,
         enableColumnFilter: true,
         enableHiding: false,
         minSize: 280,
+        maxSize: 460,
       },
       {
         id: "assigneeId",
@@ -187,7 +194,9 @@ export function useDocumentsColumns({
           variant: "multiSelect",
           options: assigneeFilterOptions,
         } as DocumentsColumnMeta,
-        size: 160,
+        size: 196,
+        minSize: 196,
+        maxSize: 220,
         enableColumnFilter: true,
         enableSorting: false,
         enableHiding: false,
@@ -227,7 +236,9 @@ export function useDocumentsColumns({
           variant: "multiSelect",
           options: tagFilterOptions,
         } as DocumentsColumnMeta,
-        size: 180,
+        size: 196,
+        minSize: 196,
+        maxSize: 260,
         enableColumnFilter: true,
         enableSorting: false,
         enableHiding: true,
@@ -247,7 +258,9 @@ export function useDocumentsColumns({
           variant: "multiSelect",
           options: runStatusOptions,
         } as DocumentsColumnMeta,
-        size: 140,
+        size: 156,
+        minSize: 156,
+        maxSize: 160,
         enableColumnFilter: true,
         enableHiding: true,
       },
@@ -258,24 +271,30 @@ export function useDocumentsColumns({
         header: ({ column }) => <DataTableColumnHeader column={column} label="Last Run" />,
         cell: ({ row }) => {
           const value = row.getValue<string | null>("lastRunAt");
-          return value ? formatTimestamp(value) : <span className="text-muted-foreground">-</span>;
+          return <TimestampCell value={value} />;
         },
         meta: {
           label: "Last Run",
+          cellClassName: "align-middle",
         } as DocumentsColumnMeta,
-        size: 180,
+        size: 124,
+        minSize: 112,
+        maxSize: 150,
         enableHiding: true,
       },
       {
         id: "updatedAt",
         accessorKey: "updatedAt",
         header: ({ column }) => <DataTableColumnHeader column={column} label="Updated" />,
-        cell: ({ row }) => formatTimestamp(row.getValue<string>("updatedAt")),
+        cell: ({ row }) => <TimestampCell value={row.getValue<string>("updatedAt")} />,
         meta: {
           label: "Updated",
           variant: "dateRange",
+          cellClassName: "align-middle",
         } as DocumentsColumnMeta,
-        size: 150,
+        size: 124,
+        minSize: 112,
+        maxSize: 150,
         enableColumnFilter: true,
         enableHiding: true,
       },
@@ -283,12 +302,15 @@ export function useDocumentsColumns({
         id: "createdAt",
         accessorKey: "createdAt",
         header: ({ column }) => <DataTableColumnHeader column={column} label="Created" />,
-        cell: ({ row }) => formatTimestamp(row.getValue<string>("createdAt")),
+        cell: ({ row }) => <TimestampCell value={row.getValue<string>("createdAt")} />,
         meta: {
           label: "Created",
           variant: "dateRange",
+          cellClassName: "align-middle",
         } as DocumentsColumnMeta,
-        size: 150,
+        size: 124,
+        minSize: 112,
+        maxSize: 150,
         enableColumnFilter: true,
         enableHiding: true,
       },
@@ -298,12 +320,15 @@ export function useDocumentsColumns({
         header: ({ column }) => <DataTableColumnHeader column={column} label="Archived" />,
         cell: ({ row }) => {
           const value = row.getValue<string | null>("deletedAt");
-          return value ? formatTimestamp(value) : <span className="text-muted-foreground">-</span>;
+          return <TimestampCell value={value} />;
         },
         meta: {
           label: "Archived",
+          cellClassName: "align-middle",
         } as DocumentsColumnMeta,
-        size: 150,
+        size: 124,
+        minSize: 112,
+        maxSize: 150,
         enableColumnFilter: false,
         enableHiding: true,
       },
@@ -317,7 +342,9 @@ export function useDocumentsColumns({
           variant: "multiSelect",
           options: fileTypeOptions,
         } as DocumentsColumnMeta,
-        size: 100,
+        size: 72,
+        minSize: 64,
+        maxSize: 96,
         enableColumnFilter: true,
         enableSorting: false,
       },
@@ -331,7 +358,9 @@ export function useDocumentsColumns({
           variant: "multiSelect",
           options: memberOptions,
         } as DocumentsColumnMeta,
-        size: 160,
+        size: 156,
+        minSize: 128,
+        maxSize: 220,
         enableColumnFilter: true,
         enableSorting: false,
         enableHiding: true,
@@ -346,7 +375,9 @@ export function useDocumentsColumns({
           variant: "number",
           unit: "bytes",
         } as DocumentsColumnMeta,
-        size: 110,
+        size: 88,
+        minSize: 72,
+        maxSize: 120,
         enableColumnFilter: true,
         enableHiding: true,
       },
@@ -354,12 +385,15 @@ export function useDocumentsColumns({
         id: "activityAt",
         accessorKey: "activityAt",
         header: ({ column }) => <DataTableColumnHeader column={column} label="Activity" />,
-        cell: ({ row }) => formatTimestamp(row.getValue<string>("activityAt")),
+        cell: ({ row }) => <TimestampCell value={row.getValue<string>("activityAt")} />,
         meta: {
           label: "Activity",
           variant: "dateRange",
+          cellClassName: "align-middle",
         } as DocumentsColumnMeta,
-        size: 150,
+        size: 124,
+        minSize: 112,
+        maxSize: 150,
         enableColumnFilter: true,
         enableHiding: true,
       },
@@ -375,7 +409,9 @@ export function useDocumentsColumns({
         meta: {
           label: "ID",
         } as DocumentsColumnMeta,
-        size: 120,
+        size: 96,
+        minSize: 80,
+        maxSize: 128,
         enableHiding: true,
       },
     ],
@@ -422,5 +458,25 @@ function renderUserSummary(user: DocumentRow["uploader"]) {
         <span className="truncate text-xs text-muted-foreground">{user.email}</span>
       ) : null}
     </div>
+  );
+}
+
+function TimestampCell({ value }: { value: string | null | undefined }) {
+  if (!value) {
+    return <span className="text-muted-foreground">-</span>;
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return <span className="truncate text-sm" title={value}>{value}</span>;
+  }
+
+  return (
+    <time dateTime={value} title={formatTimestamp(value)} className="flex min-w-0 flex-col leading-tight">
+      <span className="truncate">{date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}</span>
+      <span className="truncate text-xs text-muted-foreground">
+        {date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}
+      </span>
+    </time>
   );
 }

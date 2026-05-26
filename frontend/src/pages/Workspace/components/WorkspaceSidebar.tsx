@@ -128,7 +128,7 @@ export function WorkspaceSidebar() {
     documents: `${base}/documents`,
     runs: `${base}/runs`,
     configurations: buildConfigurationsPath(workspace.id),
-    settings: `/settings/workspaces/${workspace.id}/general`,
+    settings: `${base}/settings`,
   } as const;
 
   const navItems = useMemo<WorkspaceNavItem[]>(
@@ -276,24 +276,19 @@ export function WorkspaceSidebar() {
   }, [navigate, links.documents]);
 
   return (
-    <Sidebar
-      collapsible="icon"
-      className="group-data-[collapsible=icon]:z-50 group-data-[side=left]:border-r-0 group-data-[side=right]:border-l-0"
-    >
-      <SidebarHeader className="relative z-30 h-14 justify-center !p-0 bg-topbar text-topbar-foreground border-b border-topbar-border shadow-sm after:absolute after:-right-4 after:top-0 after:h-full after:w-4 after:bg-topbar after:content-[''] after:pointer-events-none after:z-30">
-        <div className="flex items-center">
-          <SidebarMenu className="flex-1">
-            <SidebarMenuItem>
-              <WorkspaceSwitcher
-                workspace={workspace}
-                workspaces={workspaces}
-                workspaceLabel={workspaceLabel}
-                onSelectWorkspace={handleWorkspaceSelect}
-                onViewAllWorkspaces={handleViewAllWorkspaces}
-              />
-            </SidebarMenuItem>
-          </SidebarMenu>
-        </div>
+    <Sidebar collapsible="icon">
+      <SidebarHeader className="h-14 justify-center">
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <WorkspaceSwitcher
+              workspace={workspace}
+              workspaces={workspaces}
+              workspaceLabel={workspaceLabel}
+              onSelectWorkspace={handleWorkspaceSelect}
+              onViewAllWorkspaces={handleViewAllWorkspaces}
+            />
+          </SidebarMenuItem>
+        </SidebarMenu>
       </SidebarHeader>
 
       <SidebarContent>
@@ -317,7 +312,7 @@ export function WorkspaceSidebar() {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton asChild isActive={isActive(links.settings)}>
-              <NavLink to={links.settings}>
+              <NavLink to={`${links.settings}/general`}>
                 <Settings />
                 <span>Settings</span>
               </NavLink>
@@ -346,7 +341,7 @@ function WorkspaceSwitcher({
         <SidebarMenuButton
           type="button"
           size="lg"
-          className="w-full justify-between border border-transparent bg-topbar/70 shadow-none hover:bg-accent hover:text-accent-foreground data-[state=open]:bg-accent data-[state=open]:text-accent-foreground group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:justify-center"
+          className="justify-between"
           tooltip={workspaceLabel}
         >
           <span className="flex min-w-0 items-center gap-2">
@@ -357,7 +352,7 @@ function WorkspaceSwitcher({
               <span className="block truncate text-sm font-semibold">{workspaceLabel}</span>
             </span>
           </span>
-          <ChevronsUpDown className="size-4 opacity-60 group-data-[collapsible=icon]:hidden" />
+          <ChevronsUpDown className="opacity-60 group-data-[collapsible=icon]:hidden" />
         </SidebarMenuButton>
       </PopoverTrigger>
       <PopoverContent
@@ -388,7 +383,7 @@ function WorkspaceSwitcher({
                     <span className="min-w-0 flex-1 truncate">{itemLabel}</span>
                     <Check
                       className={cn(
-                        "ml-auto size-4 text-foreground",
+                        "ml-auto text-foreground",
                         item.id === workspace.id ? "opacity-100" : "opacity-0",
                       )}
                     />
@@ -491,7 +486,7 @@ function AssignedDocumentsSection({
         <SidebarGroupLabel asChild>
           <CollapsibleTrigger type="button" className="w-full justify-between gap-2 pr-8">
             <span>My Documents</span>
-            <ChevronDown className="size-3 transition-transform group-data-[state=open]/collapsible:rotate-180" />
+            <ChevronDown className="transition-transform group-data-[state=open]/collapsible:rotate-180" />
           </CollapsibleTrigger>
         </SidebarGroupLabel>
         <SidebarGroupAction title="Upload documents" onClick={onUploadDocuments}>

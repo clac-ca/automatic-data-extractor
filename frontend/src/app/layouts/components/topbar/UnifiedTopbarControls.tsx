@@ -1,7 +1,18 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import clsx from "clsx";
 import { useNavigate } from "react-router-dom";
-import { Laptop, Moon, Palette, Sun } from "lucide-react";
+import {
+  Check,
+  ChevronDown,
+  Info,
+  Laptop,
+  Moon,
+  Newspaper,
+  Palette,
+  Settings,
+  Sun,
+  UserRoundCog,
+} from "lucide-react";
 
 import { useSession } from "@/providers/auth/SessionContext";
 import { BUILTIN_THEMES, MODE_OPTIONS, WORKSPACE_THEME_MODE_ANCHOR, useTheme } from "@/providers/theme";
@@ -21,8 +32,8 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { useSystemVersions } from "@/hooks/system";
-import { CheckIcon, ChevronDownIcon } from "@/components/icons";
 import { getInitials } from "@/lib/format";
+import { NotificationCenter } from "./NotificationCenter";
 
 const WEB_VERSION_FALLBACK =
   (typeof import.meta.env.VITE_APP_VERSION === "string" ? import.meta.env.VITE_APP_VERSION : "") ||
@@ -73,10 +84,11 @@ export function UnifiedTopbarControls() {
           <span className="h-5 w-px bg-border/70" aria-hidden />
           <ThemeMenu />
         </div>
+        <NotificationCenter />
         <ProfileMenu
           displayName={displayName}
           email={email}
-          onOpenAccountSettings={() => navigate("/account")}
+          onOpenAccountSettings={() => navigate("/settings/profile")}
           onOpenSettings={() => navigate("/settings")}
           onOpenVersions={() => setVersionsOpen(true)}
         />
@@ -551,7 +563,7 @@ function ModeControl() {
               open && "bg-foreground/12 text-foreground",
             )}
           >
-            <ChevronDownIcon className={clsx("h-3.5 w-3.5 transition", open && "rotate-180")} />
+            <ChevronDown className={clsx("h-3.5 w-3.5 transition", open && "rotate-180")} />
             <span className="sr-only">Color mode options</span>
           </button>
         </DropdownMenuTrigger>
@@ -582,7 +594,7 @@ function ModeControl() {
                       isSelected && "text-foreground",
                     )}
                   >
-                    <ModeIcon className="h-[15px] w-[15px]" />
+                    <ModeIcon />
                   </span>
                   <span className="flex min-w-0 flex-1 flex-col leading-tight">
                     <span className="text-[0.95rem] font-medium">{option.label}</span>
@@ -591,7 +603,7 @@ function ModeControl() {
                     </span>
                   </span>
                   <span className="inline-flex h-4 w-4 items-center justify-center">
-                    {isSelected ? <CheckIcon className="h-3.5 w-3.5 text-foreground" /> : null}
+                    {isSelected ? <Check className="text-foreground" /> : null}
                   </span>
                 </DropdownMenuItem>
               );
@@ -659,27 +671,19 @@ function ProfileMenu({
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
           <DropdownMenuItem onSelect={onOpenAccountSettings} className="gap-2">
-            <span className="inline-flex h-4 w-4 items-center justify-center rounded-sm bg-muted text-[0.6rem] font-semibold text-muted-foreground">
-              A
-            </span>
+            <UserRoundCog />
             <span>Account Settings</span>
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={onOpenSettings} className="gap-2">
-            <span className="inline-flex h-4 w-4 items-center justify-center rounded-sm bg-muted text-[0.6rem] font-semibold text-muted-foreground">
-              S
-            </span>
+            <Settings />
             <span>Settings</span>
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => openReleaseNotes()} className="gap-2">
-            <span className="inline-flex h-4 w-4 items-center justify-center rounded-sm bg-muted text-[0.6rem] font-semibold text-muted-foreground">
-              R
-            </span>
+            <Newspaper />
             <span>Release notes</span>
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={onOpenVersions} className="gap-2">
-            <span className="inline-flex h-4 w-4 items-center justify-center rounded-sm bg-muted text-[0.6rem] font-semibold text-muted-foreground">
-              i
-            </span>
+            <Info />
             <span>About / Versions</span>
           </DropdownMenuItem>
         </DropdownMenuGroup>
@@ -725,7 +729,7 @@ function ThemeMenu() {
           )}
         >
           <Palette className="h-[15px] w-[15px] text-current" aria-hidden />
-          <ChevronDownIcon className={clsx("h-3.5 w-3.5 transition", open && "rotate-180")} />
+          <ChevronDown className={clsx("h-3.5 w-3.5 transition", open && "rotate-180")} />
           <span className="sr-only">Theme</span>
         </button>
       </DropdownMenuTrigger>
@@ -747,7 +751,7 @@ function ThemeMenu() {
               className="gap-3"
             >
               <span className="flex h-4 w-4 items-center justify-center">
-                {theme === entry.id ? <CheckIcon className="h-4 w-4 text-foreground" /> : null}
+                {theme === entry.id ? <Check className="text-foreground" /> : null}
               </span>
               <span className="flex-1">{entry.label}</span>
             </DropdownMenuItem>

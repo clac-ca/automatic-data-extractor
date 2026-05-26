@@ -29,6 +29,7 @@ __all__ = [
     "RunLinks",
     "RunOutput",
     "RunOutputSheet",
+    "RunOutputEditRequest",
     "RunPage",
     "RunResource",
 ]
@@ -172,6 +173,14 @@ class RunOutputSheet(BaseSchema):
     index: int = Field(ge=0)
     kind: Literal["worksheet", "file"] = "worksheet"
     is_active: bool = False
+
+
+class RunOutputEditRequest(BaseSchema):
+    """Payload to save edits to a run output sheet."""
+
+    sheet_name: str | None = Field(default=None, alias="sheetName")
+    sheet_index: int | None = Field(default=None, alias="sheetIndex")
+    rows: list[list[str]] = Field(...)
 
 
 class RunMetricsResource(BaseSchema):

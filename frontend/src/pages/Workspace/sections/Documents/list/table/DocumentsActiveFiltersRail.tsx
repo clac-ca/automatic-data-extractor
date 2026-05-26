@@ -5,6 +5,8 @@ import type { Table } from "@tanstack/react-table";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
+import { cn } from "@/lib/utils";
 import type { ExtendedColumnFilter } from "@/types/data-table";
 
 import type { DocumentRow } from "../../shared/types";
@@ -63,10 +65,21 @@ export function DocumentsActiveFiltersRail({
 
   const showArchived = lifecycle === "archived";
   const hasActiveFilters = activeFilters.length > 0 || showArchived;
+  const activeFilterCount = activeFilters.length + (showArchived ? 1 : 0);
+  const shouldStackFilters = activeFilterCount > 4;
+
+  if (!hasActiveFilters) {
+    return null;
+  }
 
   return (
-    <div className="documents-filter-rail flex min-h-10 flex-wrap items-center gap-2 rounded-md border border-border/60 bg-muted/20 px-2 py-1.5">
-      <span className="text-xs font-medium text-muted-foreground">Active filters</span>
+    <div
+      className={cn(
+        "documents-filter-rail flex min-w-0 items-center gap-2",
+        shouldStackFilters ? "basis-full flex-wrap" : "shrink-0 flex-nowrap",
+      )}
+    >
+      {shouldStackFilters ? null : <Separator orientation="vertical" className="!h-8" />}
       {activeFilters.length > 1 && joinOperator === "or" ? (
         <Badge variant="secondary" className="h-6 px-2 text-[11px]">
           Match any
@@ -83,7 +96,7 @@ export function DocumentsActiveFiltersRail({
               void setLifecycle("active");
             }}
           >
-            <X className="h-3 w-3" />
+            <X className="size-3" />
           </button>
         </Badge>
       ) : null}
@@ -97,26 +110,23 @@ export function DocumentsActiveFiltersRail({
             className="inline-flex items-center"
             onClick={() => clearFilter(filter.key)}
           >
-            <X className="h-3 w-3" />
+            <X className="size-3" />
           </button>
         </Badge>
       ))}
-      <div className="ml-auto">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-7 px-2 text-xs"
-          onClick={() => {
-            void setFilters(null);
-            void setJoinOperator("and");
-            void setLifecycle("active");
-          }}
-          disabled={!hasActiveFilters}
-        >
-          Clear all
-        </Button>
-      </div>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="h-7 whitespace-nowrap px-2 text-xs"
+        onClick={() => {
+          void setFilters(null);
+          void setJoinOperator("and");
+          void setLifecycle("active");
+        }}
+      >
+        Clear filters
+      </Button>
     </div>
   );
 }

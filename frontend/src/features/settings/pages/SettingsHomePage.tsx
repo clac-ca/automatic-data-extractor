@@ -64,7 +64,7 @@ export function SettingsHomePage({
               <Link
                 to={
                   defaultWorkspaceId
-                    ? settingsPaths.workspaces.general(defaultWorkspaceId)
+                    ? `/workspaces/${defaultWorkspaceId}/settings/general`
                     : settingsPaths.workspaces.list
                 }
               >

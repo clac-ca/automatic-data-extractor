@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -19,7 +19,7 @@ import {
 } from "../model";
 import { DocumentCommentEditor } from "./DocumentCommentEditor";
 
-function renderCommentBody(comment: ActivityComment) {
+function renderCommentBody(comment: ActivityComment, currentUserId?: string) {
   const mentions = [...(comment.mentions ?? [])].sort((left, right) => left.start - right.start);
   if (mentions.length === 0) {
     return <span className="whitespace-pre-wrap">{comment.body}</span>;
@@ -36,10 +36,17 @@ function renderCommentBody(comment: ActivityComment) {
       nodes.push(<span key={`text:${cursor}`}>{comment.body.slice(cursor, safeStart)}</span>);
     }
 
+    const isCurrentUserMention = currentUserId && mention.user.id === currentUserId;
+
     nodes.push(
       <span
         key={`mention:${mention.user.id}:${safeStart}:${safeEnd}`}
-        className="rounded bg-primary/10 px-1 text-primary"
+        className={cn(
+          "rounded px-1 text-xs font-semibold select-none transition-all duration-200",
+          isCurrentUserMention
+            ? "bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/20 scale-105 inline-block mx-0.5 font-bold"
+            : "bg-primary/10 text-primary"
+        )}
       >
         {comment.body.slice(safeStart, safeEnd)}
       </span>,
@@ -100,6 +107,21 @@ function CommentRow({
   const authorName = comment.author?.name || comment.author?.email || "Unknown";
   const canManage = comment.author?.id === currentUser.id && !comment.optimistic;
 
+  const highlightCommentId = typeof window !== "undefined"
+    ? new URLSearchParams(window.location.search).get("highlightCommentId")
+    : null;
+  const isHighlighted = highlightCommentId === comment.id;
+
+  const hasCurrentUserMention = useMemo(() => {
+    return (comment.mentions ?? []).some((m) => m.user.id === currentUser.id);
+  }, [comment.mentions, currentUser.id]);
+
+  const highlightClass = isHighlighted
+    ? "bg-amber-500/10 border-l-2 border-l-amber-500 px-3.5 py-2.5 -mx-3.5 rounded-r-md transition-all duration-700 animate-pulse-once"
+    : hasCurrentUserMention
+    ? "bg-amber-500/5 border-l-2 border-l-amber-500/40 px-3.5 py-2.5 -mx-3.5 rounded-r-md"
+    : "";
+
   if (isEditing) {
     return (
       <DocumentCommentEditor
@@ -124,7 +146,7 @@ function CommentRow({
   }
 
   return (
-    <div className={cn("group/comment flex items-start gap-3", comment.optimistic && "opacity-75")}>
+    <div className={cn("group/comment flex items-start gap-3 transition-colors", comment.optimistic && "opacity-75", highlightClass)}>
       <Avatar className="mt-0.5 h-7 w-7 shrink-0">
         <AvatarFallback className="text-[11px] font-semibold">{buildInitials(authorName)}</AvatarFallback>
       </Avatar>
@@ -164,7 +186,7 @@ function CommentRow({
             </div>
           ) : null}
         </div>
-        <div className="mt-1.5 text-sm leading-6 text-foreground">{renderCommentBody(comment)}</div>
+        <div className="mt-1.5 text-sm leading-6 text-foreground">{renderCommentBody(comment, currentUser.id)}</div>
       </div>
     </div>
   );

@@ -368,6 +368,6 @@ describe("UnifiedTopbarControls", () => {
     await user.click(screen.getByRole("button", { name: "Open profile menu" }));
     await user.click(screen.getByRole("menuitem", { name: /Account Settings/i }));
 
-    expect(mockNavigate).toHaveBeenCalledWith("/account");
+    expect(mockNavigate).toHaveBeenCalledWith("/settings/profile");
   });
 });

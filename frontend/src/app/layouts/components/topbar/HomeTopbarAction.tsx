@@ -7,7 +7,7 @@ export function HomeTopbarAction() {
   return (
     <Button asChild variant="outline" size="sm" className="h-9">
       <Link to="/" aria-label="Go to home">
-        <House className="size-4" />
+        <House />
         <span>Home</span>
       </Link>
     </Button>

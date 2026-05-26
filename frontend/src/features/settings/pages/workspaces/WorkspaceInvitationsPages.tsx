@@ -15,6 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import type { Invitation } from "@/api/invitations/api";
 import type { WorkspaceProfile } from "@/types/workspaces";
 
@@ -319,13 +320,11 @@ export function WorkspaceInvitationCreatePage({ workspace }: { readonly workspac
               const checked = selectedRoleIds.includes(role.id);
               const checkboxId = `workspace-invite-role-${role.id}`;
               return (
-                <div key={role.id} className="flex items-start gap-2 text-sm">
-                  <input
+                <div key={role.id} className="flex items-start gap-2 text-sm select-none">
+                  <Checkbox
                     id={checkboxId}
-                    type="checkbox"
                     checked={checked}
-                    onChange={(event) => {
-                      const nextChecked = event.target.checked;
+                    onCheckedChange={(nextChecked) => {
                       setSelectedRoleIds((current) => {
                         if (nextChecked) {
                           return current.includes(role.id) ? current : [...current, role.id];
@@ -334,9 +333,9 @@ export function WorkspaceInvitationCreatePage({ workspace }: { readonly workspac
                       });
                     }}
                   />
-                  <label htmlFor={checkboxId}>
-                    <span className="font-medium text-foreground">{role.name}</span>
-                    <span className="block text-xs text-muted-foreground">{role.description || role.slug}</span>
+                  <label htmlFor={checkboxId} className="font-medium text-foreground cursor-pointer select-none leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                    <span>{role.name}</span>
+                    <span className="block text-xs text-muted-foreground mt-1">{role.description || role.slug}</span>
                   </label>
                 </div>
               );

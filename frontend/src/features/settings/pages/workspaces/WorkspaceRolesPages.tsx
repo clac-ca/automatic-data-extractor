@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useUnsavedChangesGuard } from "@/pages/Workspace/sections/ConfigurationEditor/workbench/state/useUnsavedChangesGuard";
 import type { WorkspaceProfile } from "@/types/workspaces";
 
@@ -290,13 +291,11 @@ export function WorkspaceRoleCreatePage({ workspace }: { readonly workspace: Wor
               const checked = selectedPermissions.includes(permission.key);
               const checkboxId = `workspace-role-create-perm-${permission.key}`;
               return (
-                <div key={permission.key} className="flex items-start gap-2 text-sm">
-                  <input
+                <div key={permission.key} className="flex items-start gap-2 text-sm select-none">
+                  <Checkbox
                     id={checkboxId}
-                    type="checkbox"
                     checked={checked}
-                    onChange={(event) => {
-                      const nextChecked = event.target.checked;
+                    onCheckedChange={(nextChecked) => {
                       setSelectedPermissions((current) => {
                         if (nextChecked) {
                           return current.includes(permission.key)
@@ -307,9 +306,9 @@ export function WorkspaceRoleCreatePage({ workspace }: { readonly workspace: Wor
                       });
                     }}
                   />
-                  <label htmlFor={checkboxId}>
-                    <span className="font-medium text-foreground">{permission.label}</span>
-                    <span className="block text-xs text-muted-foreground">{permission.key}</span>
+                  <label htmlFor={checkboxId} className="font-medium text-foreground cursor-pointer select-none leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                    <span>{permission.label}</span>
+                    <span className="block text-xs text-muted-foreground mt-1">{permission.key}</span>
                   </label>
                 </div>
               );
@@ -501,14 +500,12 @@ export function WorkspaceRoleDetailPage({ workspace }: { readonly workspace: Wor
               const checked = selectedPermissions.includes(permission.key);
               const checkboxId = `workspace-role-detail-perm-${permission.key}`;
               return (
-                <div key={permission.key} className="flex items-start gap-2 text-sm">
-                  <input
+                <div key={permission.key} className="flex items-start gap-2 text-sm select-none">
+                  <Checkbox
                     id={checkboxId}
-                    type="checkbox"
                     checked={checked}
                     disabled={!canEdit || updateMutation.isPending}
-                    onChange={(event) => {
-                      const nextChecked = event.target.checked;
+                    onCheckedChange={(nextChecked) => {
                       setSelectedPermissions((current) => {
                         if (nextChecked) {
                           return current.includes(permission.key)
@@ -519,9 +516,9 @@ export function WorkspaceRoleDetailPage({ workspace }: { readonly workspace: Wor
                       });
                     }}
                   />
-                  <label htmlFor={checkboxId}>
-                    <span className="font-medium text-foreground">{permission.label}</span>
-                    <span className="block text-xs text-muted-foreground">{permission.key}</span>
+                  <label htmlFor={checkboxId} className="font-medium text-foreground cursor-pointer select-none leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                    <span>{permission.label}</span>
+                    <span className="block text-xs text-muted-foreground mt-1">{permission.key}</span>
                   </label>
                 </div>
               );

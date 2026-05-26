@@ -194,10 +194,10 @@ export function WorkspaceDocumentsTopbarSearchButton({
         variant="ghost"
         size="icon"
         aria-label="Search documents"
-        className={cn("h-9 w-9", className)}
+        className={className}
         onClick={() => controller.setOpen(true)}
       >
-        <SearchIcon className="h-4 w-4" aria-hidden />
+        <SearchIcon aria-hidden />
       </Button>
 
       <SearchDialog

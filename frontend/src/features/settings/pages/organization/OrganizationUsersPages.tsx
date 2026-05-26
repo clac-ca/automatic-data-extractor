@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -369,15 +370,20 @@ export function OrganizationUserCreatePage() {
           </FormField>
         ) : null}
 
-        <label className="flex items-center gap-2 text-sm text-foreground">
-          <input
-            type="checkbox"
+        <div className="flex items-center gap-2 select-none">
+          <Checkbox
+            id="force-password-reset"
             checked={forcePasswordReset}
-            onChange={(event) => setForcePasswordReset(event.target.checked)}
+            onCheckedChange={(nextChecked) => setForcePasswordReset(Boolean(nextChecked))}
             disabled={createUserMutation.isPending}
           />
-          Force password change on next sign in
-        </label>
+          <label
+            htmlFor="force-password-reset"
+            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer select-none"
+          >
+            Force password change on next sign in
+          </label>
+        </div>
       </SettingsDetailSection>
 
       <SettingsDetailSection
@@ -392,14 +398,13 @@ export function OrganizationUserCreatePage() {
               const checkboxId = `create-user-role-${role.id}`;
               return (
                 <div key={role.id} className="flex items-start gap-2 text-sm">
-                  <input
+                  <Checkbox
                     id={checkboxId}
-                    type="checkbox"
                     checked={checked}
-                    onChange={(event) => {
-                      const nextChecked = event.target.checked;
+                    onCheckedChange={(nextChecked) => {
+                      const isChecked = Boolean(nextChecked);
                       setSelectedRoleIds((current) => {
-                        if (nextChecked) {
+                        if (isChecked) {
                           return current.includes(role.id) ? current : [...current, role.id];
                         }
                         return current.filter((value) => value !== role.id);
@@ -407,9 +412,9 @@ export function OrganizationUserCreatePage() {
                     }}
                     disabled={createUserMutation.isPending || assignRoleMutation.isPending}
                   />
-                  <label htmlFor={checkboxId}>
-                    <span className="font-medium text-foreground">{role.name}</span>
-                    <span className="block text-xs text-muted-foreground">{role.description || role.slug}</span>
+                  <label htmlFor={checkboxId} className="cursor-pointer select-none">
+                    <span className="font-medium text-foreground block leading-none">{role.name}</span>
+                    <span className="block text-xs text-muted-foreground mt-1">{role.description || role.slug}</span>
                   </label>
                 </div>
               );
@@ -625,14 +630,13 @@ export function OrganizationUserDetailPage() {
               const checkboxId = `detail-user-role-${role.id}`;
               return (
                 <div key={role.id} className="flex items-start gap-2 text-sm">
-                  <input
+                  <Checkbox
                     id={checkboxId}
-                    type="checkbox"
                     checked={checked}
-                    onChange={(event) => {
-                      const nextChecked = event.target.checked;
+                    onCheckedChange={(nextChecked) => {
+                      const isChecked = Boolean(nextChecked);
                       setSelectedRoleIds((current) => {
-                        if (nextChecked) {
+                        if (isChecked) {
                           return current.includes(role.id) ? current : [...current, role.id];
                         }
                         return current.filter((value) => value !== role.id);
@@ -640,9 +644,9 @@ export function OrganizationUserDetailPage() {
                     }}
                     disabled={!canManageRoles || assignRoleMutation.isPending || removeRoleMutation.isPending}
                   />
-                  <label htmlFor={checkboxId}>
-                    <span className="font-medium text-foreground">{role.name}</span>
-                    <span className="block text-xs text-muted-foreground">{role.description || role.slug}</span>
+                  <label htmlFor={checkboxId} className="cursor-pointer select-none">
+                    <span className="font-medium text-foreground block leading-none">{role.name}</span>
+                    <span className="block text-xs text-muted-foreground mt-1">{role.description || role.slug}</span>
                   </label>
                 </div>
               );
