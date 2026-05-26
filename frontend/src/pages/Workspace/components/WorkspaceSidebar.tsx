@@ -128,7 +128,7 @@ export function WorkspaceSidebar() {
     documents: `${base}/documents`,
     runs: `${base}/runs`,
     configurations: buildConfigurationsPath(workspace.id),
-    settings: `/settings/workspaces/${workspace.id}/general`,
+    settings: `${base}/settings`,
   } as const;
 
   const navItems = useMemo<WorkspaceNavItem[]>(
@@ -312,7 +312,7 @@ export function WorkspaceSidebar() {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton asChild isActive={isActive(links.settings)}>
-              <NavLink to={links.settings}>
+              <NavLink to={`${links.settings}/general`}>
                 <Settings />
                 <span>Settings</span>
               </NavLink>

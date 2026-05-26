@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Navigate,
   Route,
@@ -8,8 +8,14 @@ import {
   matchPath,
 } from "react-router-dom";
 
-import { LoadingState, PageState } from "@/components/layout";
+import { PageState } from "@/components/layout";
 import { useGlobalPermissions } from "@/hooks/auth/useGlobalPermissions";
+import { useSession } from "@/providers/auth/SessionContext";
+import { fetchMfaStatus, type MfaStatusResponse } from "@/api/auth/api";
+import { mapUiError } from "@/api/uiErrors";
+import { ProfilePage } from "@/pages/Account/pages/ProfilePage";
+import { SecurityPage } from "@/pages/Account/pages/SecurityPage";
+import { ApiKeysPage } from "@/pages/Account/pages/ApiKeysPage";
 import type { WorkspaceProfile } from "@/types/workspaces";
 
 import { useSettingsWorkspacesListQuery } from "./data";
@@ -33,7 +39,6 @@ import {
   WorkspaceInvitationsListPage,
   WorkspaceInvitationCreatePage,
   WorkspaceInvitationDetailPage,
-  WorkspaceListPage,
   WorkspacePrincipalsListPage,
   WorkspacePrincipalCreatePage,
   WorkspacePrincipalDetailPage,
@@ -41,21 +46,13 @@ import {
   WorkspaceRolesListPage,
   WorkspaceRoleCreatePage,
   WorkspaceRoleDetailPage,
+  WorkspaceListPage,
 } from "./pages/workspaces";
 import { SettingsHomePage } from "./pages/SettingsHomePage";
 import { settingsPaths } from "./routing/contracts";
 import { hasRequiredGlobalPermission, normalizePermissionSet } from "./routing/utils";
-import { SettingsAccessDenied, SettingsSectionProvider } from "./shared";
+import { SettingsSectionProvider } from "./shared";
 import { SettingsShell } from "./shell/SettingsShell";
-
-function hasWorkspacePermission(workspace: WorkspaceProfile, permission: string) {
-  return workspace.permissions.some((entry) => entry.toLowerCase() === permission.toLowerCase());
-}
-
-function hasWorkspaceAnyPermission(workspace: WorkspaceProfile, permissions: readonly string[]) {
-  return permissions.some((permission) => hasWorkspacePermission(workspace, permission));
-}
-
 function SettingsNotFoundPage() {
   return (
     <PageState
@@ -65,45 +62,6 @@ function SettingsNotFoundPage() {
       className="min-h-[340px]"
     />
   );
-}
-
-function WorkspaceRouteGate({
-  workspaces,
-  isLoading,
-  requiredPermissions,
-  children,
-}: {
-  readonly workspaces: readonly WorkspaceProfile[];
-  readonly isLoading: boolean;
-  readonly requiredPermissions?: readonly string[];
-  readonly children: (workspace: WorkspaceProfile) => ReactNode;
-}) {
-  const { workspaceId } = useParams<{ workspaceId: string }>();
-
-  if (isLoading) {
-    return <LoadingState title="Loading workspace" className="min-h-[260px]" />;
-  }
-
-  const workspace = workspaces.find((entry) => entry.id === workspaceId) ?? null;
-
-  if (!workspace) {
-    return (
-      <PageState
-        variant="error"
-        title="Workspace not found"
-        description="This workspace is not in your accessible settings scope."
-      />
-    );
-  }
-
-  if (requiredPermissions && requiredPermissions.length > 0) {
-    const allowed = hasWorkspaceAnyPermission(workspace, requiredPermissions);
-    if (!allowed) {
-      return <SettingsAccessDenied returnHref={settingsPaths.workspaces.general(workspace.id)} />;
-    }
-  }
-
-  return <>{children(workspace)}</>;
 }
 
 function OrganizationIndexRedirect({
@@ -149,10 +107,82 @@ function OrganizationIndexRedirect({
   return <Navigate to={firstPath} replace />;
 }
 
+function WorkspaceSettingsContainer({
+  workspaces,
+  isLoading,
+}: {
+  readonly workspaces: readonly WorkspaceProfile[];
+  readonly isLoading: boolean;
+}) {
+  const { workspaceId } = useParams<{ workspaceId: string }>();
+  const workspace = useMemo(
+    () => workspaces.find((w) => w.id === workspaceId),
+    [workspaces, workspaceId],
+  );
+
+  if (isLoading) {
+    return <PageState variant="loading" title="Loading workspace settings" />;
+  }
+
+  if (!workspace) {
+    return (
+      <PageState
+        variant="error"
+        title="Workspace not found"
+        description="The requested workspace settings could not be loaded."
+        className="min-h-[340px]"
+      />
+    );
+  }
+
+  return (
+    <Routes>
+      <Route index element={<Navigate to="general" replace />} />
+      <Route path="general" element={<WorkspaceGeneralPage workspace={workspace} />} />
+      <Route path="processing" element={<WorkspaceProcessingPage workspace={workspace} />} />
+      <Route path="access/principals" element={<WorkspacePrincipalsListPage workspace={workspace} />} />
+      <Route path="access/principals/create" element={<WorkspacePrincipalCreatePage workspace={workspace} />} />
+      <Route path="access/principals/:principalType/:principalId" element={<WorkspacePrincipalDetailPage workspace={workspace} />} />
+      <Route path="access/roles" element={<WorkspaceRolesListPage workspace={workspace} />} />
+      <Route path="access/roles/create" element={<WorkspaceRoleCreatePage workspace={workspace} />} />
+      <Route path="access/roles/:roleId" element={<WorkspaceRoleDetailPage workspace={workspace} />} />
+      <Route path="access/invitations" element={<WorkspaceInvitationsListPage workspace={workspace} />} />
+      <Route path="access/invitations/create" element={<WorkspaceInvitationCreatePage workspace={workspace} />} />
+      <Route path="access/invitations/:invitationId" element={<WorkspaceInvitationDetailPage workspace={workspace} />} />
+      <Route path="lifecycle/danger" element={<WorkspaceDangerPage workspace={workspace} />} />
+      <Route path="*" element={<SettingsNotFoundPage />} />
+    </Routes>
+  );
+}
+
 export default function SettingsConsoleApp() {
   const location = useLocation();
+  const session = useSession();
   const global = useGlobalPermissions();
   const globalPermissions = normalizePermissionSet(Array.from(global.permissions));
+
+  const [mfaStatus, setMfaStatus] = useState<MfaStatusResponse | null>(null);
+  const [isMfaStatusLoading, setIsMfaStatusLoading] = useState(true);
+  const [mfaStatusError, setMfaStatusError] = useState<string | null>(null);
+
+  const refreshMfaStatus = useCallback(async () => {
+    setMfaStatusError(null);
+    try {
+      const status = await fetchMfaStatus();
+      setMfaStatus(status);
+    } catch (error) {
+      const mapped = mapUiError(error, {
+        fallback: "Unable to read MFA status right now.",
+      });
+      setMfaStatusError(mapped.message);
+    } finally {
+      setIsMfaStatusLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshMfaStatus();
+  }, [refreshMfaStatus]);
 
   const workspacesQuery = useSettingsWorkspacesListQuery();
   const workspaces = workspacesQuery.data?.items ?? [];
@@ -222,157 +252,49 @@ export default function SettingsConsoleApp() {
         <Route path="organization/run/controls" element={<OrganizationRunControlsPage />} />
 
         <Route path="workspaces" element={<WorkspaceListPage workspaces={workspaces} isLoading={workspacesQuery.isLoading} />} />
-        <Route path="workspaces/:workspaceId" element={<Navigate to="general" replace />} />
-
         <Route
-          path="workspaces/:workspaceId/general"
+          path="workspaces/:workspaceId/*"
           element={
-            <WorkspaceRouteGate workspaces={workspaces} isLoading={workspacesQuery.isLoading}>
-              {(workspace) => <WorkspaceGeneralPage workspace={workspace} />}
-            </WorkspaceRouteGate>
+            <WorkspaceSettingsContainer
+              workspaces={workspaces}
+              isLoading={workspacesQuery.isLoading}
+            />
           }
         />
 
         <Route
-          path="workspaces/:workspaceId/processing"
+          path="profile"
           element={
-            <WorkspaceRouteGate
-              workspaces={workspaces}
-              isLoading={workspacesQuery.isLoading}
-              requiredPermissions={["workspace.settings.manage"]}
-            >
-              {(workspace) => <WorkspaceProcessingPage workspace={workspace} />}
-            </WorkspaceRouteGate>
+            <ProfilePage
+              displayName={session.user.display_name}
+              email={session.user.email ?? ""}
+              createdAt={session.user.created_at}
+            />
           }
         />
-
         <Route
-          path="workspaces/:workspaceId/access/principals"
+          path="security"
           element={
-            <WorkspaceRouteGate
-              workspaces={workspaces}
-              isLoading={workspacesQuery.isLoading}
-              requiredPermissions={["workspace.members.read", "workspace.members.manage"]}
-            >
-              {(workspace) => <WorkspacePrincipalsListPage workspace={workspace} />}
-            </WorkspaceRouteGate>
+            <SecurityPage
+              mfaStatus={mfaStatus}
+              isMfaStatusLoading={isMfaStatusLoading}
+              mfaStatusError={mfaStatusError}
+              onRefreshMfaStatus={refreshMfaStatus}
+            />
           }
         />
-
         <Route
-          path="workspaces/:workspaceId/access/principals/create"
+          path="api-keys"
           element={
-            <WorkspaceRouteGate
-              workspaces={workspaces}
-              isLoading={workspacesQuery.isLoading}
-              requiredPermissions={["workspace.members.manage"]}
-            >
-              {(workspace) => <WorkspacePrincipalCreatePage workspace={workspace} />}
-            </WorkspaceRouteGate>
-          }
-        />
-
-        <Route
-          path="workspaces/:workspaceId/access/principals/:principalType/:principalId"
-          element={
-            <WorkspaceRouteGate
-              workspaces={workspaces}
-              isLoading={workspacesQuery.isLoading}
-              requiredPermissions={["workspace.members.read", "workspace.members.manage"]}
-            >
-              {(workspace) => <WorkspacePrincipalDetailPage workspace={workspace} />}
-            </WorkspaceRouteGate>
-          }
-        />
-
-        <Route
-          path="workspaces/:workspaceId/access/roles"
-          element={
-            <WorkspaceRouteGate
-              workspaces={workspaces}
-              isLoading={workspacesQuery.isLoading}
-              requiredPermissions={["workspace.roles.read", "workspace.roles.manage"]}
-            >
-              {(workspace) => <WorkspaceRolesListPage workspace={workspace} />}
-            </WorkspaceRouteGate>
-          }
-        />
-
-        <Route
-          path="workspaces/:workspaceId/access/roles/create"
-          element={
-            <WorkspaceRouteGate
-              workspaces={workspaces}
-              isLoading={workspacesQuery.isLoading}
-              requiredPermissions={["workspace.roles.manage"]}
-            >
-              {(workspace) => <WorkspaceRoleCreatePage workspace={workspace} />}
-            </WorkspaceRouteGate>
-          }
-        />
-
-        <Route
-          path="workspaces/:workspaceId/access/roles/:roleId"
-          element={
-            <WorkspaceRouteGate
-              workspaces={workspaces}
-              isLoading={workspacesQuery.isLoading}
-              requiredPermissions={["workspace.roles.read", "workspace.roles.manage"]}
-            >
-              {(workspace) => <WorkspaceRoleDetailPage workspace={workspace} />}
-            </WorkspaceRouteGate>
-          }
-        />
-
-        <Route
-          path="workspaces/:workspaceId/access/invitations"
-          element={
-            <WorkspaceRouteGate
-              workspaces={workspaces}
-              isLoading={workspacesQuery.isLoading}
-              requiredPermissions={["workspace.invitations.read", "workspace.invitations.manage"]}
-            >
-              {(workspace) => <WorkspaceInvitationsListPage workspace={workspace} />}
-            </WorkspaceRouteGate>
-          }
-        />
-
-        <Route
-          path="workspaces/:workspaceId/access/invitations/create"
-          element={
-            <WorkspaceRouteGate
-              workspaces={workspaces}
-              isLoading={workspacesQuery.isLoading}
-              requiredPermissions={["workspace.invitations.manage"]}
-            >
-              {(workspace) => <WorkspaceInvitationCreatePage workspace={workspace} />}
-            </WorkspaceRouteGate>
-          }
-        />
-
-        <Route
-          path="workspaces/:workspaceId/access/invitations/:invitationId"
-          element={
-            <WorkspaceRouteGate
-              workspaces={workspaces}
-              isLoading={workspacesQuery.isLoading}
-              requiredPermissions={["workspace.invitations.read", "workspace.invitations.manage"]}
-            >
-              {(workspace) => <WorkspaceInvitationDetailPage workspace={workspace} />}
-            </WorkspaceRouteGate>
-          }
-        />
-
-        <Route
-          path="workspaces/:workspaceId/lifecycle/danger"
-          element={
-            <WorkspaceRouteGate
-              workspaces={workspaces}
-              isLoading={workspacesQuery.isLoading}
-              requiredPermissions={["workspace.delete", "workspace.settings.manage"]}
-            >
-              {(workspace) => <WorkspaceDangerPage workspace={workspace} />}
-            </WorkspaceRouteGate>
+            global.canManageApiKeys ? (
+              <ApiKeysPage />
+            ) : (
+              <PageState
+                variant="error"
+                title="You do not have access"
+                description="API key management is restricted to global administrators in this release."
+              />
+            )
           }
         />
 

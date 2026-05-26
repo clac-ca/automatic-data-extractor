@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -441,10 +442,17 @@ export function OrganizationGroupDetailPage() {
             </SelectContent>
           </Select>
         </FormField>
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={isActive} onChange={(event) => setIsActive(event.target.checked)} disabled={!canManage || updateMutation.isPending} />
-          Group is active
-        </label>
+        <div className="flex items-center gap-2 select-none">
+          <Checkbox
+            id="group-is-active"
+            checked={isActive}
+            onCheckedChange={(checked) => setIsActive(Boolean(checked))}
+            disabled={!canManage || updateMutation.isPending}
+          />
+          <label htmlFor="group-is-active" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer select-none">
+            Group is active
+          </label>
+        </div>
       </SettingsDetailSection>
 
       <SettingsDetailSection id="members" title="Members">

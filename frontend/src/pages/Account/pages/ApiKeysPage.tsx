@@ -10,6 +10,21 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { formatDate } from "@/lib/format";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 type Feedback =
   | { tone: "success"; message: string }
@@ -166,18 +181,22 @@ export function ApiKeysPage() {
             />
           </FormField>
           <FormField label="Expiration">
-            <select
-              className="h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground"
+            <Select
               value={expiryValue}
-              onChange={(event) => setExpiryValue(event.target.value)}
+              onValueChange={setExpiryValue}
               disabled={isCreating}
             >
-              {EXPIRY_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {EXPIRY_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </FormField>
           <div className="flex items-end">
             <Button type="submit" disabled={isCreating} className="w-full md:w-auto">
@@ -220,38 +239,38 @@ export function ApiKeysPage() {
         ) : (
           <>
             <div className="hidden overflow-hidden rounded-xl border border-border md:block">
-              <table className="w-full text-sm">
-                <thead className="bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
-                  <tr>
-                    <th className="px-3 py-2">Name</th>
-                    <th className="px-3 py-2">Prefix</th>
-                    <th className="px-3 py-2">Created</th>
-                    <th className="px-3 py-2">Last used</th>
-                    <th className="px-3 py-2">Expires</th>
-                    <th className="px-3 py-2">Status</th>
-                    <th className="px-3 py-2 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
+              <Table>
+                <TableHeader className="bg-muted/40">
+                  <TableRow>
+                    <TableHead className="h-9 px-3 py-2 text-xs uppercase tracking-wide text-muted-foreground font-semibold">Name</TableHead>
+                    <TableHead className="h-9 px-3 py-2 text-xs uppercase tracking-wide text-muted-foreground font-semibold">Prefix</TableHead>
+                    <TableHead className="h-9 px-3 py-2 text-xs uppercase tracking-wide text-muted-foreground font-semibold">Created</TableHead>
+                    <TableHead className="h-9 px-3 py-2 text-xs uppercase tracking-wide text-muted-foreground font-semibold">Last used</TableHead>
+                    <TableHead className="h-9 px-3 py-2 text-xs uppercase tracking-wide text-muted-foreground font-semibold">Expires</TableHead>
+                    <TableHead className="h-9 px-3 py-2 text-xs uppercase tracking-wide text-muted-foreground font-semibold">Status</TableHead>
+                    <TableHead className="h-9 px-3 py-2 text-xs uppercase tracking-wide text-muted-foreground font-semibold text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {sortedKeys.map((key) => {
                     const isRevoked = Boolean(key.revoked_at);
                     return (
-                      <tr key={key.id} className="border-t border-border/70 align-top text-foreground">
-                        <td className="px-3 py-3">{key.name ?? "(unnamed)"}</td>
-                        <td className="px-3 py-3 font-mono text-xs text-muted-foreground">{key.prefix}</td>
-                        <td className="px-3 py-3 text-muted-foreground">{formatDate(key.created_at)}</td>
-                        <td className="px-3 py-3 text-muted-foreground">
+                      <TableRow key={key.id} className="align-top hover:bg-muted/20">
+                        <TableCell className="px-3 py-3 text-sm text-foreground">{key.name ?? "(unnamed)"}</TableCell>
+                        <TableCell className="px-3 py-3 font-mono text-xs text-muted-foreground">{key.prefix}</TableCell>
+                        <TableCell className="px-3 py-3 text-sm text-muted-foreground">{formatDate(key.created_at)}</TableCell>
+                        <TableCell className="px-3 py-3 text-sm text-muted-foreground">
                           {key.last_used_at ? formatDate(key.last_used_at, { month: "short" }) : "Never"}
-                        </td>
-                        <td className="px-3 py-3 text-muted-foreground">
+                        </TableCell>
+                        <TableCell className="px-3 py-3 text-sm text-muted-foreground">
                           {key.expires_at ? formatDate(key.expires_at, { month: "short" }) : "Never"}
-                        </td>
-                        <td className="px-3 py-3">
+                        </TableCell>
+                        <TableCell className="px-3 py-3">
                           <Badge variant={isRevoked ? "outline" : "secondary"}>
                             {isRevoked ? "Revoked" : "Active"}
                           </Badge>
-                        </td>
-                        <td className="px-3 py-3 text-right">
+                        </TableCell>
+                        <TableCell className="px-3 py-3 text-right">
                           <Button
                             type="button"
                             variant="ghost"
@@ -261,12 +280,12 @@ export function ApiKeysPage() {
                           >
                             Revoke
                           </Button>
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     );
                   })}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
 
             <ul className="grid gap-3 md:hidden">

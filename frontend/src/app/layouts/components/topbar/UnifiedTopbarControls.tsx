@@ -88,7 +88,7 @@ export function UnifiedTopbarControls() {
         <ProfileMenu
           displayName={displayName}
           email={email}
-          onOpenAccountSettings={() => navigate("/account")}
+          onOpenAccountSettings={() => navigate("/settings/profile")}
           onOpenSettings={() => navigate("/settings")}
           onOpenVersions={() => setVersionsOpen(true)}
         />

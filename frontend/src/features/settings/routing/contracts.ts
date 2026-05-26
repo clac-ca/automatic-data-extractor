@@ -1,4 +1,4 @@
-export type SettingsScope = "home" | "organization" | "workspaces";
+export type SettingsScope = "home" | "organization" | "workspaces" | "user";
 
 export type SettingsEntityType =
   | "organizationUser"
@@ -33,6 +33,11 @@ export interface SettingsNavNode {
 
 export const settingsPaths = {
   home: "/settings",
+  user: {
+    profile: "/settings/profile",
+    security: "/settings/security",
+    apiKeys: "/settings/api-keys",
+  },
   organization: {
     users: "/settings/organization/users",
     usersCreate: "/settings/organization/users/create",

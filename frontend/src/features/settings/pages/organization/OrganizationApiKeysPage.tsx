@@ -5,6 +5,7 @@ import { LoadingState } from "@/components/layout";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useGlobalPermissions } from "@/hooks/auth/useGlobalPermissions";
 
@@ -47,10 +48,16 @@ export function OrganizationApiKeysPage() {
         { label: "API keys" },
       ]}
       actions={
-        <label className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-1.5 text-sm">
-          <input type="checkbox" checked={includeRevoked} onChange={(event) => setIncludeRevoked(event.target.checked)} />
-          Show revoked
-        </label>
+        <div className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-1.5 text-sm select-none">
+          <Checkbox
+            id="show-revoked"
+            checked={includeRevoked}
+            onCheckedChange={(checked) => setIncludeRevoked(Boolean(checked))}
+          />
+          <label htmlFor="show-revoked" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer select-none">
+            Show revoked
+          </label>
+        </div>
       }
     >
       {errorMessage ? <Alert tone="danger">{errorMessage}</Alert> : null}

@@ -65,8 +65,8 @@ describe("resolveWorkspaceSection", () => {
     expect(result).toMatchObject({ kind: "content", key: "runs", fullWidth: true });
   });
 
-  it("treats legacy settings paths as unknown workspace sections", () => {
+  it("resolves workspace settings paths to the settings section", () => {
     const result = resolveWorkspaceSection(workspaceId, ["settings", "access", "roles"], "", "");
-    expect(result).toMatchObject({ kind: "content", key: "not-found:settings/access/roles" });
+    expect(result).toMatchObject({ kind: "content", key: "settings", fullWidth: true, fullHeight: true });
   });
 });
