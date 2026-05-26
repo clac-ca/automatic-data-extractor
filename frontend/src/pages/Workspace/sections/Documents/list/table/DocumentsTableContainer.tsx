@@ -1612,7 +1612,7 @@ export function DocumentsTableContainer({
     columns,
     pageCount,
     enableColumnResizing: true,
-    columnResizeMode: "onEnd",
+    columnResizeMode: "onChange",
     defaultColumn: {
       size: 140,
       minSize: 90,
@@ -1631,6 +1631,7 @@ export function DocumentsTableContainer({
         deletedAt: false,
         lastRunPhase: true,
         lastRunAt: true,
+        createdAt: false,
       },
       columnPinning: { left: ["select"] },
     },
@@ -1980,8 +1981,8 @@ export function DocumentsTableContainer({
       : bulkRestoreTargets.slice(0, 3).map((document) => document.name);
 
   const tableContent = (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col px-3 pt-2 sm:px-4 lg:px-6">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">
+      <div className="flex min-w-0 flex-col px-3 pt-2 pb-4 sm:px-4 lg:px-6">
         {configBanner}
         {updatesBanner}
         <DocumentsTable

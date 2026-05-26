@@ -10,7 +10,7 @@ interface WorkspaceContextValue {
   hasPermission(permission: string): boolean;
 }
 
-const WorkspaceContext = createContext<WorkspaceContextValue | undefined>(undefined);
+export const WorkspaceContext = createContext<WorkspaceContextValue | undefined>(undefined);
 
 interface WorkspaceProviderProps {
   readonly workspace: WorkspaceProfile;
@@ -33,6 +33,10 @@ export function WorkspaceProvider({ workspace, workspaces, children }: Workspace
   }, [workspace, workspaces]);
 
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;
+}
+
+export function useOptionalWorkspaceContext(): WorkspaceContextValue | undefined {
+  return useContext(WorkspaceContext);
 }
 
 export function useWorkspaceContext(): WorkspaceContextValue {

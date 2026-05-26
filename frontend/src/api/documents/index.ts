@@ -4,3 +4,4 @@ export * from "./events";
 export * from "./uploads";
 export * from "./tags";
 export * from "./views";
+export * from "./notifications";

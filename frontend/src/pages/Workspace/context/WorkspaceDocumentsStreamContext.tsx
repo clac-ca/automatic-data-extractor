@@ -49,6 +49,7 @@ export function WorkspaceDocumentsStreamProvider({ children }: { readonly childr
     queryClient.invalidateQueries({ queryKey: ["sidebar", "assigned-documents", workspace.id] });
     queryClient.invalidateQueries({ queryKey: ["documents-preview-row", workspace.id] });
     queryClient.invalidateQueries({ queryKey: ["documents-preview-details", workspace.id] });
+    queryClient.invalidateQueries({ queryKey: ["notifications", workspace.id] });
   }, [queryClient, workspace.id]);
 
   useEffect(() => {

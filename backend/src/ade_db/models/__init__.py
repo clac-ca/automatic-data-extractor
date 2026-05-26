@@ -57,6 +57,7 @@ from .sso import (
 )
 from .system_setting import SystemSetting
 from .user import OAuthAccount, User
+from .user_notification import UserNotification
 from .workspace import Workspace, WorkspaceMembership
 
 __all__ = [
@@ -107,6 +108,7 @@ __all__ = [
     "PasswordResetToken",
     "OAuthAccount",
     "UserRoleAssignment",
+    "UserNotification",
     "Workspace",
     "WorkspaceMembership",
     "Group",

@@ -98,12 +98,15 @@ function TestHarness({
 }
 
 describe("DataTable", () => {
-  it("renders fixed-width columns with resize handles", () => {
+  it("renders content-expanding columns with resize handles", () => {
     const onActivate = vi.fn();
     const onContext = vi.fn();
     render(<TestHarness onActivate={onActivate} onContext={onContext} />);
 
-    expect(screen.getByRole("table")).toHaveStyle({ width: "150px" });
+    expect(screen.getByRole("table")).toHaveStyle({
+      minWidth: "max(150px, 100%)",
+      width: "max-content",
+    });
     expect(document.querySelectorAll("[data-column-resize-handle]").length).toBeGreaterThan(0);
   });
 

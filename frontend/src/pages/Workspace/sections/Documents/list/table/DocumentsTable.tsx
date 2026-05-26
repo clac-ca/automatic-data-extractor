@@ -194,12 +194,9 @@ export function DocumentsTable({
     </ActionBar>
   );
 
-  const toolbarShellClassName =
-    "rounded-xl border border-border/60 bg-card/90 px-2 py-2 shadow-sm";
-
   const toolbar = (
-    <div className={toolbarShellClassName}>
-      <div className="documents-toolbar-row flex min-w-0 flex-wrap items-center gap-2">
+    <div className="documents-toolbar-row flex min-w-0 flex-wrap items-center justify-between gap-2">
+      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
         {leadingToolbarActions ? (
           <div className="min-w-0 shrink-0">{leadingToolbarActions}</div>
         ) : null}
@@ -216,18 +213,14 @@ export function DocumentsTable({
           align="end"
           buttonClassName="ml-0 h-8 font-normal"
         />
-        {toolbarActions ? (
-          <div className="ml-auto min-w-0 flex flex-wrap items-center justify-end gap-2">{toolbarActions}</div>
-        ) : null}
-      </div>
-      <div className="mt-2">
         <DocumentsActiveFiltersRail table={table} />
       </div>
+      {toolbarActions ? <div className="min-w-0 shrink-0">{toolbarActions}</div> : null}
     </div>
   );
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
       {toolbar}
       <>
         <DataTable
@@ -251,7 +244,7 @@ export function DocumentsTable({
                 }
               : undefined
           }
-          className="documents-table min-h-0 min-w-0 flex-1 overflow-hidden"
+          className="documents-table min-h-0 min-w-0"
         />
         <ContextMenu
           open={Boolean(rowContextMenu)}
