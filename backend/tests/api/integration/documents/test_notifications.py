@@ -275,7 +275,7 @@ async def test_mark_notification_as_read_and_read_all(
     assert read_resp.status_code == 200
     assert read_resp.json()["isRead"] is True
 
-    # 3. Create another notification to test read-all
+    # 3. Create another notification to test readAll
     await async_client.post(
         f"/api/v1/workspaces/{seed_identity.workspace_id}/documents/{document.id}/threads",
         headers=await _auth_headers(async_client, author),
@@ -296,7 +296,7 @@ async def test_mark_notification_as_read_and_read_all(
 
     # Mark all read
     read_all_resp = await async_client.post(
-        f"/api/v1/workspaces/{seed_identity.workspace_id}/documents/notifications/read-all",
+        f"/api/v1/workspaces/{seed_identity.workspace_id}/documents/notifications/readAll",
         headers=await _auth_headers(async_client, mentioned),
     )
     assert read_all_resp.status_code == 204

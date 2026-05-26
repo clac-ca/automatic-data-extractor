@@ -9559,13 +9559,13 @@
         "description": "Mark a specific notification as read."
       }
     },
-    "/api/v1/workspaces/{workspaceId}/documents/notifications/read-all": {
+    "/api/v1/workspaces/{workspaceId}/documents/notifications/readAll": {
       "post": {
         "tags": [
           "documents"
         ],
         "summary": "Mark all unread notifications for the current user as read",
-        "operationId": "mark_all_notifications_as_read_api_v1_workspaces__workspaceId__documents_notifications_read_all_post",
+        "operationId": "mark_all_notifications_as_read_api_v1_workspaces__workspaceId__documents_notifications_readAll_post",
         "parameters": [
           {
             "name": "workspaceId",

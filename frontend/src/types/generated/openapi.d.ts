@@ -1358,7 +1358,7 @@ export type paths = {
         patch: operations["mark_notification_as_read_api_v1_workspaces__workspaceId__documents_notifications__notificationId__read_patch"];
         trace?: never;
     };
-    "/api/v1/workspaces/{workspaceId}/documents/notifications/read-all": {
+    "/api/v1/workspaces/{workspaceId}/documents/notifications/readAll": {
         parameters: {
             query?: never;
             header?: never;
@@ -1371,7 +1371,7 @@ export type paths = {
          * Mark all unread notifications for the current user as read
          * @description Mark all unread notifications for the current user as read.
          */
-        post: operations["mark_all_notifications_as_read_api_v1_workspaces__workspaceId__documents_notifications_read_all_post"];
+        post: operations["mark_all_notifications_as_read_api_v1_workspaces__workspaceId__documents_notifications_readAll_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -10722,7 +10722,7 @@ export interface operations {
             default: components["responses"]["ProblemDetails"];
         };
     };
-    mark_all_notifications_as_read_api_v1_workspaces__workspaceId__documents_notifications_read_all_post: {
+    mark_all_notifications_as_read_api_v1_workspaces__workspaceId__documents_notifications_readAll_post: {
         parameters: {
             query?: never;
             header?: {

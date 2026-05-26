@@ -1009,7 +1009,7 @@ def mark_notification_as_read(
 
 
 @router.post(
-    "/notifications/read-all",
+    "/notifications/readAll",
     dependencies=[Security(require_csrf)],
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Mark all unread notifications for the current user as read",

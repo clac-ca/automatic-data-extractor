@@ -36,7 +36,7 @@ export async function markAllNotificationsAsRead(
   workspaceId: string,
 ): Promise<void> {
   await client.POST(
-    "/api/v1/workspaces/{workspaceId}/documents/notifications/read-all",
+    "/api/v1/workspaces/{workspaceId}/documents/notifications/readAll",
     {
       params: { path: { workspaceId } },
     },

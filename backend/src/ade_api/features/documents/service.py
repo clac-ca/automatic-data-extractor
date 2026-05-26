@@ -985,6 +985,8 @@ class DocumentsService:
         }
 
         comment.body = body
+        comment.mentions = []
+        self._session.flush()
         comment.mentions = self._build_comment_mentions(
             workspace_id=workspace_id,
             body=body,
