@@ -1,3 +1,7 @@
+import { useCallback, useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { saveRunOutputEdits } from "@/api/runs/api";
+import { useNotifications } from "@/providers/notifications";
 import type { DocumentPreviewSource } from "@/pages/Workspace/sections/Documents/shared/navigation";
 import type { DocumentRow } from "@/pages/Workspace/sections/Documents/shared/types";
 
@@ -8,6 +12,10 @@ import { DocumentPreviewStatsRow } from "./components/DocumentPreviewStatsRow";
 import { DocumentPreviewUnavailableState } from "./components/DocumentPreviewUnavailableState";
 import { useDocumentPreviewModel } from "./hooks/useDocumentPreviewModel";
 import { usePreviewDisplayPreferences } from "./hooks/usePreviewDisplayPreferences";
+
+// Feature flag to control normalized preview editing.
+// Set to true to re-enable editing normalized previews and saving changes back to the database.
+const ENABLE_PREVIEW_EDITING = false;
 
 export function DocumentPreviewTab({
   workspaceId,
@@ -24,10 +32,13 @@ export function DocumentPreviewTab({
   onSourceChange: (source: DocumentPreviewSource) => void;
   onSheetChange: (sheet: string | null) => void;
 }) {
+  const queryClient = useQueryClient();
+  const { notifyToast } = useNotifications();
+
   const {
     preferences,
-    isCompactMode,
-    setCompactMode,
+    showHiddenRowsAndColumns,
+    setShowHiddenRowsAndColumns,
   } = usePreviewDisplayPreferences(workspaceId);
 
   const model = useDocumentPreviewModel({
@@ -39,6 +50,75 @@ export function DocumentPreviewTab({
     displayPreferences: preferences,
   });
 
+  const [editedRows, setEditedRows] = useState<string[][] | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Reset editedRows when switching sheet, source, or when preview rows change
+  useEffect(() => {
+    setEditedRows(null);
+  }, [source, sheet, model.previewRows]);
+
+  const handleRowsChange = useCallback((nextRows: string[][]) => {
+    setEditedRows(nextRows);
+  }, []);
+
+  const handleSave = useCallback(async () => {
+    if (!editedRows) return;
+
+    const runId = document.lastRun?.id;
+    if (!runId) {
+      notifyToast({
+        title: "No run output available to save edits to.",
+        intent: "danger",
+        duration: 5000,
+      });
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      await saveRunOutputEdits(workspaceId, runId, {
+        sheetName: sheet,
+        sheetIndex: model.selectedSheet?.index ?? null,
+        rows: editedRows,
+      });
+
+      notifyToast({
+        title: "Spreadsheet changes saved successfully.",
+        intent: "success",
+        duration: 3500,
+      });
+
+      // Invalidate preview queries to fetch the newly written file
+      await queryClient.invalidateQueries({
+        queryKey: ["document-detail-preview-grid", workspaceId, document.id],
+      });
+      await queryClient.invalidateQueries({
+        queryKey: ["document-detail-preview-sheets", workspaceId, document.id],
+      });
+      // Also invalidate run and document cache so updates propagate
+      await queryClient.invalidateQueries({
+        queryKey: ["runs"],
+      });
+      await queryClient.invalidateQueries({
+        queryKey: ["documents"],
+      });
+
+      setEditedRows(null);
+    } catch (error: unknown) {
+      console.error("Failed to save output edits:", error);
+      notifyToast({
+        title: error instanceof Error ? error.message : "Failed to save changes back to the database.",
+        intent: "danger",
+        duration: 5000,
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  }, [editedRows, workspaceId, document.id, document.lastRun?.id, sheet, model.selectedSheet?.index, notifyToast, queryClient]);
+
+  const isDirty = ENABLE_PREVIEW_EDITING && editedRows !== null;
+
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-muted/10">
       <div className="sticky top-0 z-20 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/90">
@@ -46,13 +126,16 @@ export function DocumentPreviewTab({
           name={document.name}
           source={source}
           onSourceChange={onSourceChange}
+          isDirty={isDirty}
+          isSaving={isSaving}
+          onSave={handleSave}
         />
 
         {model.canLoadSelectedSource ? (
           <DocumentPreviewStatsRow
             previewCountSummary={model.previewCountSummary}
-            isCompactMode={isCompactMode}
-            onCompactModeChange={setCompactMode}
+            showHiddenRowsAndColumns={showHiddenRowsAndColumns}
+            onShowHiddenRowsAndColumnsChange={setShowHiddenRowsAndColumns}
             metrics={document.lastRunMetrics}
           />
         ) : null}
@@ -73,7 +156,11 @@ export function DocumentPreviewTab({
               hasSheets={model.sheets.length > 0}
               hasData={Boolean(model.selectedSheet)}
               rows={model.previewRows}
+              rowNumbers={model.rowNumbers}
               columnLabels={model.columnLabels}
+              cellFormats={model.cellFormats}
+              isReadOnly={!ENABLE_PREVIEW_EDITING || source === "original"}
+              onRowsChange={handleRowsChange}
               className="h-full"
             />
           </div>

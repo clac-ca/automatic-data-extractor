@@ -43,11 +43,11 @@ export function usePreviewDisplayPreferences(workspaceId: string) {
     );
   }, []);
 
-  const setCompactMode = useCallback((enabled: boolean) => {
+  const setShowHiddenRowsAndColumns = useCallback((enabled: boolean) => {
     setPreferences((current) =>
-      current.trimEmptyRows === enabled && current.trimEmptyColumns === enabled
+      current.showHiddenRowsAndColumns === enabled
         ? current
-        : { ...current, trimEmptyRows: enabled, trimEmptyColumns: enabled },
+        : { ...current, showHiddenRowsAndColumns: enabled },
     );
   }, []);
 
@@ -57,10 +57,10 @@ export function usePreviewDisplayPreferences(workspaceId: string) {
 
   return {
     preferences,
-    isCompactMode: preferences.trimEmptyRows && preferences.trimEmptyColumns,
+    showHiddenRowsAndColumns: preferences.showHiddenRowsAndColumns,
     setTrimEmptyRows,
     setTrimEmptyColumns,
-    setCompactMode,
+    setShowHiddenRowsAndColumns,
     reset,
   };
 }

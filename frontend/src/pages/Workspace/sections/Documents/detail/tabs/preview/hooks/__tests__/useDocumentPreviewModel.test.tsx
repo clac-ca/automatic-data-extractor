@@ -50,6 +50,7 @@ function buildPreferences(enabled: boolean): PreviewDisplayPreferences {
   return {
     trimEmptyRows: enabled,
     trimEmptyColumns: enabled,
+    showHiddenRowsAndColumns: false,
   };
 }
 
@@ -167,6 +168,98 @@ describe("useDocumentPreviewModel", () => {
       expect(result.current.previewCountSummary?.rowsVisibleLabel).toBe("Showing 2 of 10 rows");
       expect(result.current.previewCountSummary?.columnsVisibleLabel).toBe("Showing 2 of 8 columns");
       expect(result.current.columnLabels).toHaveLength(2);
+    });
+  });
+
+  it("hides workbook-hidden rows and columns until requested", async () => {
+    vi.spyOn(documentsApi, "fetchDocumentSheets").mockResolvedValue([
+      { name: "Sheet A", index: 0, kind: "worksheet", is_active: true },
+    ]);
+    vi.spyOn(documentsApi, "fetchDocumentPreview").mockResolvedValue({
+      name: "Sheet A",
+      index: 0,
+      rows: [
+        ["A1", "B1", "C1"],
+        ["A2", "B2", "C2"],
+      ],
+      totalRows: 2,
+      totalColumns: 3,
+      truncatedRows: false,
+      truncatedColumns: false,
+      hiddenRows: [0],
+      hiddenColumns: [1],
+      cellFormats: [
+        {
+          row: 1,
+          column: 2,
+          bgColor: "#008000",
+          textColor: "#ffffff",
+          bold: true,
+          horizontalAlign: "center",
+          wrapText: true,
+        },
+      ],
+    });
+
+    const wrapper = createWrapper();
+
+    const { result, rerender } = renderHook(
+      (props: { displayPreferences: PreviewDisplayPreferences }) =>
+        useDocumentPreviewModel({
+          workspaceId: "ws-1",
+          document: createDocument(),
+          source: "original",
+          sheet: null,
+          onSheetChange: vi.fn(),
+          displayPreferences: props.displayPreferences,
+        }),
+      {
+        wrapper,
+        initialProps: {
+          displayPreferences: {
+            trimEmptyRows: false,
+            trimEmptyColumns: false,
+            showHiddenRowsAndColumns: false,
+          },
+        },
+      },
+    );
+
+    await waitFor(() => {
+      expect(result.current.previewRows).toEqual([["A2", "C2"]]);
+      expect(result.current.rowNumbers).toEqual([2]);
+      expect(result.current.columnLabels).toEqual(["A", "C"]);
+      expect(result.current.cellFormats).toEqual([
+        expect.objectContaining({
+          row: 0,
+          column: 1,
+          bgColor: "#008000",
+        }),
+      ]);
+    });
+
+    rerender({
+      displayPreferences: {
+        trimEmptyRows: false,
+        trimEmptyColumns: false,
+        showHiddenRowsAndColumns: true,
+      },
+    });
+
+    await waitFor(() => {
+      expect(result.current.previewRows).toEqual([
+        ["A1", "B1", "C1"],
+        ["A2", "B2", "C2"],
+      ]);
+      expect(result.current.rowNumbers).toEqual([1, 2]);
+      expect(result.current.columnLabels).toEqual(["A", "B", "C"]);
+      expect(result.current.cellFormats).toEqual([
+        expect.objectContaining({
+          row: 1,
+          column: 2,
+          bgColor: "#008000",
+        }),
+      ]);
     });
   });
 

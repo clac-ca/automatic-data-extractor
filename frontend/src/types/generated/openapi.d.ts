@@ -1318,6 +1318,66 @@ export type paths = {
         patch: operations["patch_document_tags_api_v1_workspaces__workspaceId__documents__documentId__tags_patch"];
         trace?: never;
     };
+    "/api/v1/workspaces/{workspaceId}/documents/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List unread and read notifications for the current user
+         * @description List unread and read notifications for the current user.
+         */
+        get: operations["list_user_notifications_api_v1_workspaces__workspaceId__documents_notifications_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspaceId}/documents/notifications/{notificationId}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Mark a specific notification as read
+         * @description Mark a specific notification as read.
+         */
+        patch: operations["mark_notification_as_read_api_v1_workspaces__workspaceId__documents_notifications__notificationId__read_patch"];
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspaceId}/documents/notifications/read-all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark all unread notifications for the current user as read
+         * @description Mark all unread notifications for the current user as read.
+         */
+        post: operations["mark_all_notifications_as_read_api_v1_workspaces__workspaceId__documents_notifications_read_all_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspaceId}/documents/{documentId}/listrow": {
         parameters: {
             query?: never;
@@ -2192,6 +2252,26 @@ export type paths = {
         get: operations["preview_workspace_run_output_endpoint_api_v1_workspaces__workspaceId__runs__runId__output_preview_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspaceId}/runs/{runId}/output/edit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Save edits made to normalized run output sheet
+         * @description Update a worksheet in a run output file with new cell values and save as a new version.
+         */
+        post: operations["edit_workspace_run_output_endpoint_api_v1_workspaces__workspaceId__runs__runId__output_edit_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5057,6 +5137,18 @@ export type components = {
             versionNo?: number | null;
         };
         /**
+         * RunOutputEditRequest
+         * @description Payload to save edits to a run output sheet.
+         */
+        RunOutputEditRequest: {
+            /** Sheetname */
+            sheetName?: string | null;
+            /** Sheetindex */
+            sheetIndex?: number | null;
+            /** Rows */
+            rows: string[][];
+        };
+        /**
          * RunOutputSheet
          * @description Descriptor for a worksheet or single-sheet run output.
          */
@@ -5646,6 +5738,40 @@ export type components = {
             items: components["schemas"]["UserMemberOfOut"][];
         };
         /**
+         * UserNotificationOut
+         * @description Serialized representation of a user notification (e.g. mention).
+         */
+        UserNotificationOut: {
+            /**
+             * Id
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
+             */
+            id: string;
+            /**
+             * Workspaceid
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
+             */
+            workspaceId: string;
+            /** Isread */
+            isRead: boolean;
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            comment: components["schemas"]["DocumentCommentOut"];
+            /**
+             * Documentid
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
+             */
+            documentId: string;
+            /** Documentname */
+            documentName: string;
+        };
+        /**
          * UserOut
          * @description Extended representation with activation metadata.
          */
@@ -5865,6 +5991,28 @@ export type components = {
             web: string;
         };
         /**
+         * WorkbookCellFormat
+         * @description Display formatting for one preview cell.
+         */
+        WorkbookCellFormat: {
+            /** Row */
+            row: number;
+            /** Column */
+            column: number;
+            /** Bgcolor */
+            bgColor?: string | null;
+            /** Textcolor */
+            textColor?: string | null;
+            /** Bold */
+            bold?: boolean | null;
+            /** Italic */
+            italic?: boolean | null;
+            /** Horizontalalign */
+            horizontalAlign?: string | null;
+            /** Wraptext */
+            wrapText?: boolean | null;
+        };
+        /**
          * WorkbookSheetPreview
          * @description Preview for a single workbook sheet.
          */
@@ -5883,8 +6031,12 @@ export type components = {
             truncatedRows: boolean;
             /** Truncatedcolumns */
             truncatedColumns: boolean;
+            /** Hiddenrows */
+            hiddenRows?: number[];
             /** Hiddencolumns */
             hiddenColumns?: number[];
+            /** Cellformats */
+            cellFormats?: components["schemas"]["WorkbookCellFormat"][];
         };
         /**
          * WorkspaceCreate
@@ -10455,6 +10607,172 @@ export interface operations {
             default: components["responses"]["ProblemDetails"];
         };
     };
+    list_user_notifications_api_v1_workspaces__workspaceId__documents_notifications_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Workspace identifier */
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserNotificationOut"][];
+                };
+            };
+            /** @description Authentication required to read notifications. */
+            401: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Workspace permissions do not allow notification access. */
+            403: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    mark_notification_as_read_api_v1_workspaces__workspaceId__documents_notifications__notificationId__read_patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Workspace identifier */
+                workspaceId: string;
+                notificationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserNotificationOut"];
+                };
+            };
+            /** @description Authentication required to mark notifications as read. */
+            401: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Workspace permissions do not allow notification access. */
+            403: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Notification not found. */
+            404: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    mark_all_notifications_as_read_api_v1_workspaces__workspaceId__documents_notifications_read_all_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Workspace identifier */
+                workspaceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required to mark notifications as read. */
+            401: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Workspace permissions do not allow notification access. */
+            403: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
     read_document_list_row_api_v1_workspaces__workspaceId__documents__documentId__listrow_get: {
         parameters: {
             query?: {
@@ -13043,6 +13361,71 @@ export interface operations {
                 content?: never;
             };
             /** @description The output exists but could not be parsed for preview. */
+            422: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["ProblemDetails"];
+        };
+    };
+    edit_workspace_run_output_endpoint_api_v1_workspaces__workspaceId__runs__runId__output_edit_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Workspace identifier */
+                workspaceId: string;
+                /** @description Run identifier */
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunOutputEditRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOutput"];
+                };
+            };
+            /** @description Run or output not found */
+            404: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Output not ready */
+            409: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Edits are not supported for this file type. */
+            415: {
+                headers: {
+                    "X-Request-Id": components["headers"]["X-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The output exists but sheet was not found or could not be parsed. */
             422: {
                 headers: {
                     "X-Request-Id": components["headers"]["X-Request-Id"];

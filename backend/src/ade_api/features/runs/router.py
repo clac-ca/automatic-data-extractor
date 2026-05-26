@@ -75,6 +75,7 @@ from .schemas import (
     RunInput,
     RunMetricsResource,
     RunOutput,
+    RunOutputEditRequest,
     RunOutputSheet,
     RunPage,
     RunResource,
@@ -939,3 +940,59 @@ def preview_workspace_run_output_endpoint(
         ) from exc
     except (RunOutputPreviewParseError, RunOutputPreviewSheetNotFoundError) as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
+
+
+@router.post(
+    "/{runId}/output/edit",
+    response_model=RunOutput,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Security(require_csrf)],
+    summary="Save edits made to normalized run output sheet",
+    description=(
+        "Update a worksheet in a run output file with new cell values "
+        "and save as a new version."
+    ),
+    responses={
+        status.HTTP_404_NOT_FOUND: {"description": "Run or output not found"},
+        status.HTTP_409_CONFLICT: {"description": "Output not ready"},
+        status.HTTP_415_UNSUPPORTED_MEDIA_TYPE: {
+            "description": "Edits are not supported for this file type.",
+        },
+        status.HTTP_422_UNPROCESSABLE_CONTENT: {
+            "description": "The output exists but sheet was not found or could not be parsed.",
+        },
+    },
+)
+def edit_workspace_run_output_endpoint(
+    workspace_id: WorkspacePath,
+    run_id: RunPath,
+    payload: RunOutputEditRequest,
+    service: RunsServiceDep,
+    actor: RunManager,
+) -> RunOutput:
+    _require_workspace_run(service=service, workspace_id=workspace_id, run_id=run_id)
+    try:
+        return service.save_run_output_edits(
+            run_id=run_id,
+            sheet_name=payload.sheet_name,
+            sheet_index=payload.sheet_index,
+            rows=payload.rows,
+            actor_id=actor.id,
+        )
+    except RunNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except RunOutputNotReadyError as exc:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            detail=_output_not_ready_detail(str(exc)),
+        ) from exc
+    except RunOutputMissingError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except RunOutputPreviewUnsupportedError as exc:
+        raise HTTPException(
+            status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail=str(exc),
+        ) from exc
+    except (RunOutputPreviewParseError, RunOutputPreviewSheetNotFoundError) as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
+

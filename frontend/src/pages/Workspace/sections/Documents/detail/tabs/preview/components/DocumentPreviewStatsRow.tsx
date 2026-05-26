@@ -17,16 +17,16 @@ const STAT_TONE_STYLES = {
 
 export function DocumentPreviewStatsRow({
   previewCountSummary,
-  isCompactMode,
-  onCompactModeChange,
+  showHiddenRowsAndColumns,
+  onShowHiddenRowsAndColumnsChange,
   metrics,
 }: {
   previewCountSummary: PreviewCountSummary | null;
-  isCompactMode: boolean;
-  onCompactModeChange: (enabled: boolean) => void;
+  showHiddenRowsAndColumns: boolean;
+  onShowHiddenRowsAndColumnsChange: (enabled: boolean) => void;
   metrics: RunMetricsResource | null | undefined;
 }) {
-  const compactModeId = useId();
+  const showHiddenId = useId();
   const stats = useMemo(() => buildPreviewInlineStats(metrics), [metrics]);
 
   return (
@@ -34,12 +34,12 @@ export function DocumentPreviewStatsRow({
       <div className="flex items-center gap-2 overflow-x-auto pb-1">
         <div className="inline-flex shrink-0 items-center gap-2 rounded-md border border-border/80 bg-background px-2 py-1">
           <Checkbox
-            id={compactModeId}
-            checked={isCompactMode}
-            onCheckedChange={(checked) => onCompactModeChange(checked === true)}
+            id={showHiddenId}
+            checked={showHiddenRowsAndColumns}
+            onCheckedChange={(checked) => onShowHiddenRowsAndColumnsChange(checked === true)}
           />
-          <Label htmlFor={compactModeId} className="text-xs font-medium text-foreground">
-            Hide empty rows and columns
+          <Label htmlFor={showHiddenId} className="text-xs font-medium text-foreground">
+            Show hidden rows and columns
           </Label>
         </div>
         {previewCountSummary ? (

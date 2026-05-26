@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import csv
 import json
 import logging
 import tempfile
@@ -1559,6 +1560,148 @@ class RunsService:
             ),
         )
         return preview
+
+    def save_run_output_edits(
+        self,
+        *,
+        run_id: UUID,
+        sheet_name: str | None = None,
+        sheet_index: int | None = None,
+        rows: list[list[str]],
+        actor_id: UUID | None = None,
+    ) -> RunOutput:
+        """Save edits made to a run output worksheet and create a new FileVersion."""
+        if sheet_name is None and sheet_index is None:
+            sheet_index = 0
+
+        logger.info(
+            "run.output.edit.start",
+            extra=log_context(
+                run_id=run_id,
+                sheet_name=sheet_name,
+                sheet_index=sheet_index,
+            ),
+        )
+
+        run, output_file, output_version = self.resolve_output_for_download(run_id=run_id)
+        output_name = output_version.filename_at_upload or output_file.name
+        suffix = Path(output_name).suffix.lower()
+
+        try:
+            with self._download_blob_to_tempfile(
+                blob_name=output_file.blob_name,
+                version_id=output_version.storage_version_id,
+                suffix=suffix,
+            ) as path:
+                if suffix == ".xlsx":
+                    workbook = openpyxl.load_workbook(path)
+                    try:
+                        if sheet_name:
+                            if sheet_name not in workbook.sheetnames:
+                                raise RunOutputPreviewSheetNotFoundError(
+                                    f"Sheet {sheet_name!r} not found"
+                                )
+                            sheet = workbook[sheet_name]
+                        else:
+                            idx = sheet_index if sheet_index is not None else 0
+                            if idx < 0 or idx >= len(workbook.sheetnames):
+                                raise RunOutputPreviewSheetNotFoundError(
+                                    f"Sheet index {idx} not found"
+                                )
+                            sheet = workbook[workbook.sheetnames[idx]]
+
+                        # Ensure no rows or columns are hidden in the edited output sheet
+                        for row_dim in list(sheet.row_dimensions.values()):
+                            row_dim.hidden = False
+                        for col_dim in list(sheet.column_dimensions.values()):
+                            col_dim.hidden = False
+
+                        # Delete extra columns if the new sheet has fewer columns
+                        max_cols = max(len(r) for r in rows) if rows else 0
+                        if sheet.max_column > max_cols:
+                            sheet.delete_cols(max_cols + 1, sheet.max_column - max_cols)
+
+                        # Delete extra rows if the new sheet has fewer rows
+                        if sheet.max_row > len(rows):
+                            sheet.delete_rows(len(rows) + 1, sheet.max_row - len(rows))
+
+                        # Overwrite cell values
+                        for r_idx, row_data in enumerate(rows):
+                            for c_idx, val in enumerate(row_data):
+                                typed_val: str | int | float = val
+                                if val != "":
+                                    try:
+                                        is_neg_digit = (
+                                            val.startswith("-") and val[1:].isdigit()
+                                        )
+                                        if val.isdigit() or is_neg_digit:
+                                            typed_val = int(val)
+                                        else:
+                                            typed_val = float(val)
+                                    except ValueError:
+                                        pass
+                                cell_val = None if val == "" else typed_val
+                                sheet.cell(row=r_idx + 1, column=c_idx + 1, value=cell_val)
+
+                        workbook.save(path)
+                    finally:
+                        workbook.close()
+
+                elif suffix == ".csv":
+                    with open(path, "w", newline="", encoding="utf-8") as f:
+                        writer = csv.writer(f)
+                        writer.writerows(rows)
+                else:
+                    raise RunOutputPreviewUnsupportedError(
+                        f"Editing is not supported for output file type {suffix!r}."
+                    )
+
+                # Read modified tempfile and upload to storage
+                with open(path, "rb") as file_stream:
+                    stored = self._blob_storage.write(
+                        output_file.blob_name,
+                        file_stream,
+                        max_bytes=self._settings.storage_upload_max_bytes,
+                    )
+
+        except FileNotFoundError as exc:
+            raise RunOutputMissingError("Run output is unavailable") from exc
+
+        storage_version_id = stored.version_id
+        now = datetime.now(tz=UTC)
+
+        version_no = self._next_version_no(file_id=output_file.id)
+        file_version = FileVersion(
+            file_id=output_file.id,
+            version_no=version_no,
+            origin=FileVersionOrigin.MANUAL,
+            run_id=run.id,
+            created_by_user_id=actor_id,
+            sha256=stored.sha256,
+            byte_size=stored.byte_size,
+            content_type=output_version.content_type,
+            filename_at_upload=output_version.filename_at_upload,
+            storage_version_id=storage_version_id,
+        )
+        self._session.add(file_version)
+        self._session.flush()
+
+        output_file.current_version_id = file_version.id
+        output_file.updated_at = now
+        run.output_file_version_id = file_version.id
+        self._session.flush()
+
+        logger.info(
+            "run.output.edit.success",
+            extra=log_context(
+                run_id=run.id,
+                workspace_id=run.workspace_id,
+                configuration_id=run.configuration_id,
+                file_version_id=file_version.id,
+                version_no=version_no,
+            ),
+        )
+        return self._build_output_metadata(run=run)
 
     def list_run_output_sheets(
         self,

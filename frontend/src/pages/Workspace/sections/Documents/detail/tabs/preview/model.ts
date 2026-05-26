@@ -3,11 +3,24 @@ import type { RunMetricsResource } from "@/pages/Workspace/sections/Documents/sh
 export type PreviewDisplayPreferences = {
   trimEmptyRows: boolean;
   trimEmptyColumns: boolean;
+  showHiddenRowsAndColumns: boolean;
+};
+
+export type PreviewCellFormat = {
+  row: number;
+  column: number;
+  bgColor?: string | null;
+  textColor?: string | null;
+  bold?: boolean | null;
+  italic?: boolean | null;
+  horizontalAlign?: string | null;
+  wrapText?: boolean | null;
 };
 
 export const DEFAULT_PREVIEW_DISPLAY_PREFERENCES: PreviewDisplayPreferences = Object.freeze({
-  trimEmptyRows: true,
-  trimEmptyColumns: true,
+  trimEmptyRows: false,
+  trimEmptyColumns: false,
+  showHiddenRowsAndColumns: false,
 });
 
 export function isPreviewDisplayPreferences(value: unknown): value is PreviewDisplayPreferences {
@@ -16,7 +29,11 @@ export function isPreviewDisplayPreferences(value: unknown): value is PreviewDis
   }
 
   const candidate = value as Record<string, unknown>;
-  return typeof candidate.trimEmptyRows === "boolean" && typeof candidate.trimEmptyColumns === "boolean";
+  return (
+    typeof candidate.trimEmptyRows === "boolean"
+    && typeof candidate.trimEmptyColumns === "boolean"
+    && typeof candidate.showHiddenRowsAndColumns === "boolean"
+  );
 }
 
 type PreviewMetaLike = {

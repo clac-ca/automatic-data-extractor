@@ -14,7 +14,7 @@ import type { DocumentPreviewSource } from "@/pages/Workspace/sections/Documents
 import type { DocumentRow } from "@/pages/Workspace/sections/Documents/shared/types";
 
 import { getNormalizedPreviewState } from "../state";
-import { buildPreviewCountSummary, type PreviewDisplayPreferences } from "../model";
+import { buildPreviewCountSummary, type PreviewCellFormat, type PreviewDisplayPreferences } from "../model";
 
 const DEFAULT_MAX_ROWS = 10_000;
 const DEFAULT_MAX_COLUMNS = 10_000;
@@ -152,6 +152,10 @@ export function useDocumentPreviewModel({
     return new Set(previewQuery.data?.hiddenColumns ?? []);
   }, [previewQuery.data?.hiddenColumns]);
 
+  const hiddenRows = useMemo(() => {
+    return new Set(previewQuery.data?.hiddenRows ?? []);
+  }, [previewQuery.data?.hiddenRows]);
+
   const rawRows = useMemo(() => previewQuery.data?.rows ?? [], [previewQuery.data]);
 
   const rawColumnCount = useMemo(
@@ -168,19 +172,66 @@ export function useDocumentPreviewModel({
 
     const indices: number[] = [];
     for (let index = 0; index < renderedColumnCount; index += 1) {
-      if (!hiddenColumns.has(index)) {
+      if (displayPreferences.showHiddenRowsAndColumns || !hiddenColumns.has(index)) {
         indices.push(index);
       }
     }
     return indices;
-  }, [displayPreferences.trimEmptyColumns, previewQuery.data?.totalColumns, rawColumnCount, hiddenColumns]);
+  }, [
+    displayPreferences.showHiddenRowsAndColumns,
+    displayPreferences.trimEmptyColumns,
+    previewQuery.data?.totalColumns,
+    rawColumnCount,
+    hiddenColumns,
+  ]);
 
   const previewRows = useMemo(() => {
-    if (hiddenColumns.size === 0) {
-      return rawRows;
+    const visibleRows = displayPreferences.showHiddenRowsAndColumns
+      ? rawRows.map((row, index) => ({ row, originalIndex: index }))
+      : rawRows
+        .map((row, index) => ({ row, originalIndex: index }))
+        .filter(({ originalIndex }) => !hiddenRows.has(originalIndex));
+
+    if (displayPreferences.showHiddenRowsAndColumns && hiddenColumns.size === 0) {
+      return visibleRows.map(({ row }) => row);
     }
-    return rawRows.map((row) => visibleIndices.map((index) => row[index] ?? ""));
-  }, [rawRows, visibleIndices, hiddenColumns.size]);
+    return visibleRows.map(({ row }) => visibleIndices.map((index) => row[index] ?? ""));
+  }, [
+    displayPreferences.showHiddenRowsAndColumns,
+    rawRows,
+    visibleIndices,
+    hiddenColumns.size,
+    hiddenRows,
+  ]);
+
+  const rowNumbers = useMemo(() => {
+    const visibleRows = displayPreferences.showHiddenRowsAndColumns
+      ? rawRows.map((_, index) => index)
+      : rawRows.map((_, index) => index).filter((index) => !hiddenRows.has(index));
+
+    return visibleRows.map((index) => index + 1);
+  }, [displayPreferences.showHiddenRowsAndColumns, hiddenRows, rawRows]);
+
+  const previewCellFormats = useMemo<PreviewCellFormat[]>(() => {
+    const rowPositionByOriginalIndex = new Map<number, number>();
+    rowNumbers.forEach((rowNumber, displayIndex) => {
+      rowPositionByOriginalIndex.set(rowNumber - 1, displayIndex);
+    });
+
+    const columnPositionByOriginalIndex = new Map<number, number>();
+    visibleIndices.forEach((columnIndex, displayIndex) => {
+      columnPositionByOriginalIndex.set(columnIndex, displayIndex);
+    });
+
+    return (previewQuery.data?.cellFormats ?? []).flatMap((format) => {
+      const row = rowPositionByOriginalIndex.get(format.row);
+      const column = columnPositionByOriginalIndex.get(format.column);
+      if (row === undefined || column === undefined) {
+        return [];
+      }
+      return [{ ...format, row, column }];
+    });
+  }, [previewQuery.data?.cellFormats, rowNumbers, visibleIndices]);
 
   const visibleColumnCount = useMemo(
     () => visibleIndices.filter((idx) => idx < rawColumnCount).length,
@@ -223,7 +274,9 @@ export function useDocumentPreviewModel({
     sheets,
     selectedSheet,
     previewRows,
+    rowNumbers,
     columnLabels,
+    cellFormats: previewCellFormats,
     previewMeta,
     previewCountSummary,
     normalizedState,

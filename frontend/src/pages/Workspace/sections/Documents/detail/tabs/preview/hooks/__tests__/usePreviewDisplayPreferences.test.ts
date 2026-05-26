@@ -10,21 +10,22 @@ describe("usePreviewDisplayPreferences", () => {
     window.localStorage.clear();
   });
 
-  it("defaults to compact mode when no preference is stored", () => {
+  it("defaults to showing the full worksheet surface while hiding Excel-hidden rows and columns", () => {
     const { result } = renderHook(() => usePreviewDisplayPreferences("ws-1"));
 
     expect(result.current.preferences).toEqual({
-      trimEmptyRows: true,
-      trimEmptyColumns: true,
+      trimEmptyRows: false,
+      trimEmptyColumns: false,
+      showHiddenRowsAndColumns: false,
     });
-    expect(result.current.isCompactMode).toBe(true);
+    expect(result.current.showHiddenRowsAndColumns).toBe(false);
   });
 
-  it("persists compact mode changes to workspace-scoped storage", async () => {
+  it("persists hidden row and column visibility to workspace-scoped storage", async () => {
     const { result, unmount } = renderHook(() => usePreviewDisplayPreferences("ws-1"));
 
     act(() => {
-      result.current.setCompactMode(false);
+      result.current.setShowHiddenRowsAndColumns(true);
     });
 
     await waitFor(() => {
@@ -32,6 +33,7 @@ describe("usePreviewDisplayPreferences", () => {
         JSON.stringify({
           trimEmptyRows: false,
           trimEmptyColumns: false,
+          showHiddenRowsAndColumns: true,
         }),
       );
     });
@@ -42,8 +44,9 @@ describe("usePreviewDisplayPreferences", () => {
     expect(next.result.current.preferences).toEqual({
       trimEmptyRows: false,
       trimEmptyColumns: false,
+      showHiddenRowsAndColumns: true,
     });
-    expect(next.result.current.isCompactMode).toBe(false);
+    expect(next.result.current.showHiddenRowsAndColumns).toBe(true);
   });
 
   it("isolates preferences by workspace id", async () => {
@@ -51,13 +54,13 @@ describe("usePreviewDisplayPreferences", () => {
     const ws2 = renderHook(() => usePreviewDisplayPreferences("ws-2"));
 
     act(() => {
-      ws1.result.current.setCompactMode(false);
+      ws1.result.current.setShowHiddenRowsAndColumns(true);
     });
 
     await waitFor(() => {
-      expect(ws1.result.current.isCompactMode).toBe(false);
+      expect(ws1.result.current.showHiddenRowsAndColumns).toBe(true);
     });
 
-    expect(ws2.result.current.isCompactMode).toBe(true);
+    expect(ws2.result.current.showHiddenRowsAndColumns).toBe(false);
   });
 });

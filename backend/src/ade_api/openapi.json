@@ -9343,6 +9343,314 @@
         "description": "Update document tags."
       }
     },
+    "/api/v1/workspaces/{workspaceId}/documents/notifications": {
+      "get": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "List unread and read notifications for the current user",
+        "operationId": "list_user_notifications_api_v1_workspaces__workspaceId__documents_notifications_get",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspaceid"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/UserNotificationOut"
+                  },
+                  "title": "Response List User Notifications Api V1 Workspaces  Workspaceid  Documents Notifications Get"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required to read notifications.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Workspace permissions do not allow notification access.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "description": "List unread and read notifications for the current user."
+      }
+    },
+    "/api/v1/workspaces/{workspaceId}/documents/notifications/{notificationId}/read": {
+      "patch": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Mark a specific notification as read",
+        "operationId": "mark_notification_as_read_api_v1_workspaces__workspaceId__documents_notifications__notificationId__read_patch",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspaceid"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "notificationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Notificationid"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserNotificationOut"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required to mark notifications as read.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Workspace permissions do not allow notification access.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Notification not found.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "description": "Mark a specific notification as read."
+      }
+    },
+    "/api/v1/workspaces/{workspaceId}/documents/notifications/read-all": {
+      "post": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Mark all unread notifications for the current user as read",
+        "operationId": "mark_all_notifications_as_read_api_v1_workspaces__workspaceId__documents_notifications_read_all_post",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspaceid"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required to mark notifications as read.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "403": {
+            "description": "Workspace permissions do not allow notification access.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "description": "Mark all unread notifications for the current user as read."
+      }
+    },
     "/api/v1/workspaces/{workspaceId}/documents/{documentId}/listrow": {
       "get": {
         "tags": [
@@ -15256,6 +15564,128 @@
           },
           "422": {
             "description": "The output exists but could not be parsed for preview.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/ProblemDetails"
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspaceId}/runs/{runId}/output/edit": {
+      "post": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Save edits made to normalized run output sheet",
+        "description": "Update a worksheet in a run output file with new cell values and save as a new version.",
+        "operationId": "edit_workspace_run_output_endpoint_api_v1_workspaces__workspaceId__runs__runId__output_edit_post",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspaceid"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Run identifier",
+              "title": "Runid"
+            },
+            "description": "Run identifier"
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunOutputEditRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunOutput"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "404": {
+            "description": "Run or output not found",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "409": {
+            "description": "Output not ready",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "415": {
+            "description": "Edits are not supported for this file type.",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/X-Request-Id"
+              }
+            }
+          },
+          "422": {
+            "description": "The output exists but sheet was not found or could not be parsed.",
             "headers": {
               "X-Request-Id": {
                 "$ref": "#/components/headers/X-Request-Id"
@@ -23398,6 +23828,49 @@
         "title": "RunOutput",
         "description": "Output metadata captured for a run."
       },
+      "RunOutputEditRequest": {
+        "properties": {
+          "sheetName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sheetname"
+          },
+          "sheetIndex": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sheetindex"
+          },
+          "rows": {
+            "items": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": "array",
+            "title": "Rows"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "rows"
+        ],
+        "title": "RunOutputEditRequest",
+        "description": "Payload to save edits to a run output sheet."
+      },
       "RunOutputSheet": {
         "properties": {
           "name": {
@@ -25098,6 +25571,57 @@
         ],
         "title": "UserMemberOfResponse"
       },
+      "UserNotificationOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id",
+            "description": "UUIDv7 (RFC 9562) generated in the application layer."
+          },
+          "workspaceId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Workspaceid",
+            "description": "UUIDv7 (RFC 9562) generated in the application layer."
+          },
+          "isRead": {
+            "type": "boolean",
+            "title": "Isread"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat"
+          },
+          "comment": {
+            "$ref": "#/components/schemas/DocumentCommentOut"
+          },
+          "documentId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Documentid",
+            "description": "UUIDv7 (RFC 9562) generated in the application layer."
+          },
+          "documentName": {
+            "type": "string",
+            "title": "Documentname"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "workspaceId",
+          "isRead",
+          "createdAt",
+          "comment",
+          "documentId",
+          "documentName"
+        ],
+        "title": "UserNotificationOut",
+        "description": "Serialized representation of a user notification (e.g. mention)."
+      },
       "UserOut": {
         "properties": {
           "id": {
@@ -25771,6 +26295,94 @@
         "title": "VersionsResponse",
         "description": "Installed ADE package versions."
       },
+      "WorkbookCellFormat": {
+        "properties": {
+          "row": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Row"
+          },
+          "column": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Column"
+          },
+          "bgColor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bgcolor"
+          },
+          "textColor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Textcolor"
+          },
+          "bold": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bold"
+          },
+          "italic": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Italic"
+          },
+          "horizontalAlign": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Horizontalalign"
+          },
+          "wrapText": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wraptext"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "row",
+          "column"
+        ],
+        "title": "WorkbookCellFormat",
+        "description": "Display formatting for one preview cell."
+      },
       "WorkbookSheetPreview": {
         "properties": {
           "name": {
@@ -25808,12 +26420,26 @@
             "type": "boolean",
             "title": "Truncatedcolumns"
           },
+          "hiddenRows": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Hiddenrows"
+          },
           "hiddenColumns": {
             "items": {
               "type": "integer"
             },
             "type": "array",
             "title": "Hiddencolumns"
+          },
+          "cellFormats": {
+            "items": {
+              "$ref": "#/components/schemas/WorkbookCellFormat"
+            },
+            "type": "array",
+            "title": "Cellformats"
           }
         },
         "additionalProperties": false,
