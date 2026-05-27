@@ -4,8 +4,10 @@ import {
   GridCellKind,
   getLuminance,
   textCellRenderer,
+  CompactSelection,
   type EditableGridCell,
   type GridColumn,
+  type GridSelection,
   type InnerGridCell,
   type InternalCellRenderer,
   type Item,
@@ -135,6 +137,11 @@ export function DocumentPreviewGrid({
 }) {
   const paletteTheme = useGlideDataEditorTheme();
 
+  const [selection, setSelection] = useState<GridSelection>({
+    columns: CompactSelection.empty(),
+    rows: CompactSelection.empty(),
+  });
+
   const dataEditorTheme = useMemo(
     () => ({
       ...paletteTheme,
@@ -148,13 +155,9 @@ export function DocumentPreviewGrid({
   const customHeaderIcons = useMemo(() => {
     return {
       plus: (props: { fgColor: string }) => `
-        <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none">
-          <!-- Background thick stroke for high-contrast halo on dark selected headers -->
-          <path d="M5 12h14" stroke="#ffffff" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" />
-          <path d="M12 5v14" stroke="#ffffff" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" />
-          <!-- Foreground stroke in brand accent color -->
-          <path d="M5 12h14" stroke="${props.fgColor}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
-          <path d="M12 5v14" stroke="${props.fgColor}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+        <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="${props.fgColor}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-plus">
+          <path d="M5 12h14" />
+          <path d="M12 5v14" />
         </svg>
       `
     };
@@ -199,15 +202,21 @@ export function DocumentPreviewGrid({
           textDark: "#5f6368",
         },
       },
-      ...renderedColumnLabels.map((label, columnIndex) => ({
-        id: `column-${columnIndex}`,
-        title: label,
-        hasMenu: true,
-        menuIcon: "plus",
-        width: estimateColumnWidth(label, columnIndex, gridRows),
-      })),
+      ...renderedColumnLabels.map((label, columnIndex) => {
+        const isSelected = selection.columns.hasIndex(columnIndex + 1);
+        return {
+          id: `column-${columnIndex}`,
+          title: label,
+          hasMenu: true,
+          menuIcon: "plus",
+          width: estimateColumnWidth(label, columnIndex, gridRows),
+          themeOverride: isSelected
+            ? { fgIconHeader: "#ffffff" }
+            : undefined,
+        };
+      }),
     ];
-  }, [gridRows, renderedColumnLabels]);
+  }, [gridRows, renderedColumnLabels, selection.columns]);
 
   const getCellContent = useCallback(
     ([columnIndex, rowIndex]: Item): TextCell => {
@@ -327,6 +336,8 @@ export function DocumentPreviewGrid({
         getCellContent={getCellContent}
         getCellsForSelection={true}
         freezeColumns={1}
+        gridSelection={selection}
+        onGridSelectionChange={setSelection}
         rangeSelect="multi-rect"
         rowSelect="none"
         columnSelect="multi"

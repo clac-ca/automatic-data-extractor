@@ -24,6 +24,12 @@ vi.mock("@glideapps/glide-data-grid", () => ({
     kind: "text",
     draw: vi.fn(),
   },
+  CompactSelection: {
+    empty: () => ({
+      hasIndex: () => false,
+      some: () => false,
+    }),
+  },
   DataEditor: (props: unknown) => {
     dataEditorMock(props);
     return <div data-testid="preview-grid-editor" />;
