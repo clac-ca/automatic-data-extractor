@@ -25606,6 +25606,18 @@
           "documentName": {
             "type": "string",
             "title": "Documentname"
+          },
+          "documentDeletedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Documentdeletedat"
           }
         },
         "additionalProperties": false,

@@ -2,12 +2,16 @@ import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 
-import { fetchWorkspaceDocumentRowById, restoreWorkspaceDocument } from "@/api/documents";
+import {
+  fetchWorkspaceDocumentRowById,
+  fetchWorkspaceDocumentRowsByIdFilter,
+  restoreWorkspaceDocument,
+} from "@/api/documents";
 import { ApiError } from "@/api/errors";
 import { cancelRun, createRun } from "@/api/runs/api";
 import type { RunStreamOptions } from "@/api/runs/api";
 import { PageState } from "@/components/layout";
-import { TabsContent, TabsList, TabsRoot, TabsTrigger } from "@/components/ui/tabs";
+import { TabsContent, TabsRoot } from "@/components/ui/tabs";
 import { useWorkspaceContext } from "@/pages/Workspace/context/WorkspaceContext";
 import { useWorkspacePresence } from "@/pages/Workspace/context/WorkspacePresenceContext";
 import type { DocumentDetailTab } from "@/pages/Workspace/sections/Documents/shared/navigation";
@@ -36,24 +40,46 @@ export function DocumentsDetailPage({ documentId }: { documentId: string }) {
   const {
     state: detailState,
     setTab,
-    setActivityFilter,
     setPreviewSource,
     setPreviewSheet,
   } = useDocumentDetailUrlState();
 
   const documentQuery = useQuery({
     queryKey: ["documents-detail", workspace.id, documentId],
-    queryFn: ({ signal }) =>
-      fetchWorkspaceDocumentRowById(
-        workspace.id,
-        documentId,
-        {
-          includeRunMetrics: true,
-          includeRunTableColumns: true,
-          includeRunFields: true,
-        },
-        signal,
-      ),
+    queryFn: async ({ signal }) => {
+      const includeOptions = {
+        includeRunMetrics: true,
+        includeRunTableColumns: true,
+        includeRunFields: true,
+      };
+      try {
+        return await fetchWorkspaceDocumentRowById(
+          workspace.id,
+          documentId,
+          includeOptions,
+          signal,
+        );
+      } catch (error) {
+        if (!(error instanceof ApiError) || error.status !== 404) {
+          throw error;
+        }
+        const archivedRows = await fetchWorkspaceDocumentRowsByIdFilter(
+          workspace.id,
+          [documentId],
+          {
+            sort: null,
+            lifecycle: "archived",
+            ...includeOptions,
+          },
+          signal,
+        );
+        const archivedRow = archivedRows.find((row) => row.id === documentId);
+        if (!archivedRow) {
+          throw error;
+        }
+        return archivedRow;
+      }
+    },
     enabled: Boolean(workspace.id && documentId),
     staleTime: 30_000,
     refetchInterval: (query) => {
@@ -255,54 +281,27 @@ export function DocumentsDetailPage({ documentId }: { documentId: string }) {
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background text-foreground">
-      <DocumentTicketHeader
-        workspaceId={workspace.id}
-        document={documentRow}
-        onBack={onBack}
-        onRenameRequest={() => {
-          setRenameError(null);
-          setRenameOpen(true);
-        }}
-        onRestoreRequest={onRestoreRequest}
-        onReprocessRequest={() => setReprocessOpen(true)}
-        onCancelRunRequest={onCancelRunRequest}
-        isRunActionPending={isRunActionPending}
-      />
-
       <TabsRoot value={detailState.tab} onValueChange={(value) => setTab(value as DocumentDetailTab)}>
+        <DocumentTicketHeader
+          workspaceId={workspace.id}
+          document={documentRow}
+          onBack={onBack}
+          onRenameRequest={() => {
+            setRenameError(null);
+            setRenameOpen(true);
+          }}
+          onRestoreRequest={onRestoreRequest}
+          onReprocessRequest={() => setReprocessOpen(true)}
+          onCancelRunRequest={onCancelRunRequest}
+          isRunActionPending={isRunActionPending}
+          showViewSwitch
+        />
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <TabsList className="flex gap-1 border-b bg-background px-4 py-2">
-            <TabsTrigger
-              value="activity"
-              className={[
-                "rounded-md px-3 py-1.5 text-sm",
-                detailState.tab === "activity"
-                  ? "bg-muted text-foreground"
-                  : "text-muted-foreground hover:text-foreground",
-              ].join(" ")}
-            >
-              Activity
-            </TabsTrigger>
-            <TabsTrigger
-              value="preview"
-              className={[
-                "rounded-md px-3 py-1.5 text-sm",
-                detailState.tab === "preview"
-                  ? "bg-muted text-foreground"
-                  : "text-muted-foreground hover:text-foreground",
-              ].join(" ")}
-            >
-              Preview
-            </TabsTrigger>
-          </TabsList>
-
           <div className="min-h-0 flex-1 overflow-hidden">
             <TabsContent value="activity" className="min-h-0 flex h-full flex-col">
               <DocumentActivityTab
                 workspaceId={workspace.id}
                 document={documentRow}
-                filter={detailState.activityFilter}
-                onFilterChange={setActivityFilter}
               />
             </TabsContent>
             <TabsContent value="preview" className="min-h-0 flex h-full flex-col">

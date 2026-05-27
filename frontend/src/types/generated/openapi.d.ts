@@ -5770,6 +5770,11 @@ export type components = {
             documentId: string;
             /** Documentname */
             documentName: string;
+            /**
+             * Documentdeletedat
+             * Format: date-time
+             */
+            documentDeletedAt?: string | null;
         };
         /**
          * UserOut

@@ -74,6 +74,7 @@ export function DocumentCommentEditor({
   helperText,
   shouldAutoFocus,
   showHeading,
+  expandOnFocus,
 }: {
   workspaceId: string;
   mode: "new" | "reply" | "edit";
@@ -89,6 +90,7 @@ export function DocumentCommentEditor({
   helperText?: string;
   shouldAutoFocus?: boolean;
   showHeading?: boolean;
+  expandOnFocus?: boolean;
 }) {
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const { mentionSuggestions, isMentionLoading } = useCommentMentions(
@@ -114,6 +116,7 @@ export function DocumentCommentEditor({
         helperText={helperText}
         shouldAutoFocus={shouldAutoFocus ?? mode !== "new"}
         showHeading={showHeading}
+        expandOnFocus={expandOnFocus}
       />
       {errorMessage ? <div className="text-xs text-destructive">{errorMessage}</div> : null}
     </div>

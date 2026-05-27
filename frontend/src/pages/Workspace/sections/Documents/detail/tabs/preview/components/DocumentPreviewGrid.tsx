@@ -5,6 +5,7 @@ import {
   getLuminance,
   textCellRenderer,
   CompactSelection,
+  type CellClickedEventArgs,
   type EditableGridCell,
   type GridColumn,
   type GridSelection,
@@ -222,6 +223,7 @@ export function DocumentPreviewGrid({
     ([columnIndex, rowIndex]: Item): TextCell => {
       if (columnIndex === 0) {
         const value = String(resolveRowNumber(rowNumbers, rowIndex));
+        const isSelected = selection.rows.hasIndex(rowIndex);
         return {
           kind: GridCellKind.Text,
           data: value,
@@ -230,8 +232,8 @@ export function DocumentPreviewGrid({
           readonly: true,
           contentAlign: "center",
           themeOverride: {
-            bgCell: "#f1f3f4",
-            textDark: "#5f6368",
+            bgCell: isSelected ? dataEditorTheme.accentColor : "#f1f3f4",
+            textDark: isSelected ? "#ffffff" : "#5f6368",
           },
         };
       }
@@ -249,7 +251,7 @@ export function DocumentPreviewGrid({
         ...buildCellFormatProps(cellFormat),
       };
     },
-    [cellFormatByPosition, gridRows, rowNumbers, isReadOnly],
+    [cellFormatByPosition, dataEditorTheme.accentColor, gridRows, isReadOnly, rowNumbers, selection.rows],
   );
 
   const handleCellEdited = useCallback((cell: Item, newValue: EditableGridCell) => {
@@ -289,6 +291,29 @@ export function DocumentPreviewGrid({
     },
     [onHeaderMenuClick],
   );
+
+  const handleCellClicked = useCallback((cell: Item, event: CellClickedEventArgs) => {
+    const [columnIndex, rowIndex] = cell;
+    if (columnIndex !== 0) {
+      return;
+    }
+
+    event.preventDefault();
+    setSelection((currentSelection) => {
+      const isMultiSelect = event.ctrlKey || event.metaKey;
+      const nextRows = isMultiSelect
+        ? currentSelection.rows.hasIndex(rowIndex)
+          ? currentSelection.rows.remove(rowIndex)
+          : currentSelection.rows.add(rowIndex)
+        : CompactSelection.fromSingleSelection(rowIndex);
+
+      return {
+        columns: CompactSelection.empty(),
+        rows: nextRows,
+        current: undefined,
+      };
+    });
+  }, []);
 
   if (hasSheetError || hasPreviewError) {
     return (
@@ -339,7 +364,7 @@ export function DocumentPreviewGrid({
         gridSelection={selection}
         onGridSelectionChange={setSelection}
         rangeSelect="multi-rect"
-        rowSelect="none"
+        rowSelect="multi"
         columnSelect="multi"
         drawFocusRing
         scrollToActiveCell
@@ -351,8 +376,8 @@ export function DocumentPreviewGrid({
         fixedShadowX
         fixedShadowY
         onCellEdited={handleCellEdited}
+        onCellClicked={handleCellClicked}
         onHeaderMenuClick={handleHeaderMenuClick}
-        onHeaderClick={handleHeaderMenuClick}
         onPaste={true}
         editOnType
         copyHeaders={false}

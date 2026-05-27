@@ -5,6 +5,7 @@ import {
   useState,
   type KeyboardEvent,
 } from "react";
+import { SendHorizontal } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -167,7 +168,7 @@ function CommentComposerInner({
 
   const canSubmit = hasMeaningfulCommentBody(draft.body) && !isSubmitting;
   const isExpanded =
-    mode === "edit" || !expandOnFocus || isFocused || hasMeaningfulCommentBody(draft.body);
+    mode === "edit" || (expandOnFocus && isFocused) || hasMeaningfulCommentBody(draft.body);
   const resolvedPlaceholder =
     placeholder ?? (
       mode === "edit"
@@ -186,12 +187,13 @@ function CommentComposerInner({
     variant === "compact"
       ? isExpanded
         ? mode === "new"
-          ? 4
+          ? 3
           : 3
-        : 2
+        : 1
       : mode === "new"
         ? 4
         : 3;
+  const isChatComposer = variant === "compact" && mode !== "edit";
 
   async function handleSubmit() {
     if (!canSubmit) return;
@@ -309,16 +311,16 @@ function CommentComposerInner({
               aria-label={resolvedPlaceholder}
               rows={textareaRows}
               className={cn(
-                "w-full resize-y border border-input bg-background px-3 py-2 text-sm shadow-xs outline-hidden transition-colors",
+                "w-full border border-input bg-background px-3 py-2 text-sm shadow-xs outline-hidden transition-colors",
                 "placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring",
                 variant === "editing"
                   ? "min-h-24 rounded-md border-border/80"
                   : variant === "compact"
                     ? cn(
-                        "rounded-md border-border/80",
-                        isExpanded ? "min-h-20" : "min-h-14",
+                        "resize-none rounded-lg border-transparent bg-transparent shadow-none focus-visible:border-transparent focus-visible:ring-0",
+                        isExpanded ? "min-h-18" : "min-h-10",
                       )
-                    : "min-h-28 rounded-lg",
+                    : "min-h-28 resize-y rounded-lg",
               )}
               onChange={(event) => {
                 updateDraft((current) => reconcileCommentDraft(current, event.target.value));
@@ -403,7 +405,13 @@ function CommentComposerInner({
       </Popover>
 
       <div className="flex items-center justify-between gap-3">
-        <div className="text-xs text-muted-foreground">Enter sends. Shift+Enter adds a new line.</div>
+        {isChatComposer ? (
+          <div />
+        ) : (
+          <div className="text-xs text-muted-foreground">
+            Enter sends. Shift+Enter adds a new line.
+          </div>
+        )}
         <div className="flex items-center gap-2">
           {onCancel ? (
             <Button
@@ -418,20 +426,24 @@ function CommentComposerInner({
           ) : null}
           <Button
             type="button"
-            size="sm"
+            size={isChatComposer ? "icon" : "sm"}
             variant={mode === "edit" ? "outline" : "default"}
             onClick={() => void handleSubmit()}
             disabled={!canSubmit}
+            aria-label={isChatComposer ? (mode === "reply" ? "Reply" : "Send") : undefined}
+            title={isChatComposer ? (mode === "reply" ? "Reply" : "Send") : undefined}
           >
-            {isSubmitting
-              ? mode === "edit"
-                ? "Saving..."
-                : "Sending..."
-              : mode === "edit"
-                ? "Save"
-                : mode === "reply"
-                  ? "Reply"
-                  : "Send"}
+            {isChatComposer ? (
+              <SendHorizontal data-icon="inline-start" />
+            ) : isSubmitting ? (
+              mode === "edit" ? "Saving..." : "Sending..."
+            ) : mode === "edit" ? (
+              "Save"
+            ) : mode === "reply" ? (
+              "Reply"
+            ) : (
+              "Send"
+            )}
           </Button>
         </div>
       </div>

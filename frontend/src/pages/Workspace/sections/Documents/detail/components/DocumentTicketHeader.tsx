@@ -1,14 +1,17 @@
 import { useMemo } from "react";
-import { ChevronLeft, PencilLine } from "lucide-react";
+import { ChevronLeft, Download, MoreHorizontal } from "lucide-react";
 
 import { resolveApiUrl } from "@/api/client";
 import { CloseIcon, RefreshIcon } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
@@ -38,6 +41,7 @@ export function DocumentTicketHeader({
   onReprocessRequest,
   onCancelRunRequest,
   isRunActionPending = false,
+  showViewSwitch = false,
 }: {
   workspaceId: string;
   document: DocumentRow;
@@ -47,6 +51,7 @@ export function DocumentTicketHeader({
   onReprocessRequest: () => void;
   onCancelRunRequest: () => void;
   isRunActionPending?: boolean;
+  showViewSwitch?: boolean;
 }) {
   const downloadHref = useMemo(
     () => resolveApiUrl(`/api/v1/workspaces/${workspaceId}/documents/${document.id}/download`),
@@ -70,20 +75,28 @@ export function DocumentTicketHeader({
 
   return (
     <div className="sticky top-0 z-20 border-b bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/90">
-      <div className="flex flex-wrap items-start gap-3">
-        <Button variant="ghost" size="sm" onClick={onBack} className="gap-1">
-          <ChevronLeft className="h-4 w-4" />
-          Back
+      <div className="flex flex-wrap items-center gap-3">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onBack}
+          aria-label="Back"
+          title="Back"
+          className="size-8 rounded-full"
+        >
+          <ChevronLeft data-icon="inline-start" />
         </Button>
 
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="outline" className="font-mono text-xs">
-              DOC-{shortId(document.id, 6)}
-            </Badge>
-            <span className="truncate text-sm font-semibold" title={document.name}>
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <button
+              type="button"
+              className="truncate rounded-sm text-left text-sm font-semibold leading-5 hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              title="Rename"
+              onClick={onRenameRequest}
+            >
               {document.name}
-            </span>
+            </button>
             {runStatus ? (
               <Badge
                 variant="outline"
@@ -96,40 +109,65 @@ export function DocumentTicketHeader({
               </Badge>
             ) : null}
           </div>
-          <div className="mt-1 text-xs text-muted-foreground">
-            Last activity: {formatTimestamp(document.activityAt)}
-          </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
+          {showViewSwitch ? (
+            <TabsList className="flex items-center rounded-full border border-border bg-muted/40 p-1">
+              <TabsTrigger
+                value="activity"
+                className="rounded-full px-3 py-1 text-xs text-muted-foreground aria-selected:bg-background aria-selected:text-foreground aria-selected:shadow-sm"
+              >
+                Chat
+              </TabsTrigger>
+              <TabsTrigger
+                value="preview"
+                className="rounded-full px-3 py-1 text-xs text-muted-foreground aria-selected:bg-background aria-selected:text-foreground aria-selected:shadow-sm"
+              >
+                Preview
+              </TabsTrigger>
+            </TabsList>
+          ) : null}
           <Button
             size="sm"
             variant={isRunActive ? "secondary" : "outline"}
-            className="gap-1.5"
+            className="gap-1.5 rounded-full"
             onClick={onPrimaryAction}
             disabled={isRunActionPending}
           >
-            {isRunActive ? <CloseIcon className="h-4 w-4" /> : <RefreshIcon className="h-4 w-4" />}
+            {isRunActive ? <CloseIcon data-icon="inline-start" /> : <RefreshIcon data-icon="inline-start" />}
             {primaryActionLabel}
           </Button>
-          <Button size="sm" variant="ghost" className="gap-1.5" onClick={onRenameRequest}>
-            <PencilLine className="h-4 w-4" />
-            Rename
-          </Button>
-          <Button asChild size="sm" variant="secondary">
+          <Button asChild size="sm" variant="secondary" className="gap-1.5 rounded-full">
             <a href={downloadHref} target="_blank" rel="noreferrer">
+              <Download data-icon="inline-start" />
               Download
             </a>
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button size="sm" variant="outline">
-                More
+              <Button size="icon" variant="outline" className="size-8 rounded-full" aria-label="More">
+                <MoreHorizontal data-icon="inline-start" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              <DropdownMenuLabel className="max-w-64">
+                <span className="block truncate text-xs font-normal text-muted-foreground">
+                  DOC-{shortId(document.id, 6)}
+                </span>
+                <span className="block truncate text-xs font-normal text-muted-foreground">
+                  {formatTimestamp(document.activityAt)}
+                </span>
+                {document.lastRun?.id ? (
+                  <span className="block truncate font-mono text-xs font-normal text-muted-foreground">
+                    Run {shortId(document.lastRun.id)}
+                  </span>
+                ) : null}
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
               <DropdownMenuItem asChild>
                 <a href={originalHref} target="_blank" rel="noreferrer">
+                  <Download />
                   Download original
                 </a>
               </DropdownMenuItem>

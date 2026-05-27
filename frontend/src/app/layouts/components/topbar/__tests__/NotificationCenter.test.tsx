@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -12,6 +13,16 @@ import {
 } from "@/api/documents";
 import { WorkspaceProvider } from "@/pages/Workspace/context/WorkspaceContext";
 import type { WorkspaceProfile } from "@/types/workspaces";
+
+const mockNavigate = vi.hoisted(() => vi.fn());
+
+vi.mock("react-router-dom", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("react-router-dom")>();
+  return {
+    ...actual,
+    useNavigate: () => mockNavigate,
+  };
+});
 
 vi.mock("@/api/documents", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/api/documents")>();
@@ -68,6 +79,7 @@ function buildNotification(index: number): UserNotification {
     createdAt: "2026-05-26T12:00:00.000Z",
     documentId: `document-${index}`,
     documentName: `Document ${index}`,
+    documentDeletedAt: null,
     comment: {
       id: `comment-${index}`,
       workspaceId: workspace.id,
@@ -90,6 +102,7 @@ function buildNotification(index: number): UserNotification {
 describe("NotificationCenter", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockNavigate.mockClear();
     mockListUserNotifications.mockResolvedValue(Array.from({ length: 47 }, (_, index) => buildNotification(index)));
     mockMarkNotificationAsRead.mockImplementation(async (_workspaceId, notificationId) => buildNotification(Number(notificationId)));
     mockMarkAllNotificationsAsRead.mockResolvedValue();
@@ -103,10 +116,53 @@ describe("NotificationCenter", () => {
     document.documentElement.dataset.theme = "default";
     const { queryClient } = renderNotificationCenter();
 
+    const trigger = screen.getByRole("button", { name: "Open notifications menu" });
     const badge = await screen.findByText("47");
 
+    expect(trigger).toHaveClass("hover:text-accent-foreground");
     expect(badge).toHaveClass("bg-white", "text-red-700", "ring-red-600");
     expect(badge).not.toHaveClass("bg-destructive", "text-destructive-foreground");
+
+    queryClient.clear();
+  });
+
+  it("navigates archived notifications to the activity tab with a highlight target", async () => {
+    const user = userEvent.setup();
+    const notification = {
+      ...buildNotification(1),
+      documentDeletedAt: "2026-05-27T12:00:00.000Z",
+    };
+    mockListUserNotifications.mockResolvedValue([notification]);
+
+    const { queryClient } = renderNotificationCenter();
+
+    await user.click(await screen.findByRole("button", { name: "Open notifications menu" }));
+    await user.click(await screen.findByText("Document 1"));
+
+    expect(mockNavigate).toHaveBeenCalledWith(
+      "/workspaces/workspace-1/documents/document-1?tab=activity&highlightCommentId=comment-1&lifecycle=archived",
+    );
+
+    queryClient.clear();
+  });
+
+  it("navigates output-file notifications to their source document without comment highlighting", async () => {
+    const user = userEvent.setup();
+    const notification = {
+      ...buildNotification(2),
+      documentId: "source-document-2",
+      documentDeletedAt: "2026-05-27T12:00:00.000Z",
+    };
+    mockListUserNotifications.mockResolvedValue([notification]);
+
+    const { queryClient } = renderNotificationCenter();
+
+    await user.click(await screen.findByRole("button", { name: "Open notifications menu" }));
+    await user.click(await screen.findByText("Document 2"));
+
+    expect(mockNavigate).toHaveBeenCalledWith(
+      "/workspaces/workspace-1/documents/source-document-2?tab=activity&lifecycle=archived",
+    );
 
     queryClient.clear();
   });

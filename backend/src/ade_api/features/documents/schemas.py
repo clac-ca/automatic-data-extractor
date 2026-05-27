@@ -729,6 +729,7 @@ class UserNotificationOut(BaseSchema):
     comment: DocumentCommentOut
     document_id: UUIDStr = Field(alias="documentId")
     document_name: str = Field(alias="documentName")
+    document_deleted_at: datetime | None = Field(default=None, alias="documentDeletedAt")
 
 
 __all__ = [

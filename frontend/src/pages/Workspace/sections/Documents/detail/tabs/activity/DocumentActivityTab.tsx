@@ -1,9 +1,7 @@
-import type { DocumentActivityFilter } from "@/pages/Workspace/sections/Documents/shared/navigation";
 import type { DocumentRow } from "@/pages/Workspace/sections/Documents/shared/types";
 
 import { DocumentActivityComposer } from "./components/DocumentActivityComposer";
 import { DocumentActivityFeed } from "./components/DocumentActivityFeed";
-import { DocumentActivityHeader } from "./components/DocumentActivityHeader";
 import { useDocumentActivityTimeline } from "./hooks/useDocumentActivityTimeline";
 import { useDocumentActivityUiState } from "./hooks/useDocumentActivityUiState";
 import { filterActivityItems } from "./model";
@@ -11,13 +9,9 @@ import { filterActivityItems } from "./model";
 export function DocumentActivityTab({
   workspaceId,
   document,
-  filter,
-  onFilterChange,
 }: {
   workspaceId: string;
   document: DocumentRow;
-  filter: DocumentActivityFilter;
-  onFilterChange: (filter: DocumentActivityFilter) => void;
 }) {
   const timeline = useDocumentActivityTimeline({
     workspaceId,
@@ -28,16 +22,11 @@ export function DocumentActivityTab({
     replyToItem: timeline.replyToItem,
     editComment: timeline.editComment,
   });
-  const visibleItems = filterActivityItems(timeline.items, filter);
-  const showDiscussions = filter !== "events";
+  const visibleItems = filterActivityItems(timeline.items, "all");
+  const showDiscussions = true;
 
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-background">
-      <DocumentActivityHeader
-        filter={filter}
-        onFilterChange={onFilterChange}
-      />
-
+    <div className="relative flex h-full flex-col overflow-hidden bg-background">
       <DocumentActivityFeed
         workspaceId={workspaceId}
         currentUser={timeline.currentUser}

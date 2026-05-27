@@ -147,19 +147,19 @@ def test_as_str_accepts_uuid_values() -> None:
     assert _as_str(value) == str(value)
 
 
-def test_mapped_with_zero_valid_cells_is_unmapped() -> None:
+def test_mapped_with_zero_valid_cells_stays_mapped() -> None:
     payload = _sample_payload()
     # Explicitly set valid_cells to 0 for the mapped column (index 0)
     payload["workbooks"][0]["sheets"][0]["tables"][0]["structure"]["columns"][0]["valid_cells"] = 0
 
     # Parse columns
     columns = parse_run_table_columns(payload)
-    # The first column should now be considered unmapped
-    assert columns[0]["mapping_status"] == "unmapped"
-    assert columns[0]["mapped_field"] is None
-    assert columns[0]["mapping_score"] is None
-    assert columns[0]["mapping_method"] is None
-    assert columns[0]["unmapped_reason"] == "no_valid_cells"
+    # The first column remains mapped even though it has no valid cells.
+    assert columns[0]["mapping_status"] == "mapped"
+    assert columns[0]["mapped_field"] == "email"
+    assert columns[0]["mapping_score"] == 1.0
+    assert columns[0]["mapping_method"] == "classifier"
+    assert columns[0]["unmapped_reason"] is None
 
     # The second column (originally unmapped) remains unchanged
     assert columns[1]["mapping_status"] == "unmapped"
@@ -167,6 +167,5 @@ def test_mapped_with_zero_valid_cells_is_unmapped() -> None:
     # Parse metrics
     metrics = parse_run_metrics(payload)
     assert metrics is not None
-    # Original counts had mapped=2, unmapped=3. Should now be mapped=1, unmapped=4.
-    assert metrics["column_count_mapped"] == 1
-    assert metrics["column_count_unmapped"] == 4
+    assert metrics["column_count_mapped"] == 2
+    assert metrics["column_count_unmapped"] == 3

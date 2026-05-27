@@ -40,4 +40,15 @@ describe("document detail navigation", () => {
     });
     expect(url).toBe("/workspaces/ws_1/documents/doc_1?tab=activity");
   });
+
+  it("builds archived activity links with comment highlighting", () => {
+    const url = buildDocumentDetailUrl("ws_1", "doc_1", {
+      tab: "activity",
+      highlightCommentId: "comment_1",
+      lifecycle: "archived",
+    });
+    expect(url).toBe(
+      "/workspaces/ws_1/documents/doc_1?tab=activity&highlightCommentId=comment_1&lifecycle=archived",
+    );
+  });
 });

@@ -1060,6 +1060,7 @@ class DocumentsService:
         results = []
         for n in notifications:
             comment_payload = DocumentCommentOut.model_validate(n.comment)
+            notification_document = self._notification_target_document(n.comment)
             results.append(
                 UserNotificationOut(
                     id=str(n.id),
@@ -1067,8 +1068,9 @@ class DocumentsService:
                     is_read=n.is_read,
                     created_at=n.created_at,
                     comment=comment_payload,
-                    document_id=str(n.comment.file_id),
+                    document_id=str(notification_document.id),
                     document_name=n.comment.file.name,
+                    document_deleted_at=notification_document.deleted_at,
                 )
             )
         return results
@@ -1097,14 +1099,16 @@ class DocumentsService:
         self._session.flush()
         
         comment_payload = DocumentCommentOut.model_validate(notification.comment)
+        notification_document = self._notification_target_document(notification.comment)
         return UserNotificationOut(
             id=str(notification.id),
             workspace_id=str(notification.workspace_id),
             is_read=notification.is_read,
             created_at=notification.created_at,
             comment=comment_payload,
-            document_id=str(notification.comment.file_id),
+            document_id=str(notification_document.id),
             document_name=notification.comment.file.name,
+            document_deleted_at=notification_document.deleted_at,
         )
 
     def mark_all_notifications_as_read(
@@ -1127,6 +1131,16 @@ class DocumentsService:
             n.updated_at = utc_now()
             
         self._session.flush()
+
+    def _notification_target_document(self, comment: FileComment) -> File:
+        """Return the document detail target for a notification comment."""
+
+        file = comment.file
+        if file.kind == FileKind.OUTPUT and file.source_file_id is not None:
+            source_file = self._session.get(File, file.source_file_id)
+            if source_file is not None:
+                return source_file
+        return file
 
     def build_list_row_for_document(
         self,
