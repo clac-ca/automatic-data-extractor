@@ -276,6 +276,7 @@ export function useDocumentPreviewModel({
     previewRows,
     rowNumbers,
     columnLabels,
+    visibleIndices,
     cellFormats: previewCellFormats,
     previewMeta,
     previewCountSummary,

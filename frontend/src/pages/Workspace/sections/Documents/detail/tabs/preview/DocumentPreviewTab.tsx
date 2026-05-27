@@ -5,6 +5,17 @@ import { useNotifications } from "@/providers/notifications";
 import type { DocumentPreviewSource } from "@/pages/Workspace/sections/Documents/shared/navigation";
 import type { DocumentRow } from "@/pages/Workspace/sections/Documents/shared/types";
 
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+
 import { DocumentPreviewGrid } from "./components/DocumentPreviewGrid";
 import { DocumentPreviewHeader } from "./components/DocumentPreviewHeader";
 import { DocumentPreviewSheetTabs } from "./components/DocumentPreviewSheetTabs";
@@ -52,6 +63,69 @@ export function DocumentPreviewTab({
 
   const [editedRows, setEditedRows] = useState<string[][] | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [selectedColumnForPopup, setSelectedColumnForPopup] = useState<{
+    title: string;
+    originalName: string;
+  } | null>(null);
+
+  const handleHeaderMenuClick = useCallback((gridColumnIndex: number) => {
+    // Map grid visible column index to sheet physical column index
+    const physicalIndex = model.visibleIndices?.[gridColumnIndex];
+    if (physicalIndex === undefined) return;
+
+    // Search in document's column mapping telemetry
+    const activeSheetName = sheet || (model.selectedSheet?.name ?? null);
+    const lastRunTableColumns = document.lastRunTableColumns;
+
+    let mapping = null;
+    const columnName = model.previewRows?.[0]?.[gridColumnIndex];
+
+    if (source === "normalized") {
+      // In normalized mode, the columns shown are the output schema columns.
+      // Get the column name from row 0 of the visible columns.
+      if (columnName) {
+        const normName = columnName.toLowerCase();
+        // Try matching by name and active sheet
+        mapping = lastRunTableColumns?.find((col) => 
+          (col.header_raw?.toLowerCase() === normName ||
+           col.header_normalized?.toLowerCase() === normName ||
+           col.mapped_field?.toLowerCase() === normName) && 
+          col.sheet_name === activeSheetName
+        );
+        // Fallback to matching by name only (across any sheet)
+        if (!mapping) {
+          mapping = lastRunTableColumns?.find((col) => 
+            col.header_raw?.toLowerCase() === normName ||
+            col.header_normalized?.toLowerCase() === normName ||
+            col.mapped_field?.toLowerCase() === normName
+          );
+        }
+      }
+    } else {
+      // In original mode, column indexes map directly to the original sheet's columns
+      mapping = lastRunTableColumns?.find((col) => 
+        col.sheet_name === activeSheetName && col.column_index === physicalIndex
+      );
+      // Fallback: If index lookup failed but we have a columnName from row 0, match by name
+      if (!mapping && columnName) {
+        const normName = columnName.toLowerCase();
+        mapping = lastRunTableColumns?.find((col) => 
+          (col.header_raw?.toLowerCase() === normName ||
+           col.header_normalized?.toLowerCase() === normName ||
+           col.mapped_field?.toLowerCase() === normName) &&
+          col.sheet_name === activeSheetName
+        );
+      }
+    }
+
+    const originalName = mapping?.header_raw ?? "no original column";
+    const columnLabel = model.columnLabels[gridColumnIndex] || spreadsheetColumnLabel(physicalIndex);
+
+    setSelectedColumnForPopup({
+      title: columnLabel,
+      originalName,
+    });
+  }, [model.visibleIndices, model.columnLabels, model.previewRows, model.selectedSheet?.name, document.lastRunTableColumns, sheet, source]);
 
   // Reset editedRows when switching sheet, source, or when preview rows change
   useEffect(() => {
@@ -161,6 +235,7 @@ export function DocumentPreviewTab({
               cellFormats={model.cellFormats}
               isReadOnly={!ENABLE_PREVIEW_EDITING || source === "original"}
               onRowsChange={handleRowsChange}
+              onHeaderMenuClick={handleHeaderMenuClick}
               className="h-full"
             />
           </div>
@@ -173,6 +248,62 @@ export function DocumentPreviewTab({
           />
         </div>
       )}
+
+      <Dialog
+        open={selectedColumnForPopup !== null}
+        onOpenChange={(open) => !open && setSelectedColumnForPopup(null)}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Column Original Header Info</DialogTitle>
+            <DialogDescription>
+              Introspected original column name from raw input file.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="flex flex-col gap-2 rounded-lg bg-muted/30 p-4 border border-border">
+              <div className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">
+                Preview Column Label
+              </div>
+              <div className="text-base font-bold text-foreground">
+                Column {selectedColumnForPopup?.title}
+              </div>
+            </div>
+            <div className="flex flex-col gap-2 rounded-lg bg-muted/30 p-4 border border-border">
+              <div className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">
+                Original Column Name
+              </div>
+              <div className="text-base font-bold text-foreground">
+                {selectedColumnForPopup?.originalName === "no original column" ? (
+                  <span className="text-muted-foreground italic font-medium">no original column</span>
+                ) : (
+                  <span className="text-primary">{selectedColumnForPopup?.originalName}</span>
+                )}
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="button" variant="secondary">
+                Dismiss
+              </Button>
+            </DialogClose>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
+}
+
+function spreadsheetColumnLabel(index: number) {
+  let label = "";
+  let n = index + 1;
+
+  while (n > 0) {
+    const remainder = (n - 1) % 26;
+    label = String.fromCharCode(65 + remainder) + label;
+    n = Math.floor((n - 1) / 26);
+  }
+
+  return label;
 }

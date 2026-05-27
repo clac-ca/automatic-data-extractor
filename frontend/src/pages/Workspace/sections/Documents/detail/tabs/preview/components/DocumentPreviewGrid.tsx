@@ -44,7 +44,41 @@ const SPREADSHEET_PREVIEW_THEME: Partial<Theme> = {
 const PREVIEW_TEXT_CELL_RENDERER: InternalCellRenderer<TextCell> = {
   ...textCellRenderer,
   draw: (args, cell) => {
+    const bgCell = cell.themeOverride?.bgCell;
     const textColor = cell.themeOverride?.textDark;
+
+    if (bgCell) {
+      // 1. Draw custom background color
+      args.ctx.fillStyle = bgCell;
+      args.ctx.fillRect(args.rect.x, args.rect.y, args.rect.width, args.rect.height);
+
+      // 2. Draw selection overlay if highlighted
+      if (args.highlighted) {
+        args.ctx.save();
+        args.ctx.fillStyle = args.theme.accentLight;
+        args.ctx.globalAlpha = 0.25; // Draw overlay with opacity to preserve the original color underneath
+        args.ctx.fillRect(args.rect.x, args.rect.y, args.rect.width, args.rect.height);
+        args.ctx.restore();
+      }
+
+      // 3. Draw text with custom textDark and transparent fill color to prevent overwrite
+      const strokeColor = textColor || args.theme.textDark;
+      args.ctx.fillStyle = strokeColor; // Make sure the canvas font color brush is set back to our text color instead of selection color
+      textCellRenderer.draw(
+        {
+          ...args,
+          cellFillColor: "rgba(0,0,0,0)",
+          theme: {
+            ...args.theme,
+            textDark: strokeColor,
+          },
+        },
+        cell,
+      );
+      return;
+    }
+
+    // Default cell highlight contrast rendering
     if (!args.highlighted || !textColor) {
       textCellRenderer.draw(args, cell);
       return;
@@ -82,6 +116,7 @@ export function DocumentPreviewGrid({
   cellFormats,
   isReadOnly = false,
   onRowsChange,
+  onHeaderMenuClick,
   className,
 }: {
   hasSheetError: boolean;
@@ -95,14 +130,35 @@ export function DocumentPreviewGrid({
   cellFormats: PreviewCellFormat[];
   isReadOnly?: boolean;
   onRowsChange?: (rows: string[][]) => void;
+  onHeaderMenuClick?: (columnIndex: number) => void;
   className?: string;
 }) {
   const paletteTheme = useGlideDataEditorTheme();
 
   const dataEditorTheme = useMemo(
-    () => ({ ...paletteTheme, ...SPREADSHEET_PREVIEW_THEME }),
+    () => ({
+      ...paletteTheme,
+      ...SPREADSHEET_PREVIEW_THEME,
+      fgIconHeader: paletteTheme.accentColor || "#4f5dff",
+      bgIconHeader: "rgba(0,0,0,0)",
+    }),
     [paletteTheme],
   );
+
+  const customHeaderIcons = useMemo(() => {
+    return {
+      plus: (props: { fgColor: string }) => `
+        <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none">
+          <!-- Background thick stroke for high-contrast halo on dark selected headers -->
+          <path d="M5 12h14" stroke="#ffffff" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" />
+          <path d="M12 5v14" stroke="#ffffff" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" />
+          <!-- Foreground stroke in brand accent color -->
+          <path d="M5 12h14" stroke="${props.fgColor}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+          <path d="M12 5v14" stroke="${props.fgColor}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+      `
+    };
+  }, []);
 
   const initialGridRows = useMemo(() => {
     return rows.map((row) => (Array.isArray(row) ? row.map(renderPreviewCell) : []));
@@ -147,6 +203,7 @@ export function DocumentPreviewGrid({
         id: `column-${columnIndex}`,
         title: label,
         hasMenu: true,
+        menuIcon: "plus",
         width: estimateColumnWidth(label, columnIndex, gridRows),
       })),
     ];
@@ -215,6 +272,15 @@ export function DocumentPreviewGrid({
     });
   }, [isReadOnly, onRowsChange]);
 
+  const handleHeaderMenuClick = useCallback(
+    (col: number) => {
+      if (col > 0 && onHeaderMenuClick) {
+        onHeaderMenuClick(col - 1);
+      }
+    },
+    [onHeaderMenuClick],
+  );
+
   if (hasSheetError || hasPreviewError) {
     return (
       <div className="rounded-lg border border-border bg-background p-4 text-sm text-muted-foreground">
@@ -274,11 +340,14 @@ export function DocumentPreviewGrid({
         fixedShadowX
         fixedShadowY
         onCellEdited={handleCellEdited}
+        onHeaderMenuClick={handleHeaderMenuClick}
+        onHeaderClick={handleHeaderMenuClick}
         onPaste={true}
         editOnType
         copyHeaders={false}
         renderers={PREVIEW_CELL_RENDERERS}
         theme={dataEditorTheme}
+        headerIcons={customHeaderIcons}
       />
     </div>
   );
