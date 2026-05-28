@@ -950,7 +950,6 @@ def patch_document_tags(
     response_model=list[UserNotificationOut],
     status_code=status.HTTP_200_OK,
     summary="List unread and read notifications for the current user",
-    response_model_exclude_none=True,
     responses={
         status.HTTP_401_UNAUTHORIZED: {
             "description": "Authentication required to read notifications.",
@@ -979,7 +978,6 @@ def list_user_notifications(
     response_model=UserNotificationOut,
     status_code=status.HTTP_200_OK,
     summary="Mark a specific notification as read",
-    response_model_exclude_none=True,
     responses={
         status.HTTP_401_UNAUTHORIZED: {
             "description": "Authentication required to mark notifications as read.",
