@@ -4,8 +4,11 @@ import {
   GridCellKind,
   getLuminance,
   textCellRenderer,
+  CompactSelection,
+  type CellClickedEventArgs,
   type EditableGridCell,
   type GridColumn,
+  type GridSelection,
   type InnerGridCell,
   type InternalCellRenderer,
   type Item,
@@ -44,7 +47,41 @@ const SPREADSHEET_PREVIEW_THEME: Partial<Theme> = {
 const PREVIEW_TEXT_CELL_RENDERER: InternalCellRenderer<TextCell> = {
   ...textCellRenderer,
   draw: (args, cell) => {
+    const bgCell = cell.themeOverride?.bgCell;
     const textColor = cell.themeOverride?.textDark;
+
+    if (bgCell) {
+      // 1. Draw custom background color
+      args.ctx.fillStyle = bgCell;
+      args.ctx.fillRect(args.rect.x, args.rect.y, args.rect.width, args.rect.height);
+
+      // 2. Draw selection overlay if highlighted
+      if (args.highlighted) {
+        args.ctx.save();
+        args.ctx.fillStyle = args.theme.accentLight;
+        args.ctx.globalAlpha = 0.25; // Draw overlay with opacity to preserve the original color underneath
+        args.ctx.fillRect(args.rect.x, args.rect.y, args.rect.width, args.rect.height);
+        args.ctx.restore();
+      }
+
+      // 3. Draw text with custom textDark and transparent fill color to prevent overwrite
+      const strokeColor = textColor || args.theme.textDark;
+      args.ctx.fillStyle = strokeColor; // Make sure the canvas font color brush is set back to our text color instead of selection color
+      textCellRenderer.draw(
+        {
+          ...args,
+          cellFillColor: "rgba(0,0,0,0)",
+          theme: {
+            ...args.theme,
+            textDark: strokeColor,
+          },
+        },
+        cell,
+      );
+      return;
+    }
+
+    // Default cell highlight contrast rendering
     if (!args.highlighted || !textColor) {
       textCellRenderer.draw(args, cell);
       return;
@@ -82,6 +119,7 @@ export function DocumentPreviewGrid({
   cellFormats,
   isReadOnly = false,
   onRowsChange,
+  onHeaderMenuClick,
   className,
 }: {
   hasSheetError: boolean;
@@ -95,14 +133,36 @@ export function DocumentPreviewGrid({
   cellFormats: PreviewCellFormat[];
   isReadOnly?: boolean;
   onRowsChange?: (rows: string[][]) => void;
+  onHeaderMenuClick?: (columnIndex: number) => void;
   className?: string;
 }) {
   const paletteTheme = useGlideDataEditorTheme();
 
+  const [selection, setSelection] = useState<GridSelection>({
+    columns: CompactSelection.empty(),
+    rows: CompactSelection.empty(),
+  });
+
   const dataEditorTheme = useMemo(
-    () => ({ ...paletteTheme, ...SPREADSHEET_PREVIEW_THEME }),
+    () => ({
+      ...paletteTheme,
+      ...SPREADSHEET_PREVIEW_THEME,
+      fgIconHeader: paletteTheme.accentColor || "#4f5dff",
+      bgIconHeader: "rgba(0,0,0,0)",
+    }),
     [paletteTheme],
   );
+
+  const customHeaderIcons = useMemo(() => {
+    return {
+      plus: (props: { fgColor: string }) => `
+        <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="${props.fgColor}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-plus">
+          <path d="M5 12h14" />
+          <path d="M12 5v14" />
+        </svg>
+      `
+    };
+  }, []);
 
   const initialGridRows = useMemo(() => {
     return rows.map((row) => (Array.isArray(row) ? row.map(renderPreviewCell) : []));
@@ -143,19 +203,27 @@ export function DocumentPreviewGrid({
           textDark: "#5f6368",
         },
       },
-      ...renderedColumnLabels.map((label, columnIndex) => ({
-        id: `column-${columnIndex}`,
-        title: label,
-        hasMenu: true,
-        width: estimateColumnWidth(label, columnIndex, gridRows),
-      })),
+      ...renderedColumnLabels.map((label, columnIndex) => {
+        const isSelected = selection.columns.hasIndex(columnIndex + 1);
+        return {
+          id: `column-${columnIndex}`,
+          title: label,
+          hasMenu: true,
+          menuIcon: "plus",
+          width: estimateColumnWidth(label, columnIndex, gridRows),
+          themeOverride: isSelected
+            ? { fgIconHeader: "#ffffff" }
+            : undefined,
+        };
+      }),
     ];
-  }, [gridRows, renderedColumnLabels]);
+  }, [gridRows, renderedColumnLabels, selection.columns]);
 
   const getCellContent = useCallback(
     ([columnIndex, rowIndex]: Item): TextCell => {
       if (columnIndex === 0) {
         const value = String(resolveRowNumber(rowNumbers, rowIndex));
+        const isSelected = selection.rows.hasIndex(rowIndex);
         return {
           kind: GridCellKind.Text,
           data: value,
@@ -164,8 +232,8 @@ export function DocumentPreviewGrid({
           readonly: true,
           contentAlign: "center",
           themeOverride: {
-            bgCell: "#f1f3f4",
-            textDark: "#5f6368",
+            bgCell: isSelected ? dataEditorTheme.accentColor : "#f1f3f4",
+            textDark: isSelected ? "#ffffff" : "#5f6368",
           },
         };
       }
@@ -183,7 +251,7 @@ export function DocumentPreviewGrid({
         ...buildCellFormatProps(cellFormat),
       };
     },
-    [cellFormatByPosition, gridRows, rowNumbers, isReadOnly],
+    [cellFormatByPosition, dataEditorTheme.accentColor, gridRows, isReadOnly, rowNumbers, selection.rows],
   );
 
   const handleCellEdited = useCallback((cell: Item, newValue: EditableGridCell) => {
@@ -214,6 +282,38 @@ export function DocumentPreviewGrid({
       return nextRows;
     });
   }, [isReadOnly, onRowsChange]);
+
+  const handleHeaderMenuClick = useCallback(
+    (col: number) => {
+      if (col > 0 && onHeaderMenuClick) {
+        onHeaderMenuClick(col - 1);
+      }
+    },
+    [onHeaderMenuClick],
+  );
+
+  const handleCellClicked = useCallback((cell: Item, event: CellClickedEventArgs) => {
+    const [columnIndex, rowIndex] = cell;
+    if (columnIndex !== 0) {
+      return;
+    }
+
+    event.preventDefault();
+    setSelection((currentSelection) => {
+      const isMultiSelect = event.ctrlKey || event.metaKey;
+      const nextRows = isMultiSelect
+        ? currentSelection.rows.hasIndex(rowIndex)
+          ? currentSelection.rows.remove(rowIndex)
+          : currentSelection.rows.add(rowIndex)
+        : CompactSelection.fromSingleSelection(rowIndex);
+
+      return {
+        columns: CompactSelection.empty(),
+        rows: nextRows,
+        current: undefined,
+      };
+    });
+  }, []);
 
   if (hasSheetError || hasPreviewError) {
     return (
@@ -261,8 +361,10 @@ export function DocumentPreviewGrid({
         getCellContent={getCellContent}
         getCellsForSelection={true}
         freezeColumns={1}
+        gridSelection={selection}
+        onGridSelectionChange={setSelection}
         rangeSelect="multi-rect"
-        rowSelect="none"
+        rowSelect="multi"
         columnSelect="multi"
         drawFocusRing
         scrollToActiveCell
@@ -274,11 +376,14 @@ export function DocumentPreviewGrid({
         fixedShadowX
         fixedShadowY
         onCellEdited={handleCellEdited}
+        onCellClicked={handleCellClicked}
+        onHeaderMenuClick={handleHeaderMenuClick}
         onPaste={true}
         editOnType
         copyHeaders={false}
         renderers={PREVIEW_CELL_RENDERERS}
         theme={dataEditorTheme}
+        headerIcons={customHeaderIcons}
       />
     </div>
   );

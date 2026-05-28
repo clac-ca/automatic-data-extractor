@@ -123,7 +123,26 @@ async def test_mention_creates_user_notification(
     assert matching_notif is not None
     assert matching_notif["isRead"] is False
     assert matching_notif["documentName"] == "comment-doc.xlsx"
+    assert matching_notif["documentDeletedAt"] is None
     assert matching_notif["comment"]["body"] == body
+
+    archive_resp = await async_client.post(
+        f"/api/v1/workspaces/{seed_identity.workspace_id}/documents/{document.id}/archive",
+        headers=await _auth_headers(async_client, author),
+    )
+    assert archive_resp.status_code == 204, archive_resp.text
+
+    archived_notif_resp = await async_client.get(
+        f"/api/v1/workspaces/{seed_identity.workspace_id}/documents/notifications",
+        headers=await _auth_headers(async_client, mentioned),
+    )
+    assert archived_notif_resp.status_code == 200, archived_notif_resp.text
+    archived_matching_notif = next(
+        (n for n in archived_notif_resp.json() if n["id"] == str(notification.id)),
+        None,
+    )
+    assert archived_matching_notif is not None
+    assert archived_matching_notif["documentDeletedAt"] is not None
 
     # 3. Verify author (sender) does not have a notification
     author_notif_resp = await async_client.get(

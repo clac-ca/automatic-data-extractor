@@ -1,20 +1,8 @@
 import type { ReactNode } from "react";
 import { PlayCircle } from "lucide-react";
 
-import {
-  TimelineConnector,
-  TimelineContent,
-  TimelineDescription,
-  TimelineDot,
-  TimelineItem,
-  TimelineTime,
-  TimelineTitle,
-} from "@/components/ui/timeline";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
-  formatTimestamp,
   shortId,
 } from "@/pages/Workspace/sections/Documents/shared/utils";
 import type { RunStatus } from "@/types";
@@ -41,9 +29,6 @@ function ActivityEventShell({
   iconClassName,
   title,
   description,
-  showReplyAction,
-  isReplyOpen,
-  onReplyToggle,
   children,
 }: {
   item: Extract<ActivityItem, { type: "document" | "run" }>;
@@ -51,41 +36,23 @@ function ActivityEventShell({
   iconClassName?: string;
   title: ReactNode;
   description?: ReactNode;
-  showReplyAction: boolean;
-  isReplyOpen: boolean;
-  onReplyToggle: () => void;
   children?: ReactNode;
 }) {
   return (
-    <TimelineItem id={item.key} className="gap-3">
-      <TimelineDot className={cn("mt-1 flex items-center justify-center", iconClassName)}>{icon}</TimelineDot>
-      <TimelineConnector />
-      <TimelineContent className="space-y-3 pb-2">
-        <div className="group/event flex items-start justify-between gap-3">
-          <div className="min-w-0 space-y-1">
-            <TimelineTitle className="text-sm text-foreground">{title}</TimelineTitle>
-            {description ? (
-              <TimelineDescription className="text-xs leading-5">{description}</TimelineDescription>
-            ) : null}
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <TimelineTime dateTime={item.activityAt}>{formatTimestamp(item.activityAt)}</TimelineTime>
-            {showReplyAction ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-7 px-2 text-xs text-muted-foreground"
-                onClick={onReplyToggle}
-              >
-                {isReplyOpen ? "Cancel" : "Reply"}
-              </Button>
-            ) : null}
-          </div>
+    <div id={item.key} className="flex flex-col items-center gap-3">
+      <div className="group/event flex max-w-full items-center gap-3 rounded-full border border-border/70 bg-card px-3 py-2 text-xs text-muted-foreground shadow-sm">
+        <span className={cn("flex size-7 items-center justify-center rounded-full border bg-background", iconClassName)}>
+          {icon}
+        </span>
+        <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
+          <span className="truncate font-medium text-foreground">{title}</span>
+          {description ? (
+            <span className="truncate text-muted-foreground">{description}</span>
+          ) : null}
         </div>
-        {children}
-      </TimelineContent>
-    </TimelineItem>
+      </div>
+      {children ? <div className="w-full">{children}</div> : null}
+    </div>
   );
 }
 
@@ -93,18 +60,15 @@ function RunDescription({ item }: { item: Extract<ActivityItem, { type: "run" }>
   const hasDuration = item.run.durationSeconds !== null && item.run.durationSeconds !== undefined;
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <span>
       {hasDuration ? (
         <span>
           Duration <span className="font-medium text-foreground">{Math.round(item.run.durationSeconds ?? 0)}s</span>
         </span>
       ) : null}
-      {item.run.exitCode !== null && item.run.exitCode !== undefined ? <span>Exit {item.run.exitCode}</span> : null}
       {item.run.errorMessage ? <span className="text-destructive">{item.run.errorMessage}</span> : null}
-      {!hasDuration && item.run.exitCode === null && !item.run.errorMessage ? (
-        <span>Status: {formatRunStatus(String(item.run.status))}</span>
-      ) : null}
-    </div>
+      {!hasDuration && !item.run.errorMessage ? <span>{formatRunStatus(String(item.run.status))}</span> : null}
+    </span>
   );
 }
 
@@ -126,6 +90,8 @@ function buildReplyTarget(item: ActivityItem): ActivityReplyTarget {
 
 export function DocumentActivityFeedItem({
   item,
+  isClusteredWithPrevious = false,
+  isClusteredWithNext = false,
   workspaceId,
   currentUser,
   showDiscussions,
@@ -149,6 +115,8 @@ export function DocumentActivityFeedItem({
   onRequestDelete,
 }: {
   item: ActivityItem;
+  isClusteredWithPrevious?: boolean;
+  isClusteredWithNext?: boolean;
   workspaceId: string;
   currentUser: ActivityCurrentUser;
   showDiscussions: boolean;
@@ -178,45 +146,41 @@ export function DocumentActivityFeedItem({
 
   if (item.type === "note") {
     return (
-      <TimelineItem id={item.key} className="gap-3">
-        <TimelineDot className="mt-1 border-primary/40 bg-primary/5 text-primary">
-          <ACTIVITY_ICON.note className="h-4 w-4" />
-        </TimelineDot>
-        <TimelineConnector />
-        <TimelineContent className="pb-2">
-          <DocumentCommentThreadCard
-            variant="note"
-            workspaceId={workspaceId}
-            currentUser={currentUser}
-            thread={item.thread}
-            isReplyOpen={isReplyOpen}
-            replyDraft={replyDraft}
-            isReplySubmitting={submittingReplyTargetKey === item.replyTargetKey}
-            replyErrorMessage={replyErrorMessage}
-            activeEditCommentId={activeEditCommentId}
-            activeEditDraft={activeEditDraft}
-            submittingEditCommentId={submittingEditCommentId}
-            editErrorCommentId={editErrorCommentId}
-            editErrorMessage={editErrorMessage}
-            onStartReply={() => onStartReply(replyTarget)}
-            onCancelReply={onCancelReply}
-            onReplyDraftChange={(draft) => onReplyDraftChange(item.replyTargetKey, draft)}
-            onSubmitReply={(draft: NoteDraft) =>
-              onSubmitReply({
-                targetKey: item.replyTargetKey,
-                threadId: item.thread.id,
-                body: draft.body,
-                mentions: draft.mentions,
-              })
-            }
-            onStartEdit={onStartEdit}
-            onCancelEdit={onCancelEdit}
-            onEditDraftChange={onEditDraftChange}
-            onSubmitEdit={onSubmitEdit}
-            onRequestDelete={onRequestDelete}
-          />
-        </TimelineContent>
-      </TimelineItem>
+      <div className={cn(isClusteredWithPrevious && "-mt-3.5")}>
+        <DocumentCommentThreadCard
+          variant="note"
+          workspaceId={workspaceId}
+          currentUser={currentUser}
+          thread={item.thread}
+          clusterWithPrevious={isClusteredWithPrevious}
+          clusterWithNext={isClusteredWithNext}
+          isReplyOpen={isReplyOpen}
+          replyDraft={replyDraft}
+          isReplySubmitting={submittingReplyTargetKey === item.replyTargetKey}
+          replyErrorMessage={replyErrorMessage}
+          activeEditCommentId={activeEditCommentId}
+          activeEditDraft={activeEditDraft}
+          submittingEditCommentId={submittingEditCommentId}
+          editErrorCommentId={editErrorCommentId}
+          editErrorMessage={editErrorMessage}
+          onStartReply={() => onStartReply(replyTarget)}
+          onCancelReply={onCancelReply}
+          onReplyDraftChange={(draft) => onReplyDraftChange(item.replyTargetKey, draft)}
+          onSubmitReply={(draft: NoteDraft) =>
+            onSubmitReply({
+              targetKey: item.replyTargetKey,
+              threadId: item.thread.id,
+              body: draft.body,
+              mentions: draft.mentions,
+            })
+          }
+          onStartEdit={onStartEdit}
+          onCancelEdit={onCancelEdit}
+          onEditDraftChange={onEditDraftChange}
+          onSubmitEdit={onSubmitEdit}
+          onRequestDelete={onRequestDelete}
+        />
+      </div>
     );
   }
 
@@ -233,9 +197,6 @@ export function DocumentActivityFeedItem({
             Uploaded by <span className="font-medium text-foreground">{uploaderName}</span>
           </span>
         }
-        showReplyAction={showDiscussions}
-        isReplyOpen={isReplyOpen}
-        onReplyToggle={() => (isReplyOpen ? onCancelReply() : onStartReply(replyTarget))}
       >
         {showDiscussions && (item.thread || isReplyOpen) ? (
           <DocumentCommentThreadCard
@@ -285,18 +246,8 @@ export function DocumentActivityFeedItem({
       item={item}
       icon={<DotIcon className="h-4 w-4" />}
       iconClassName={cn("border-border bg-muted/30 text-muted-foreground", tone?.dot)}
-      title={
-        <div className="flex items-center gap-2">
-          <span className="font-mono">Run {shortId(item.run.id)}</span>
-          <Badge variant="outline" className={cn("capitalize", tone?.badge)}>
-            {formatRunStatus(String(item.run.status))}
-          </Badge>
-        </div>
-      }
+      title={<span className="font-mono">Run {shortId(item.run.id)}</span>}
       description={<RunDescription item={item} />}
-      showReplyAction={showDiscussions}
-      isReplyOpen={isReplyOpen}
-      onReplyToggle={() => (isReplyOpen ? onCancelReply() : onStartReply(replyTarget))}
     >
       {showDiscussions && (item.thread || isReplyOpen) ? (
         <DocumentCommentThreadCard

@@ -591,50 +591,11 @@ def parse_run_metrics(payload: dict[str, Any]) -> dict[str, Any] | None:
     metrics["column_count_total"] = _as_int(columns.get("total"))
     metrics["column_count_empty"] = _as_int(columns.get("empty"))
 
-    # Count how many columns are mapped but have valid_cells == 0
-    mapped_with_zero_valid = 0
-    workbooks = payload.get("workbooks")
-    if isinstance(workbooks, list):
-        for workbook in workbooks:
-            workbook_data = _as_dict(workbook) or {}
-            sheets = workbook_data.get("sheets")
-            if not isinstance(sheets, list):
-                continue
-            for sheet in sheets:
-                sheet_data = _as_dict(sheet) or {}
-                tables = sheet_data.get("tables")
-                if not isinstance(tables, list):
-                    continue
-                for table in tables:
-                    table_data = _as_dict(table) or {}
-                    structure = _as_dict(table_data.get("structure")) or {}
-                    columns_list = structure.get("columns")
-                    if not isinstance(columns_list, list):
-                        continue
-                    for column in columns_list:
-                        column_data = _as_dict(column) or {}
-                        mapping = _as_dict(column_data.get("mapping")) or {}
-                        mapping_status = _normalize_mapping_status(mapping.get("status"))
-                        if mapping_status == "mapped":
-                            non_empty = _as_int(column_data.get("non_empty_cells")) or 0
-                            valid = _as_int(column_data.get("valid_cells"))
-                            if valid is None:
-                                valid = non_empty
-                            if valid == 0:
-                                mapped_with_zero_valid += 1
-
     column_count_mapped = _as_int(columns.get("mapped"))
     column_count_unmapped = _as_int(columns.get("unmapped"))
 
-    if column_count_mapped is not None:
-        metrics["column_count_mapped"] = max(0, column_count_mapped - mapped_with_zero_valid)
-    else:
-        metrics["column_count_mapped"] = None
-
-    if column_count_unmapped is not None:
-        metrics["column_count_unmapped"] = column_count_unmapped + mapped_with_zero_valid
-    else:
-        metrics["column_count_unmapped"] = None
+    metrics["column_count_mapped"] = column_count_mapped
+    metrics["column_count_unmapped"] = column_count_unmapped
 
     fields = _as_dict(counts.get("fields")) or {}
     metrics["field_count_expected"] = _as_int(fields.get("expected"))
@@ -755,13 +716,6 @@ def parse_run_table_columns(payload: dict[str, Any]) -> list[dict[str, Any]]:
                     mapping_score = _as_float(mapping.get("score"))
                     mapping_method = _as_str(mapping.get("method"))
                     unmapped_reason = _as_str(mapping.get("unmapped_reason"))
-
-                    if mapping_status == "mapped" and valid == 0:
-                        mapping_status = "unmapped"
-                        mapped_field = None
-                        mapping_score = None
-                        mapping_method = None
-                        unmapped_reason = "no_valid_cells"
 
                     rows.append(
                         {

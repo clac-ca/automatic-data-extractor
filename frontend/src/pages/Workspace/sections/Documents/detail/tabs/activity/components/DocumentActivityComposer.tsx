@@ -1,5 +1,3 @@
-import { Separator } from "@/components/ui/separator";
-
 import type { NoteDraft } from "../activityTypes";
 import { DocumentCommentEditor } from "./DocumentCommentEditor";
 
@@ -15,21 +13,21 @@ export function DocumentActivityComposer({
   onCreateNote: (draft: NoteDraft) => Promise<void>;
 }) {
   return (
-    <>
-      <Separator />
-      <div className="bg-background px-4 py-2.5">
+    <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 px-4 pb-3 pt-8">
+      <div className="pointer-events-auto mx-auto max-w-4xl rounded-xl border border-border/70 bg-card p-2 shadow-sm">
         <DocumentCommentEditor
           workspaceId={workspaceId}
           mode="new"
           variant="compact"
           isSubmitting={isCreatingNote}
           errorMessage={noteError}
-          placeholder="Add a note, decision, or request..."
-          helperText="Add a note to the timeline. Enter sends, Shift+Enter adds a new line."
+          placeholder="Add a comment..."
+          helperText="Use @ to mention someone. Enter sends, Shift+Enter adds a new line."
           showHeading={false}
+          expandOnFocus={false}
           onSubmit={onCreateNote}
         />
       </div>
-    </>
+    </div>
   );
 }

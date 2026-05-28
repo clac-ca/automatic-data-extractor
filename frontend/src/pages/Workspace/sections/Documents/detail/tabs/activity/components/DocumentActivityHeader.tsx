@@ -9,15 +9,15 @@ export function DocumentActivityHeader({
   onFilterChange: (filter: DocumentActivityFilter) => void;
 }) {
   return (
-    <div className="border-b border-border bg-background px-4 py-3">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="border-b border-border bg-background/80 px-4 py-3 backdrop-blur-md">
+      <div className="mx-auto flex w-full max-w-5xl flex-wrap items-center justify-between gap-3">
         <div>
-          <div className="text-sm font-semibold">Activity</div>
+          <div className="text-sm font-semibold">Document chat</div>
           <div className="text-xs text-muted-foreground">
-            Notes and processing events for this document.
+            Ask questions, leave decisions, and review document events in context.
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 rounded-full border border-border bg-muted/40 p-1 shadow-sm">
           <FilterChip
             active={filter === "all"}
             onClick={() => onFilterChange("all")}
@@ -26,7 +26,7 @@ export function DocumentActivityHeader({
           <FilterChip
             active={filter === "comments"}
             onClick={() => onFilterChange("comments")}
-            label="Discussions"
+            label="Messages"
           />
           <FilterChip
             active={filter === "events"}
@@ -52,8 +52,9 @@ function FilterChip({
     <Button
       type="button"
       size="sm"
-      variant={active ? "secondary" : "outline"}
-      className="h-8 text-xs"
+      variant={active ? "secondary" : "ghost"}
+      className="h-7 rounded-full px-3 text-xs data-[active=true]:shadow-sm"
+      data-active={active ? "true" : undefined}
       onClick={onClick}
     >
       {label}

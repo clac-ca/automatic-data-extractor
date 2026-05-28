@@ -7,6 +7,8 @@ type DocumentDetailOptions = {
   activityFilter?: DocumentActivityFilter;
   source?: DocumentPreviewSource;
   sheet?: string | null;
+  highlightCommentId?: string | null;
+  lifecycle?: "active" | "archived" | null;
 };
 
 const VALID_ACTIVITY_FILTERS = new Set<DocumentActivityFilter>([
@@ -75,6 +77,13 @@ export function buildDocumentDetailUrl(
     if (sheet) {
       params.set("sheet", sheet);
     }
+  }
+  const highlightCommentId = options.highlightCommentId?.trim();
+  if (highlightCommentId) {
+    params.set("highlightCommentId", highlightCommentId);
+  }
+  if (options.lifecycle === "archived") {
+    params.set("lifecycle", "archived");
   }
 
   const query = params.toString();

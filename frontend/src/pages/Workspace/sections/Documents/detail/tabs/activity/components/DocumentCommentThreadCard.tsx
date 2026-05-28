@@ -1,11 +1,11 @@
-import { useMemo, type ReactNode } from "react";
+import type { ReactNode } from "react";
+import { Pencil, Trash2 } from "lucide-react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
-import { formatTimestamp } from "@/pages/Workspace/sections/Documents/shared/utils";
 
 import type {
   ActivityCurrentUser,
@@ -42,10 +42,10 @@ function renderCommentBody(comment: ActivityComment, currentUserId?: string) {
       <span
         key={`mention:${mention.user.id}:${safeStart}:${safeEnd}`}
         className={cn(
-          "rounded px-1 text-xs font-semibold select-none transition-all duration-200",
+          "inline-block rounded border px-1 text-xs font-semibold select-none transition-all duration-200",
           isCurrentUserMention
-            ? "bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/20 scale-105 inline-block mx-0.5 font-bold"
-            : "bg-primary/10 text-primary"
+            ? "border-primary/20 bg-primary/10 text-primary"
+            : "border-border bg-muted text-foreground"
         )}
       >
         {comment.body.slice(safeStart, safeEnd)}
@@ -81,6 +81,8 @@ function CommentRow({
   workspaceId,
   comment,
   currentUser,
+  isClustered,
+  isLastInCluster,
   isEditing,
   editDraft,
   isSubmittingEdit,
@@ -94,6 +96,8 @@ function CommentRow({
   workspaceId: string;
   comment: ActivityComment;
   currentUser: ActivityCurrentUser;
+  isClustered: boolean;
+  isLastInCluster: boolean;
   isEditing: boolean;
   editDraft?: NoteDraft | null;
   isSubmittingEdit: boolean;
@@ -112,84 +116,149 @@ function CommentRow({
     : null;
   const isHighlighted = highlightCommentId === comment.id;
 
-  const hasCurrentUserMention = useMemo(() => {
-    return (comment.mentions ?? []).some((m) => m.user.id === currentUser.id);
-  }, [comment.mentions, currentUser.id]);
-
-  const highlightClass = isHighlighted
-    ? "bg-amber-500/10 border-l-2 border-l-amber-500 px-3.5 py-2.5 -mx-3.5 rounded-r-md transition-all duration-700 animate-pulse-once"
-    : hasCurrentUserMention
-    ? "bg-amber-500/5 border-l-2 border-l-amber-500/40 px-3.5 py-2.5 -mx-3.5 rounded-r-md"
+  const bubbleHighlightClass = isHighlighted
+    ? "border-amber-500/60 bg-amber-500/10 ring-1 ring-amber-500/30 transition-all duration-700 animate-pulse-once"
     : "";
+  const isOwnMessage = comment.author?.id === currentUser.id;
+  const showAvatar = isLastInCluster;
+  const showMeta = !isClustered && !isOwnMessage;
 
   if (isEditing) {
     return (
-      <DocumentCommentEditor
-        workspaceId={workspaceId}
-        mode="edit"
-        comment={comment}
-        draft={editDraft}
-        variant="editing"
-        isSubmitting={isSubmittingEdit}
-        errorMessage={editErrorMessage}
-        onDraftChange={onEditDraftChange}
-        onCancel={onCancelEdit}
-        onSubmit={(draft) =>
-          onSubmitEdit({
-            commentId: comment.id,
-            body: draft.body,
-            mentions: draft.mentions,
-          })
-        }
-      />
+      <div className={cn("flex items-start gap-3", isOwnMessage && "justify-end")}>
+        {!isOwnMessage ? (
+          <Avatar className="mt-0.5 size-8 shrink-0 border border-border/70 bg-card shadow-sm">
+            <AvatarFallback className="bg-card text-[11px] font-semibold text-foreground">
+              {buildInitials(authorName)}
+            </AvatarFallback>
+          </Avatar>
+        ) : null}
+        <div className="w-full max-w-[44rem] rounded-xl border border-border/70 bg-card p-2 shadow-sm">
+          <DocumentCommentEditor
+            workspaceId={workspaceId}
+            mode="edit"
+            comment={comment}
+            draft={editDraft}
+            variant="editing"
+            isSubmitting={isSubmittingEdit}
+            errorMessage={editErrorMessage}
+            onDraftChange={onEditDraftChange}
+            onCancel={onCancelEdit}
+            onSubmit={(draft) =>
+              onSubmitEdit({
+                commentId: comment.id,
+                body: draft.body,
+                mentions: draft.mentions,
+              })
+            }
+          />
+        </div>
+      </div>
     );
   }
 
   return (
-    <div className={cn("group/comment flex items-start gap-3 transition-colors", comment.optimistic && "opacity-75", highlightClass)}>
-      <Avatar className="mt-0.5 h-7 w-7 shrink-0">
-        <AvatarFallback className="text-[11px] font-semibold">{buildInitials(authorName)}</AvatarFallback>
-      </Avatar>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              <span className="font-semibold text-foreground">{authorName}</span>
-              <span>{comment.optimistic ? "Sending..." : formatTimestamp(comment.createdAt)}</span>
-              {isEditedComment(comment) ? (
-                <Badge variant="outline" className="h-5 rounded-sm px-1.5 text-[10px] font-medium">
-                  Edited
-                </Badge>
-              ) : null}
+    <div
+      className={cn(
+        "group/comment flex items-end gap-2 transition-colors",
+        isOwnMessage && "justify-end",
+        comment.optimistic && "opacity-75",
+      )}
+    >
+      {!isOwnMessage && showAvatar ? (
+        <Avatar className="mb-0.5 size-8 shrink-0 border border-border/70 bg-card shadow-sm">
+          <AvatarFallback className="bg-card text-[11px] font-semibold text-foreground">
+            {buildInitials(authorName)}
+          </AvatarFallback>
+        </Avatar>
+      ) : null}
+      {!isOwnMessage && !showAvatar ? <div className="size-8 shrink-0" /> : null}
+      <div className={cn("min-w-0 flex max-w-[min(42rem,76%)] flex-col gap-0.5", isOwnMessage && "items-end")}>
+        {showMeta ? (
+          <div className="flex items-center gap-2 px-1">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                <span className="font-semibold text-foreground">{authorName}</span>
+                {isEditedComment(comment) ? (
+                  <Badge variant="outline" className="h-5 rounded-sm px-1.5 text-[10px] font-medium">
+                    Edited
+                  </Badge>
+                ) : null}
+              </div>
             </div>
           </div>
+        ) : null}
+        <div className={cn("flex items-center gap-1", isOwnMessage && "flex-row-reverse")}>
+          <div
+            className={cn(
+              "break-words rounded-2xl border px-4 py-2.5 text-sm leading-6 shadow-sm transition-shadow group-hover/comment:shadow-md",
+              isOwnMessage
+                ? "rounded-br-md border-primary/15 bg-primary/5 text-foreground"
+                : "rounded-bl-md border-border/70 bg-card text-foreground",
+              isClustered && isOwnMessage && "rounded-tr-md",
+              isClustered && !isOwnMessage && "rounded-tl-md",
+              !isLastInCluster && isOwnMessage && "rounded-br-md",
+              !isLastInCluster && !isOwnMessage && "rounded-bl-md",
+              bubbleHighlightClass,
+            )}
+          >
+            {renderCommentBody(comment, currentUser.id)}
+          </div>
           {canManage ? (
-            <div className="flex items-center gap-1 opacity-100 md:opacity-0 md:group-hover/comment:opacity-100 md:group-focus-within/comment:opacity-100">
+            <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover/comment:opacity-100 group-focus-within/comment:opacity-100">
               <Button
                 type="button"
                 variant="ghost"
-                size="sm"
-                className="h-6 px-2 text-[11px] text-muted-foreground"
+                size="icon"
+                className="size-7 rounded-full text-muted-foreground"
                 onClick={onEdit}
+                aria-label="Edit"
+                title="Edit"
               >
-                Edit
+                <Pencil data-icon="inline-start" />
               </Button>
               <Button
                 type="button"
                 variant="ghost"
-                size="sm"
-                className="h-6 px-2 text-[11px] text-muted-foreground"
+                size="icon"
+                className="size-7 rounded-full text-muted-foreground"
                 onClick={onRequestDelete}
+                aria-label="Delete"
+                title="Delete"
               >
-                Delete
+                <Trash2 data-icon="inline-start" />
               </Button>
             </div>
           ) : null}
         </div>
-        <div className="mt-1.5 text-sm leading-6 text-foreground">{renderCommentBody(comment, currentUser.id)}</div>
       </div>
+      {isOwnMessage && showAvatar ? (
+        <Avatar className="mb-0.5 size-7 shrink-0 border border-primary/20 bg-primary/5 shadow-sm">
+          <AvatarFallback className="bg-primary/5 text-[10px] font-semibold text-foreground">
+            {buildInitials(authorName)}
+          </AvatarFallback>
+        </Avatar>
+      ) : null}
+      {isOwnMessage && !showAvatar ? <div className="size-7 shrink-0" /> : null}
     </div>
   );
+}
+
+function isSameAuthor(left: ActivityComment, right: ActivityComment) {
+  const leftAuthor = left.author?.id ?? left.author?.email ?? null;
+  const rightAuthor = right.author?.id ?? right.author?.email ?? null;
+  return Boolean(leftAuthor && rightAuthor && leftAuthor === rightAuthor);
+}
+
+function isCloseInTime(left: ActivityComment, right: ActivityComment) {
+  const leftTime = new Date(left.createdAt).getTime();
+  const rightTime = new Date(right.createdAt).getTime();
+
+  if (Number.isNaN(leftTime) || Number.isNaN(rightTime)) {
+    return false;
+  }
+
+  return Math.abs(rightTime - leftTime) <= 15 * 60 * 1000;
 }
 
 export function DocumentCommentThreadCard({
@@ -197,6 +266,8 @@ export function DocumentCommentThreadCard({
   workspaceId,
   currentUser,
   thread,
+  clusterWithPrevious = false,
+  clusterWithNext = false,
   isReplyOpen,
   replyDraft,
   isReplySubmitting = false,
@@ -206,7 +277,6 @@ export function DocumentCommentThreadCard({
   submittingEditCommentId,
   editErrorCommentId,
   editErrorMessage,
-  onStartReply,
   onCancelReply,
   onReplyDraftChange,
   onSubmitReply,
@@ -220,6 +290,8 @@ export function DocumentCommentThreadCard({
   workspaceId: string;
   currentUser: ActivityCurrentUser;
   thread: ActivityThread | null;
+  clusterWithPrevious?: boolean;
+  clusterWithNext?: boolean;
   isReplyOpen: boolean;
   replyDraft?: NoteDraft | null;
   isReplySubmitting?: boolean;
@@ -248,20 +320,35 @@ export function DocumentCommentThreadCard({
   return (
     <div
       className={cn(
-        "overflow-hidden rounded-md border border-border/70 bg-background",
-        variant === "attached" && "mt-2.5",
+        "flex flex-col gap-1.5",
+        variant === "attached" && "mx-auto max-w-[92%]",
       )}
     >
       {comments.length > 0 ? (
-        <div>
-          {comments.map((comment, index) => (
-            <div key={comment.id}>
-              {index > 0 ? <Separator /> : null}
-              <div className="px-3 py-2.5">
+        <div className="flex flex-col gap-0.5">
+          {comments.map((comment, index) => {
+            const previousComment = comments[index - 1];
+            const nextComment = comments[index + 1];
+            const isClustered =
+              (Boolean(previousComment) &&
+                isSameAuthor(previousComment, comment) &&
+                isCloseInTime(previousComment, comment)) ||
+              (index === 0 && clusterWithPrevious);
+            const isLastInCluster =
+              !(
+                (nextComment && isSameAuthor(comment, nextComment) && isCloseInTime(comment, nextComment)) ||
+                (index === comments.length - 1 && clusterWithNext)
+              );
+
+            return (
+              <div key={comment.id}>
+                {variant === "attached" && index === 0 ? <Separator className="mb-3" /> : null}
                 <CommentRow
                   workspaceId={workspaceId}
                   comment={comment}
                   currentUser={currentUser}
+                  isClustered={isClustered}
+                  isLastInCluster={isLastInCluster}
                   isEditing={activeEditCommentId === comment.id}
                   editDraft={activeEditCommentId === comment.id ? activeEditDraft : null}
                   isSubmittingEdit={submittingEditCommentId === comment.id}
@@ -273,37 +360,27 @@ export function DocumentCommentThreadCard({
                   onSubmitEdit={onSubmitEdit}
                 />
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       ) : null}
 
-      <div className={cn("px-3 py-2.5", comments.length > 0 && "border-t border-border/70")}>
+      <div>
         {isReplyOpen ? (
-          <DocumentCommentEditor
-            workspaceId={workspaceId}
-            mode="reply"
-            draft={replyDraft}
-            variant="compact"
-            isSubmitting={isReplySubmitting}
-            errorMessage={replyErrorMessage}
-            onDraftChange={onReplyDraftChange}
-            onCancel={onCancelReply}
-            onSubmit={onSubmitReply}
-            placeholder={variant === "note" ? "Reply to this note..." : "Reply to this activity..."}
-            helperText="Use @ to mention someone. Enter sends, Shift+Enter adds a new line."
-          />
-        ) : variant === "note" ? (
-          <div className="flex items-center justify-end">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-8 px-2 text-xs text-muted-foreground"
-              onClick={onStartReply}
-            >
-              Reply
-            </Button>
+          <div className="ml-11 max-w-[72%] rounded-xl border border-border/70 bg-card p-2 shadow-sm">
+            <DocumentCommentEditor
+              workspaceId={workspaceId}
+              mode="reply"
+              draft={replyDraft}
+              variant="compact"
+              isSubmitting={isReplySubmitting}
+              errorMessage={replyErrorMessage}
+              onDraftChange={onReplyDraftChange}
+              onCancel={onCancelReply}
+              onSubmit={onSubmitReply}
+              placeholder={variant === "note" ? "Reply to this note..." : "Reply to this activity..."}
+              helperText="Use @ to mention someone. Enter sends, Shift+Enter adds a new line."
+            />
           </div>
         ) : null}
       </div>

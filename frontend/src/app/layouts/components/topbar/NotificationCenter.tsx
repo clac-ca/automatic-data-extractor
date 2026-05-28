@@ -104,10 +104,12 @@ function NotificationCenterInner({ workspace }: { readonly workspace: WorkspaceP
       markReadMutation.mutate(notif.id);
     }
     // Navigate directly to the document details page activity tab and pass the comment ID to glow focus it
-    const url = buildDocumentDetailUrl(workspace.id, notif.comment.documentId, {
+    const url = buildDocumentDetailUrl(workspace.id, notif.documentId, {
       tab: "activity",
+      highlightCommentId: notif.comment.documentId === notif.documentId ? notif.comment.id : null,
+      lifecycle: notif.documentDeletedAt ? "archived" : "active",
     });
-    navigate(`${url}?highlightCommentId=${notif.comment.id}`);
+    navigate(url);
   };
 
   const handleMarkAsRead = (e: React.MouseEvent, notifId: string) => {
@@ -127,9 +129,9 @@ function NotificationCenterInner({ workspace }: { readonly workspace: WorkspaceP
           type="button"
           className={cn(
             "relative inline-flex h-9 w-9 items-center justify-center rounded-full border text-foreground shadow-sm transition",
-            "border-border/60 bg-background/80 hover:border-border/90 hover:bg-accent",
+            "border-border/60 bg-background/80 hover:border-border/90 hover:bg-accent hover:text-accent-foreground",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-            open && "border-ring bg-accent ring-2 ring-ring/30",
+            open && "border-ring bg-accent text-accent-foreground ring-2 ring-ring/30",
           )}
           aria-haspopup="menu"
           aria-expanded={open}

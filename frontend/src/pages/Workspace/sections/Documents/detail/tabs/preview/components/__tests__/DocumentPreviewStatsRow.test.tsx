@@ -6,16 +6,11 @@ import { render, screen } from "@/test/test-utils";
 import { DocumentPreviewStatsRow } from "../DocumentPreviewStatsRow";
 
 describe("DocumentPreviewStatsRow", () => {
-  it("renders one meta row with hidden-row controls, counts, and up to three inline run metrics", () => {
+  it("renders one meta row with source, hidden-row controls, and inline run metrics", () => {
     render(
       <DocumentPreviewStatsRow
-        previewCountSummary={{
-          totalRowsLabel: "93 rows",
-          totalColumnsLabel: "102 columns",
-          rowsVisibleLabel: "Showing 65 of 93 rows",
-          columnsVisibleLabel: "Showing first 102 columns",
-          hasReduction: true,
-        }}
+        source="normalized"
+        onSourceChange={vi.fn()}
         showHiddenRowsAndColumns
         onShowHiddenRowsAndColumnsChange={vi.fn()}
         metrics={{
@@ -30,10 +25,8 @@ describe("DocumentPreviewStatsRow", () => {
     );
 
     expect(screen.getByRole("checkbox", { name: "Show hidden rows and columns" })).toBeChecked();
-    expect(screen.getByText("93 rows")).toBeInTheDocument();
-    expect(screen.getByText("102 columns")).toBeInTheDocument();
-    expect(screen.getByText("Showing 65 of 93 rows")).toBeInTheDocument();
-    expect(screen.getByText("Showing first 102 columns")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Normalized" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Original" })).toBeInTheDocument();
     expect(screen.getByText("Mapped columns:")).toBeInTheDocument();
     expect(screen.getByText("8/10 (80%)")).toBeInTheDocument();
     expect(screen.getByText("Validation issues:")).toBeInTheDocument();
@@ -45,7 +38,8 @@ describe("DocumentPreviewStatsRow", () => {
   it("renders correct mapped columns ratio when column_count_empty is specified", () => {
     render(
       <DocumentPreviewStatsRow
-        previewCountSummary={null}
+        source="normalized"
+        onSourceChange={vi.fn()}
         showHiddenRowsAndColumns={false}
         onShowHiddenRowsAndColumnsChange={vi.fn()}
         metrics={{
@@ -67,7 +61,8 @@ describe("DocumentPreviewStatsRow", () => {
 
     render(
       <DocumentPreviewStatsRow
-        previewCountSummary={null}
+        source="normalized"
+        onSourceChange={vi.fn()}
         showHiddenRowsAndColumns
         onShowHiddenRowsAndColumnsChange={onShowHiddenRowsAndColumnsChange}
         metrics={null}
@@ -79,16 +74,11 @@ describe("DocumentPreviewStatsRow", () => {
     expect(onShowHiddenRowsAndColumnsChange).toHaveBeenCalledWith(false);
   });
 
-  it("omits metric pills when no metrics are available while preserving summary and controls", () => {
+  it("omits metric pills when no metrics are available while preserving controls", () => {
     render(
       <DocumentPreviewStatsRow
-        previewCountSummary={{
-          totalRowsLabel: "12 rows",
-          totalColumnsLabel: "8 columns",
-          rowsVisibleLabel: null,
-          columnsVisibleLabel: null,
-          hasReduction: false,
-        }}
+        source="original"
+        onSourceChange={vi.fn()}
         showHiddenRowsAndColumns={false}
         onShowHiddenRowsAndColumnsChange={vi.fn()}
         metrics={null}
@@ -96,8 +86,8 @@ describe("DocumentPreviewStatsRow", () => {
     );
 
     expect(screen.getByRole("checkbox", { name: "Show hidden rows and columns" })).not.toBeChecked();
-    expect(screen.getByText("12 rows")).toBeInTheDocument();
-    expect(screen.getByText("8 columns")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Normalized" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Original" })).toBeInTheDocument();
     expect(screen.queryByText("Mapped columns:")).not.toBeInTheDocument();
     expect(screen.queryByText("Validation issues:")).not.toBeInTheDocument();
     expect(screen.queryByText("Non-empty rows:")).not.toBeInTheDocument();

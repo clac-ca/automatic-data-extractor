@@ -24,6 +24,10 @@ vi.mock("@glideapps/glide-data-grid", () => ({
     kind: "text",
     draw: vi.fn(),
   },
+  CompactSelection: {
+    empty: () => createCompactSelection(),
+    fromSingleSelection: (selection: number | [number, number]) => createCompactSelection(selectionToItems(selection)),
+  },
   DataEditor: (props: unknown) => {
     dataEditorMock(props);
     return <div data-testid="preview-grid-editor" />;
@@ -31,6 +35,31 @@ vi.mock("@glideapps/glide-data-grid", () => ({
 }));
 
 import { DocumentPreviewGrid } from "../DocumentPreviewGrid";
+
+function createCompactSelection(items: number[] = []) {
+  return {
+    hasIndex: (index: number) => items.includes(index),
+    some: (predicate: (index: number) => boolean) => items.some(predicate),
+    add: (selection: number | [number, number]) =>
+      createCompactSelection([...new Set([...items, ...selectionToItems(selection)])]),
+    remove: (selection: number | [number, number]) => {
+      const removeItems = new Set(selectionToItems(selection));
+      return createCompactSelection(items.filter((item) => !removeItems.has(item)));
+    },
+  };
+}
+
+function selectionToItems(selection: number | [number, number]) {
+  if (typeof selection === "number") {
+    return [selection];
+  }
+
+  const items: number[] = [];
+  for (let index = selection[0]; index < selection[1]; index += 1) {
+    items.push(index);
+  }
+  return items;
+}
 
 function renderGrid(overrides: Partial<ComponentProps<typeof DocumentPreviewGrid>> = {}) {
   return render(
@@ -70,7 +99,7 @@ describe("DocumentPreviewGrid", () => {
     expect(props.columns).toHaveLength(27);
     expect(props.freezeColumns).toBe(1);
     expect(props.rangeSelect).toBe("multi-rect");
-    expect(props.rowSelect).toBe("none");
+    expect(props.rowSelect).toBe("multi");
     expect(props.columnSelect).toBe("multi");
     expect(props.drawFocusRing).toBe(true);
     expect(props.scrollToActiveCell).toBe(true);
@@ -96,6 +125,45 @@ describe("DocumentPreviewGrid", () => {
         cellHorizontalPadding: 8,
         cellVerticalPadding: 2,
         bgHeader: "#f1f3f4",
+      }),
+    );
+  });
+
+  it("selects rows from the row-number column", () => {
+    renderGrid();
+
+    const latestCall = dataEditorMock.mock.calls.at(-1);
+    const props = latestCall?.[0] as {
+      onCellClicked: (
+        cell: [number, number],
+        event: { ctrlKey: boolean; metaKey: boolean; preventDefault: () => void },
+      ) => void;
+    };
+    const preventDefault = vi.fn();
+
+    act(() => {
+      props.onCellClicked([0, 1], {
+        ctrlKey: false,
+        metaKey: false,
+        preventDefault,
+      });
+    });
+
+    const selectedProps = dataEditorMock.mock.calls.at(-1)?.[0] as {
+      getCellContent: (cell: [number, number]) => { themeOverride?: Record<string, string> };
+      gridSelection: {
+        rows: { hasIndex: (index: number) => boolean };
+        columns: { hasIndex: (index: number) => boolean };
+      };
+    };
+
+    expect(preventDefault).toHaveBeenCalledTimes(1);
+    expect(selectedProps.gridSelection.rows.hasIndex(1)).toBe(true);
+    expect(selectedProps.gridSelection.columns.hasIndex(1)).toBe(false);
+    expect(selectedProps.getCellContent([0, 1]).themeOverride).toEqual(
+      expect.objectContaining({
+        bgCell: "#123456",
+        textDark: "#ffffff",
       }),
     );
   });
@@ -197,6 +265,25 @@ describe("DocumentPreviewGrid", () => {
         }),
       }),
     );
+  });
+
+  it("opens mapping requests only from the header menu button", () => {
+    const onHeaderMenuClick = vi.fn();
+    renderGrid({ onHeaderMenuClick });
+
+    const latestCall = dataEditorMock.mock.calls.at(-1);
+    const props = latestCall?.[0] as {
+      onHeaderMenuClick: (columnIndex: number) => void;
+      onHeaderClicked?: (columnIndex: number) => void;
+    };
+
+    expect(props.onHeaderClicked).toBeUndefined();
+
+    act(() => {
+      props.onHeaderMenuClick(2);
+    });
+
+    expect(onHeaderMenuClick).toHaveBeenCalledWith(1);
   });
 
   it("shows empty state when no preview rows are available", () => {
